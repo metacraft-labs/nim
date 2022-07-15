@@ -45,7 +45,8 @@ else:
 
 proc raiseOutOfMem() {.noinline.} =
   if outOfMemHook != nil: outOfMemHook()
-  cstderr.rawWrite("out of memory\n")
+  when not defined(nimNoLibc):
+    cstderr.rawWrite("out of memory\n")
   quit(1)
 
 when defined(boehmgc):

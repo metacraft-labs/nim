@@ -1784,7 +1784,8 @@ proc compiles*(x: untyped): bool {.magic: "Compiles", noSideEffect, compileTime.
   discard
 
 when notJSnotNims:
-  import system/ansi_c
+  when not defined(nimNoLibc):
+    import system/ansi_c
   import system/memory
 
 
@@ -2232,7 +2233,7 @@ when notJSnotNims:
     when declared(memTrackerOp):
       memTrackerOp("copyMem", dest, size)
   proc moveMem(dest, source: pointer, size: Natural) =
-    c_memmove(dest, source, csize_t(size))
+    discard nimMoveMem(dest, source, size)
     when declared(memTrackerOp):
       memTrackerOp("moveMem", dest, size)
   proc equalMem(a, b: pointer, size: Natural): bool =
@@ -2287,7 +2288,7 @@ when not defined(js) and declared(alloc0) and declared(dealloc):
       inc(i)
     dealloc(a)
 
-when notJSnotNims:
+when notJSnotNims and not defined(nimNoLibc):
   type
     PSafePoint = ptr TSafePoint
     TSafePoint {.compilerproc, final.} = object
