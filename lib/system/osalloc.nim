@@ -203,8 +203,7 @@ elif hostOS == "standalone" or defined(StandaloneHeapSize):
       result = cast[pointer](bumpPointer)
       inc bumpPointer, size
     else:
-      when not defined(nimNoLibc):
-        raiseOutOfMem()
+      raiseOutOfMem()
 
   proc osTryAllocPages(size: int): pointer {.inline.} =
     if size+bumpPointer < cast[int](addr theHeap) + sizeof(theHeap):
