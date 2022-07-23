@@ -2237,7 +2237,7 @@ when notJSnotNims:
     when declared(memTrackerOp):
       memTrackerOp("copyMem", dest, size)
   proc moveMem(dest, source: pointer, size: Natural) =
-    discard nimMoveMem(dest, source, size)
+    nimMoveMem(dest, source, size)
     when declared(memTrackerOp):
       memTrackerOp("moveMem", dest, size)
   proc equalMem(a, b: pointer, size: Natural): bool =
