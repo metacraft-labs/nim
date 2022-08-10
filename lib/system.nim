@@ -2403,7 +2403,7 @@ when notJSnotNims and hasThreadSupport and hostOS != "standalone":
   include "system/channels_builtin"
 
 
-when notJSnotNims and hostOS != "standalone":
+when notJSnotNims and declared(currException):
   proc getCurrentException*(): ref Exception {.compilerRtl, inl, benign.} =
     ## Retrieves the current exception; if there is none, `nil` is returned.
     result = currException

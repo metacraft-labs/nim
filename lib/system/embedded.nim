@@ -22,8 +22,20 @@ proc setFrame(s: PFrame) {.compilerRtl, inl.} = discard
 when declared(SafePoint):
   proc pushSafePoint(s: PSafePoint) {.compilerRtl, inl.} = discard
 proc popSafePoint {.compilerRtl, inl.} = discard
-proc pushCurrentException(e: ref Exception) {.compilerRtl, inl.} = discard
-proc popCurrentException {.compilerRtl, inl.} = discard
+
+var currException: ref Exception
+
+proc pushCurrentException(e: sink(ref Exception)) {.compilerRtl, inl.} =
+  e.up = currException
+  currException = e
+  #showErrorMessage2 "A"
+
+proc popCurrentException {.compilerRtl, inl.} =
+  currException = currException.up
+  #showErrorMessage2 "B"
+
+proc popCurrentExceptionEx(id: uint) {.compilerRtl.} =
+  discard "only for bootstrapping compatbility"
 
 # some platforms have native support for stack traces:
 const
