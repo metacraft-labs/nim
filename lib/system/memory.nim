@@ -73,7 +73,7 @@ proc nimMoveMem*(dest, source: pointer, size: Natural) {.nonReloadable, compiler
     while i < size:
       d[i] = s[i]
       inc i
-  return
+    return
 
   nimCopyMem(dest, source, size)
   return
