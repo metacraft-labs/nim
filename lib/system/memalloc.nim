@@ -87,6 +87,21 @@ when hasAlloc and not defined(js):
     template incStat(what: untyped) = discard
     proc getAllocStats*(): AllocStats = discard
 
+  when defined(lightClientWASM):
+    const StandaloneHeapSize1 {.intdefine.}: int = 1_000_000
+    var
+      theHeap1: array[StandaloneHeapSize1 div sizeof(float64), float64] # 'float64' for alignment
+      offset: int
+
+    proc osAllocPages1(size: int): pointer {.inline.} =
+      let startOffset = cast[int](addr theHeap1)
+
+      if offset + size < sizeof(theHeap1):
+        result = cast[pointer](startOffset + offset)
+        inc offset, size
+      else:
+        discard
+
   template alloc*(size: Natural): pointer =
     ## Allocates a new memory block with at least `size` bytes.
     ##
@@ -101,7 +116,10 @@ when hasAlloc and not defined(js):
     ## See also:
     ## * `alloc0 <#alloc0.t,Natural>`_
     incStat(allocCount)
-    allocImpl(size)
+    when defined(lightClientWASM):
+      osAllocPages1(size)
+    else:
+      allocImpl(size)
 
   proc createU*(T: typedesc, size = 1.Positive): ptr T {.inline, benign, raises: [].} =
     ## Allocates a new memory block with at least `T.sizeof * size` bytes.
