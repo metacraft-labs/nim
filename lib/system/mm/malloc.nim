@@ -1,6 +1,12 @@
 
 {.push stackTrace: off.}
 
+when defined(emcc):
+  proc c_malloc(size: csize_t):pointer {.header: "<emscripten.h>", importc: "malloc".}
+  proc c_calloc(nitems: csize_t, size: csize_t):pointer {.header: "<emscripten.h>", importc: "calloc".}
+  proc c_realloc(p: pointer, size: csize_t):pointer {.header: "<emscripten.h>", importc: "realloc".}
+  proc c_free(size: pointer):void {.header: "<emscripten.h>", importc: "free".}
+
 proc allocImpl(size: Natural): pointer =
   result = c_malloc(size.csize_t)
   when defined(zephyr):
