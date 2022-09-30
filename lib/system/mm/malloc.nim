@@ -1,11 +1,16 @@
 
 {.push stackTrace: off.}
 
-when defined(emcc):
-  proc c_malloc(size: csize_t):pointer {.header: "<emscripten.h>", importc: "malloc".}
-  proc c_calloc(nitems: csize_t, size: csize_t):pointer {.header: "<emscripten.h>", importc: "calloc".}
-  proc c_realloc(p: pointer, size: csize_t):pointer {.header: "<emscripten.h>", importc: "realloc".}
-  proc c_free(size: pointer):void {.header: "<emscripten.h>", importc: "free".}
+# Make sure we always have these definitions, when `useMalloc` is defined.
+# For example in the case when `nimNoLibc` is defined, we do not have these
+# definitions, because they come form `system/ansi_c` but it is not imported.
+# In the case we need both `nimNoLibc` & `useMalloc` we have to make sure
+# they are defined
+when defined(useMalloc):
+  proc c_malloc(size: csize_t):pointer {.header: "<stdlib.h>", importc: "malloc".}
+  proc c_calloc(nitems: csize_t, size: csize_t):pointer {.header: "<stdlib.h>", importc: "calloc".}
+  proc c_realloc(p: pointer, size: csize_t):pointer {.header: "<stdlib.h>", importc: "realloc".}
+  proc c_free(size: pointer):void {.header: "<stdlib.h>", importc: "free".}
 
 proc allocImpl(size: Natural): pointer =
   result = c_malloc(size.csize_t)
