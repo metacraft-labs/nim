@@ -1700,3 +1700,13 @@ proc sameModules*(a, b: PSym): bool {.inline.} =
 
 proc sameOwners*(a, b: PSym): bool =
   result = a == b or (a.kind == skModule and b.kind == skModule and a.position == b.position) or a.id == b.id
+
+func lastNodeChild*(node: PNode): PNode =
+  # node.kind check based on `safeLen`
+  if node.kind notin {nkNone..nkNilLit}:
+    if node.len > 0:
+      lastNodeChild(node.sons[^1])
+    else:
+      node
+  else:
+    node

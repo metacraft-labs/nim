@@ -16,7 +16,11 @@
 import
   lexer, options, idents, ast, msgs, lineinfos, wordrecg, trees
 
-import std/[strutils]
+import std/[strutils, tables, hashes, sets]
+
+const
+  ASYNCDISPATCH_MACRO_PATH = "lib/pure/asyncmacro.nim"
+  LIB2_MACRO_PATH = "chronos/asyncmacro2.nim"
 
 when defined(nimPreviewSlimSystem):
   import std/[syncio, assertions, formatfloat]
@@ -25,7 +29,8 @@ type
   TRenderFlag* = enum
     renderNone, renderNoBody, renderNoComments, renderDocComments,
     renderNoPragmas, renderIds, renderNoProcDefs, renderSyms, renderRunnableExamples,
-    renderIr, renderNonExportedFields, renderExpandUsing, renderNoPostfix
+    renderIr, renderNonExportedFields, renderExpandUsing, renderNoPostfix,
+    renderMacroSourcemap
 
   TRenderFlags* = set[TRenderFlag]
   TRenderTok* = object
@@ -59,8 +64,8 @@ type
     fid*: FileIndex
     config*: ConfigRef
     mangler: seq[PSym]
+    line*: uint32
 
-proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}): string
 
 # We render the source code in a two phases: The first
 # determines how long the subtree will likely be, the second
@@ -506,7 +511,13 @@ proc initSrcGen(renderFlags: TRenderFlags; config: ConfigRef): TSrcGen =
                    config: config
                    )
 
+  if renderMacroSourcemap in renderFlags and not config.macroSourcemap.isNil:
+    result.line = config.macroSourcemap.startLine
+
+
 proc addTok(g: var TSrcGen, kind: TokType, s: string; sym: PSym = nil) =
+  let nlCount = count(s, Newlines).uint32
+  g.line += nlCount
   g.tokens.add TRenderTok(kind: kind, length: int32(s.len), sym: sym)
   g.buf.add(s)
   if kind != tkSpaces:
@@ -1103,6 +1114,7 @@ proc longMode(g: TSrcGen; n: PNode, start: int = 0, theEnd: int = - 1): bool =
         break
 
 proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
+  # echo "gstmts ", n.kind, " ", n.info
   if n.kind == nkEmpty: return
   if n.kind in {nkStmtList, nkStmtListExpr, nkStmtListType}:
     if doIndent: indentNL(g)
@@ -1123,6 +1135,27 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
     gcoms(g)
     dedent(g)
     optNL(g)
+
+  if renderMacroSourcemap in g.flags and not g.config.macroSourcemap.isNil:
+    let info = TLineInfo(line: g.line, col: 1, fileIndex: g.config.macroSourcemap.fileIndex)
+    # echo "node ", n, " ", g.fileIndex.int, " ", info.line, " ", n.info.line
+    let siteInfo = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].site
+
+    # (toMsgFilename(g.config, n.info), n.info.line.int)
+    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(siteInfo: siteInfo, expansionId: g.config.macroSourcemap.expansionId, entryExpandedLine: -1)
+    if siteInfo[0].endsWith("/expanded.nim"): # eventually? TODO g.config.macroSourcemap.expandedFileId:
+      if g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine == -1:
+        g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine = info.line.int
+
+    # TODO is it ok to not do it? for now don't do it here
+    # it overwrites more precise locations
+    # g.config.macroSourcemap.topLevelLines[g.line.int] = (toMsgFilename(g.config, n.info), n.info.line.int)
+    
+
+    # n.info => seq[info.line]?
+    n.info = info
+  
+  # echo "after gstmts ", n.kind, " ", n.info
 
 
 proc gcond(g: var TSrcGen, n: PNode) =
@@ -1477,6 +1510,7 @@ proc isCustomLit(n: PNode): bool =
 
 proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
   if isNil(n): return
+  # echo "gsub ", n.kind, " ", n.info
   var
     a: TContext = default(TContext)
   if shouldRenderComment(g, n): pushCom(g, n)
@@ -2217,10 +2251,38 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
   else:
     #nkNone, nkExplicitTypeListCall:
     internalError(g.config, n.info, "renderer.gsub(" & $n.kind & ')')
+  
+  if renderMacroSourcemap in g.flags and not g.config.macroSourcemap.isNil:
+    let info = TLineInfo(line: g.line, col: 1, fileIndex: g.config.macroSourcemap.fileIndex)
+    # echo "node ", n, " ", g.fileIndex.int, " ", info.line, " ", n.info.line
+    let siteInfo = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].site
+    let fromMacro = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].fromMacro
+    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(siteInfo: siteInfo, expansionId: g.config.macroSourcemap.expansionId, entryExpandedLine: -1)
+    if siteInfo[0].endsWith("/expanded.nim"): # eventually? TODO g.config.macroSourcemap.expandedFileId:
+      if g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine == -1:
+        g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine = info.line.int
 
-proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}): string =
+    let nodePath = toMsgFilename(g.config, n.info)
+    let isNodeInfoFromDefinition = g.config.macroSourcemap.definitionLocations.hasKey(nodePath) and n.info.line.int in g.config.macroSourcemap.definitionLocations[nodePath]
+    # if not fromMacro:
+    if not isNodeInfoFromDefinition:
+      # echo "not from definition ", nodePath, " ", n.info.line, " ", g.line.int
+      # don't overwrite expanded.nim
+      let filename = nodePath
+      if n.info.fileIndex != g.config.macroSourcemap.fileIndex and
+         ASYNCDISPATCH_MACRO_PATH notin filename and
+         LIB2_MACRO_PATH notin filename:
+        if not g.config.macroSourcemap.topLevelLines.hasKey(g.line.int):
+          g.config.macroSourcemap.topLevelLines[g.line.int] = (filename, n.info.line.int)
+    n.info = info
+
+  
+  # echo "after gsub ", n.kind, " ", n.info
+
+proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}, config: ConfigRef = nil): string =
   if n == nil: return "<nil tree>"
-  var g: TSrcGen = initSrcGen(renderFlags, newPartialConfigRef())
+  var c = if not config.isNil: config else: newPartialConfigRef()
+  var g: TSrcGen = initSrcGen(renderFlags, c)
   # do not indent the initial statement list so that
   # writeFile("file.nim", repr n)
   # produces working Nim code:

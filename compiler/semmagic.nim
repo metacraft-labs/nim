@@ -134,8 +134,10 @@ proc expectIntLit(c: PContext, n: PNode): int =
 
 proc semInstantiationInfo(c: PContext, n: PNode): PNode =
   result = newNodeIT(nkTupleConstr, n.info, n.typ)
-  let idx = expectIntLit(c, n[1])
+  var idx = expectIntLit(c, n[1])
   let useFullPaths = expectIntLit(c, n[2])
+  if not c.config.macroSourcemap.isNil and n.info.fileIndex == c.config.macroSourcemap.fileIndex:
+    idx = 0
   let info = getInfoContext(c.config, idx)
   var filename = newNodeIT(nkStrLit, n.info, getSysType(c.graph, n.info, tyString))
   filename.strVal = if useFullPaths != 0: toFullPath(c.config, info) else: toFilename(c.config, info)

@@ -40,7 +40,7 @@ proc semTemplateExpr(c: PContext, n: PNode, s: PSym,
   popInfoContext(c.config)
 
   # XXX: A more elaborate line info rewrite might be needed
-  result.info = info
+  # result.info = info
 
 proc semFieldAccess(c: PContext, n: PNode, flags: TExprFlags = {}): PNode
 

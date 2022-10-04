@@ -18,7 +18,7 @@ import
   evaltempl, patterns, parampatterns, sempass2, linter, semmacrosanity,
   lowerings, plugins/active, lineinfos, int128,
   isolation_check, typeallowed, modulegraphs, enumtostr, concepts, astmsgs,
-  extccomp, layeredtable
+  extccomp, layeredtable, pathutils
 
 import vtables
 import std/[strtabs, math, tables, intsets, strutils, packedsets]
@@ -34,6 +34,9 @@ when defined(nimPreviewSlimSystem):
 
 # implementation
 
+const dontExpandDebug = toSet[string](
+  @["!=", ">=", "assert", "assertImpl", "builtin", "in", ">",
+  "dotdotImpl", "dotdotLessImpl", "sysAssert", ">=%", "+!", "[]", "[]=", "ones"])
 proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}, expectedType: PType = nil): PNode
 proc semExprWithType(c: PContext, n: PNode, flags: TExprFlags = {}, expectedType: PType = nil): PNode
 proc semExprNoType(c: PContext, n: PNode): PNode
@@ -467,6 +470,86 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
   c.friendModules.add(s.owner.getModule)
   result = macroResult
   resetSemFlag result
+  excl(result.flags, nfSem)
+
+  # after each `evalMacroCall` and before all others from those that we record
+  # we should do the record
+  # setup/record => `evalMacroCall` => setup/record for a child => `evalMacroCall` for it
+  var expandMap = false
+  if s.name.s notin dontExpandDebug:
+    # don't follow stdlib
+    if c.module.owner != nil and c.module.owner.name.s == "stdlib":
+      # echo c.module.owner.name.s
+      expandMap = false
+    else:
+      # echo s.name.s
+      expandMap = true
+
+  if expandMap:
+    # echo c.module.owner.name.s
+    let nimcache = getNimcacheDir(c.config)
+    # echo "nimcache: ", nimcache
+    if "/.cache/nim/" in nimcache.string:
+      echo "[warn]: ignoring ", nimcache.string
+    else:
+      let filename = AbsoluteFile(nimcache / RelativeFile("expanded.nim"))
+      if c.config.macroSourcemap.isNil:
+        c.config.macroSourcemap = MacroSourcemap(
+          source: "",
+          startLine: 1,
+          fileIndex: c.config.fileInfoIdx(filename),
+          expandedFilename: filename.string)
+      # c.config.macroSourcemap.expandedFilename = filename.string
+      # c.config.macroSourceMap.files
+      # var sourcemap = c.config.macroSourcemap
+      # file id => the same, expansion id => the def/name/info, from locations file_line_expanded
+      # or locations => expansion_id
+      c.config.macroSourcemap.startLine += 1
+
+      # var topLevel = ("TODO", -1)
+      # if call.info.fileIndex != c.config.macroSourceMap.fileIndex:
+        # macro site not in expanded.nim: this ins top level
+        # topLevel = (toMsgFilename(c.config, ))
+      c.config.macroSourcemap.expansions.add(Expansion(
+        path: $filename,
+        firstLine: c.config.macroSourcemap.startLine.int - 1,
+        lastLine: -1,
+        site: (toMsgFilename(c.config, call.info), call.info.line.int),
+        definition: (toMsgFilename(c.config, s.info), s.info.line.int),
+        name: s.name.s,
+        fromMacro: s.ast.kind == nkMacroDef))
+
+      let definitionPath = toMsgFilename(c.config, s.info)
+      if not c.config.macroSourcemap.definitionLocations.hasKey(definitionPath):
+        c.config.macroSourcemap.definitionLocations[definitionPath] = initHashSet[int]()
+      # TODO s last : maybe ^1 ^1 etc
+      # if s.ast.kind == nkMacroDef:
+       # echo renderTree(s.ast)
+      let lastChild = lastNodeChild(getBody(c.graph, s))
+      # echo "definitions ", definitionPath, " ", s.info.line.int, " ", lastChild.info.line.int
+      for definitionLine in s.info.line.int .. lastChild.info.line.int:
+        c.config.macroSourcemap.definitionLocations[definitionPath].incl(definitionLine)
+
+      # edit: this was the initial idea, but we use different logic now:
+      # only point to actual not in definitions paths in top level (?)
+      # TODO: only non-def paths
+      # nkMacroDef : no top level lines, because we get a location for the macro definition code nodes
+      # nkTemplateDef: top level lines
+
+      # echo s.ast.renderTree, " ", s.ast.kind #echo macroResult.renderTree
+      var macroSource = renderTree(macroResult, {renderMacroSourcemap}, c.config)
+      if macroSource.len > 0:
+        macroSource = macroSource[0 .. ^1] # \n
+        # if macroSource[0] == '\n':
+          # macroSource = macroSource[1 .. ^1]
+      macroSource = "# " & s.name.s & " expansion in " & c.p.owner.name.s & " internal line " & $c.config.macroSourcemap.startLine & "\n" & macroSource
+      macroSource.add(repeat("\n", 4))
+      c.config.macroSourcemap.source.add(macroSource)
+      c.config.macroSourcemap.startLine += count(macroSource, Newlines).uint32 - 1
+      c.config.macroSourcemap.expansionId += 1
+      c.config.macroSourcemap.expansions[^1].lastLine = c.config.macroSourcemap.startLine.int - 4
+      # echo macroSource
+
   if s.typ.returnType == nil:
     result = semStmt(c, result, flags)
   else:
@@ -565,8 +648,10 @@ proc semMacroExpr(c: PContext, n, nOrig: PNode, sym: PSym,
     message(c.config, nOrig.info, hintExpandMacro, renderTree(result, {
       renderNonExportedFields, renderDocComments, renderNoComments
     }))
-  result = wrapInComesFrom(nOrig.info, sym, result)
+  # result = wrapInComesFrom(nOrig.info, sym, result)
   popInfoContext(c.config)
+  # echo "return semMacroExpr: ", nOrig.info, " ", sym.name.s
+
 
 proc forceBool(c: PContext, n: PNode): PNode =
   result = fitNode(c, getSysType(c.graph, n.info, tyBool), n, n.info)

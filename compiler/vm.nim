@@ -2531,7 +2531,8 @@ const evalMacroLimit = 1000
 
 proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstCounter: ref int;
                     n, nOrig: PNode, sym: PSym): PNode =
-  #if g.config.errorCounter > 0: return errorNode(idgen, module, n)
+  # echo "evalMacroCall: ", nOrig.info, " ", sym.name.s
+  if g.config.errorCounter > 0: return errorNode(idgen, module, n)
 
   # XXX globalError() is ugly here, but I don't know a better solution for now
   inc(g.config.evalMacroCounter)
@@ -2567,7 +2568,7 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
   #InternalAssert tos.slots.len >= L
 
   # return value:
-  tos.slots[0] = TFullReg(kind: rkNode, node: newNodeI(nkEmpty, n.info))
+  tos.slots[0] = TFullReg(kind: rkNode, node: newNodeI(nkEmpty, nOrig.info))
 
   # setup parameters:
   for i, param in paramTypes(sym.typ):
@@ -2586,8 +2587,10 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
   # temporary storage:
   #for i in L..<maxSlots: tos.slots[i] = newNode(nkEmpty)
   result = rawExecute(c, start.pc, tos).regToNode
-  if result.info.line < 0: result.info = n.info
+  if result.info.line < 0: result.info = nOrig.info
   if cyclicTree(result): globalError(c.config, n.info, "macro produced a cyclic tree")
   dec(g.config.evalMacroCounter)
   c.callsite = nil
   c.mode = oldMode
+
+  # echo "return evalMacroCall: ", nOrig.info, " ", sym.name.s

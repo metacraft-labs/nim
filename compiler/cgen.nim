@@ -16,7 +16,7 @@ import
   rodutils, renderer, cgendata, aliases,
   lowerings, lineinfos, pathutils, transf,
   injectdestructors, astmsgs, modulepaths, pushpoppragmas,
-  mangleutils, cbuilderbase, modulegraphs
+  mangleutils, cbuilderbase, modulegraphs, json
 
 from expanddefaults import caseObjDefaultBranch
 
@@ -2645,6 +2645,25 @@ proc genForwardedProcs(g: BModuleList) =
 
     genProcLvl2(m, prc)
 
+proc `%`[K, V](table: Table[K, V]): JsonNode =
+  result = newJObject()
+  for k, v in table:
+    result.add($k, %v)
+
+proc `%`[K, V](table: OrderedTable[K, V]): JsonNode =
+  result = newJObject()
+  for k, v in table:
+    result.add($k, %v)
+
+proc `%`(index: FileIndex): JsonNode =
+  %(index.int)
+
+proc `%`(value: (string, int)): JsonNode =
+  result = %* {
+    "Field1": %value[0],
+    "Field2": %value[1]
+  }
+
 proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
   let g = BModuleList(backend)
   g.config = config
@@ -2658,3 +2677,52 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
     m.writeModule()
   writeMapping(config, g.mapping)
   if g.generatedHeader != nil: writeHeader(g.generatedHeader)
+
+  # start of macro sourcemap code
+
+  let fullPath = config.prepareToWriteOutput
+
+  let (outDir, name, _) = splitFile(fullPath)
+
+  if config.macroSourcemap.isNil:
+    config.macroSourcemap = MacroSourcemap()
+  else:
+    # let nimcache = getNimcacheDir(config)
+    # let expanded = AbsoluteFile(nimcache / RelativeFile("expanded.nim"))
+
+    # TODO function in sem.nim:
+
+    let expandedString = config.macroSourcemap.expandedFilename
+    for line, expansionInfo in config.macroSourcemap.locations:
+      # if expansionInfo.siteInfo[0] != expandedString:
+      var entryExpandedLine = line
+      var currentExpansionInfo = expansionInfo
+      while true:
+        if currentExpansionInfo.entryExpandedLine == -1:
+          break
+        entryExpandedLine = currentExpansionInfo.entryExpandedLine
+        currentExpansionInfo = config.macroSourcemap.locations[entryExpandedLine]
+      if not config.macroSourcemap.expandedEntries.hasKey(expansionInfo.siteInfo[0]):
+        config.macroSourcemap.expandedEntries[expansionInfo.siteInfo[0]] = initTable[int, int]()
+      if not config.macroSourcemap.expandedEntries[expansionInfo.siteInfo[0]].hasKey(expansionInfo.siteInfo[1]):
+        if expansionInfo.siteInfo[0] != expandedString or expansionInfo.siteInfo[1] != entryExpandedLine:
+          config.macroSourcemap.expandedEntries[expansionInfo.siteInfo[0]][expansionInfo.siteInfo[1]] = entryExpandedLine
+
+  for expandedLine, location in config.macroSourcemap.topLevelLines:
+    if not config.macroSourcemap.expandedEntries.hasKey(location[0]):
+      config.macroSourcemap.expandedEntries[location[0]] = initTable[int, int]()
+    config.macroSourcemap.expandedEntries[location[0]][location[1]] = expandedLine
+
+  let finalJsonNode = %* {
+    "expansions": %config.macroSourcemap.expansions,
+    "locations": %config.macroSourcemap.locations,
+    "expandedEntries": %config.macroSourcemap.expandedEntries,
+    "expandedFilename": %config.macroSourcemap.expandedFilename,
+    "topLevelLines": %config.macroSourcemap.topLevelLines
+  }
+  writeFile(outDir / RelativeFile("macro_sourcemap_" & name.string & ".json"), pretty(finalJsonNode))
+
+  if config.macroSourcemap.expandedFilename.len > 0:
+    writeFile(config.macroSourcemap.expandedFilename.AbsoluteFile, config.macroSourcemap.source)
+
+  # end of macro sourcemap code

@@ -11,7 +11,7 @@
 ## `TLineInfo` object.
 
 import ropes, pathutils
-import std/[hashes, tables]
+import std/[hashes, tables, strformat]
 
 const
   explanationsBaseUrl* = "https://nim-lang.github.io/Nim"
@@ -305,13 +305,19 @@ type
     when defined(nimpretty):
       fullContent*: string
   FileIndex* = distinct int32
-  TLineInfo* = object          # This is designed to be as small as possible,
+  TLineInfo* = object          # (original comment from the upstream code, not valid for our fork!):
+                               # This is designed to be as small as possible,
                                # because it is used
                                # in syntax nodes. We save space here by using
                                # two int16 and an int32.
                                # On 64 bit and on 32 bit systems this is
                                # only 8 bytes.
-    line*: uint16
+
+                               # comment by Alexander Ivanov alehander92: ^ this is NOT
+                               # true in our sourcemap-and-macros fork
+                               # as we can generate a big expanded.nim file with >65k line and the line number can be too big
+                               # for the original `uint16`, so we use `uint32`
+    line*: uint32
     col*: int16
     fileIndex*: FileIndex
     when defined(nimpretty):
@@ -368,3 +374,7 @@ proc initMsgConfig*(): MsgConfig =
                      fileInfos: @[], errorOutputs: {eStdOut, eStdErr}
   )
   result.filenameToIndexTbl["???"] = FileIndex(-1)
+
+# TODO optimize if needed
+proc `$`*(info: TLineInfo): string =
+  fmt"{info.fileIndex.int}_{info.line}"

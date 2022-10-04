@@ -87,7 +87,7 @@ type
 
   FileIndex* = distinct int32
   TLineInfo* = object
-    line*: uint16
+    line*: uint32
     col*: int16
     fileIndex*: FileIndex
 

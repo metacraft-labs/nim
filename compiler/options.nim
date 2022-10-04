@@ -343,6 +343,38 @@ type
     foName # lastPathPart, e.g.: foo.nim
     foStacktrace # if optExcessiveStackTrace: foAbs else: foName
 
+  MacroSourcemap* = ref object
+    # filenames*: Table[int, string]
+    expansions*: seq[Expansion]
+    expandedFileId*: int
+    expandedFilename*: string
+    locations*: OrderedTable[int, ExpansionInfo]
+    # {path: {line top level: line in expanded.nim}}
+    expandedEntries*: Table[string, Table[int, int]]
+    topLevelLines*: Table[int, (string, int)]
+    definitionLocations*: Table[string, HashSet[int]]
+    source*: string
+    startLine*: uint32
+    expansionId*: int
+    fileIndex*: FileIndex
+
+
+  Expansion* = object
+    path*: string
+    firstLine*: int
+    lastLine*: int
+    site*: (string, int) #TLineInfo
+    definition*: (string, int) #TLineInfo
+    # topLevel*: (string, int)
+    name*: string # empty if not definition
+    fromMacro*: bool
+
+  ExpansionInfo* = object
+    siteInfo*: (string, int)
+    expansionId*: int
+    entryExpandedLine*: int
+
+
   ConfigRef* {.acyclic.} = ref object ## every global configuration
                           ## fields marked with '*' are subject to
                           ## the incremental compilation mechanisms
@@ -452,6 +484,7 @@ type
     cppCustomNamespace*: string
     nimMainPrefix*: string
     vmProfileData*: ProfileData
+    macroSourcemap*: MacroSourcemap
 
     expandProgress*: bool
     expandLevels*: int
