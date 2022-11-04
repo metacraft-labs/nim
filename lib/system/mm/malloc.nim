@@ -7,10 +7,16 @@
 # In the case we need both `nimNoLibc` & `useMalloc` we have to make sure
 # they are defined
 when defined(useMalloc):
-  proc c_malloc(size: csize_t):pointer {.header: "<stdlib.h>", importc: "malloc".}
-  proc c_calloc(nitems: csize_t, size: csize_t):pointer {.header: "<stdlib.h>", importc: "calloc".}
-  proc c_realloc(p: pointer, size: csize_t):pointer {.header: "<stdlib.h>", importc: "realloc".}
-  proc c_free(size: pointer):void {.header: "<stdlib.h>", importc: "free".}
+  when defined(lightClientCosmos):
+    proc c_malloc(size: csize_t):pointer = discard
+    proc c_calloc(nitems: csize_t, size: csize_t):pointer = discard
+    proc c_realloc(p: pointer, size: csize_t):pointer = discard
+    proc c_free(size: pointer):void = discard
+  else:
+    proc c_malloc(size: csize_t):pointer {.header: "<stdlib.h>", importc: "malloc".}
+    proc c_calloc(nitems: csize_t, size: csize_t):pointer {.header: "<stdlib.h>", importc: "calloc".}
+    proc c_realloc(p: pointer, size: csize_t):pointer {.header: "<stdlib.h>", importc: "realloc".}
+    proc c_free(size: pointer):void {.header: "<stdlib.h>", importc: "free".}
 
 proc allocImpl(size: Natural): pointer =
   result = c_malloc(size.csize_t)
