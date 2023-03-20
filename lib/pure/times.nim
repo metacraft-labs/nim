@@ -201,6 +201,11 @@ import strutils, math, options
 import std/private/since
 include "system/inclrtl"
 
+when hostOS == "standalone":
+  {.pragma: notOnStandalone, error: "this proc is not available on the Wasm target".}
+else:
+  {.pragma: notOnStandalone.}
+
 when defined(js):
   import jscore
 
@@ -225,7 +230,7 @@ when defined(js):
     system.inc(a, b)
   {.pop.}
 
-elif defined(posix):
+elif defined(posix) or defined(wasm):
   import posix
 
   type CTime = posix.Time
@@ -2582,7 +2587,7 @@ proc `-=`*(t: var Time, b: TimeInterval) =
 # Other
 #
 
-proc epochTime*(): float {.tags: [TimeEffect].} =
+proc epochTime*(): float {.notOnStandalone, tags: [TimeEffect].} =
   ## Gets time after the UNIX epoch (1970) in seconds. It is a float
   ## because sub-second resolution is likely to be supported (depending
   ## on the hardware/OS).
