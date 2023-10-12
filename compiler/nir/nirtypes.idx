@@ -1,0 +1,70 @@
+nimTitle	nirtypes	nir/nirtypes.html	module nir/nirtypes		0
+nim	VoidTy	nir/nirtypes.html#VoidTy	NirTypeKind.VoidTy		16
+nim	IntTy	nir/nirtypes.html#IntTy	NirTypeKind.IntTy		16
+nim	UIntTy	nir/nirtypes.html#UIntTy	NirTypeKind.UIntTy		16
+nim	FloatTy	nir/nirtypes.html#FloatTy	NirTypeKind.FloatTy		16
+nim	BoolTy	nir/nirtypes.html#BoolTy	NirTypeKind.BoolTy		16
+nim	CharTy	nir/nirtypes.html#CharTy	NirTypeKind.CharTy		16
+nim	NameVal	nir/nirtypes.html#NameVal	NirTypeKind.NameVal		16
+nim	IntVal	nir/nirtypes.html#IntVal	NirTypeKind.IntVal		16
+nim	AnnotationVal	nir/nirtypes.html#AnnotationVal	NirTypeKind.AnnotationVal		16
+nim	VarargsTy	nir/nirtypes.html#VarargsTy	NirTypeKind.VarargsTy		16
+nim	APtrTy	nir/nirtypes.html#APtrTy	NirTypeKind.APtrTy		16
+nim	UPtrTy	nir/nirtypes.html#UPtrTy	NirTypeKind.UPtrTy		16
+nim	AArrayPtrTy	nir/nirtypes.html#AArrayPtrTy	NirTypeKind.AArrayPtrTy		16
+nim	UArrayPtrTy	nir/nirtypes.html#UArrayPtrTy	NirTypeKind.UArrayPtrTy		16
+nim	ArrayTy	nir/nirtypes.html#ArrayTy	NirTypeKind.ArrayTy		16
+nim	LastArrayTy	nir/nirtypes.html#LastArrayTy	NirTypeKind.LastArrayTy		16
+nim	ObjectTy	nir/nirtypes.html#ObjectTy	NirTypeKind.ObjectTy		16
+nim	UnionTy	nir/nirtypes.html#UnionTy	NirTypeKind.UnionTy		16
+nim	ProcTy	nir/nirtypes.html#ProcTy	NirTypeKind.ProcTy		16
+nim	ObjectDecl	nir/nirtypes.html#ObjectDecl	NirTypeKind.ObjectDecl		16
+nim	UnionDecl	nir/nirtypes.html#UnionDecl	NirTypeKind.UnionDecl		16
+nim	FieldDecl	nir/nirtypes.html#FieldDecl	NirTypeKind.FieldDecl		16
+nim	NirTypeKind	nir/nirtypes.html#NirTypeKind	enum NirTypeKind		16
+nim	TypeNode	nir/nirtypes.html#TypeNode	object TypeNode		38
+nim	kind	nir/nirtypes.html#kind.t,TypeNode	template kind(n: TypeNode): NirTypeKind		41
+nim	TypeId	nir/nirtypes.html#TypeId	type TypeId		51
+nim	`==`	nir/nirtypes.html#==,TypeId,TypeId	proc `==`(a, b: TypeId): bool		53
+nim	hash	nir/nirtypes.html#hash,TypeId	proc hash(a: TypeId): Hash		54
+nim	TypeGraph	nir/nirtypes.html#TypeGraph	object TypeGraph		57
+nim	VoidId	nir/nirtypes.html#VoidId	const VoidId		63
+nim	Bool8Id	nir/nirtypes.html#Bool8Id	const Bool8Id		64
+nim	Char8Id	nir/nirtypes.html#Char8Id	const Char8Id		65
+nim	Int8Id	nir/nirtypes.html#Int8Id	const Int8Id		66
+nim	Int16Id	nir/nirtypes.html#Int16Id	const Int16Id		67
+nim	Int32Id	nir/nirtypes.html#Int32Id	const Int32Id		68
+nim	Int64Id	nir/nirtypes.html#Int64Id	const Int64Id		69
+nim	UInt8Id	nir/nirtypes.html#UInt8Id	const UInt8Id		70
+nim	UInt16Id	nir/nirtypes.html#UInt16Id	const UInt16Id		71
+nim	UInt32Id	nir/nirtypes.html#UInt32Id	const UInt32Id		72
+nim	UInt64Id	nir/nirtypes.html#UInt64Id	const UInt64Id		73
+nim	Float32Id	nir/nirtypes.html#Float32Id	const Float32Id		74
+nim	Float64Id	nir/nirtypes.html#Float64Id	const Float64Id		75
+nim	VoidPtrId	nir/nirtypes.html#VoidPtrId	const VoidPtrId		76
+nim	LastBuiltinId	nir/nirtypes.html#LastBuiltinId	const LastBuiltinId		77
+nim	initTypeGraph	nir/nirtypes.html#initTypeGraph	proc initTypeGraph(): TypeGraph		79
+nim	TypePatchPos	nir/nirtypes.html#TypePatchPos	type TypePatchPos		100
+nim	InvalidTypePatchPos	nir/nirtypes.html#InvalidTypePatchPos	const InvalidTypePatchPos		103
+nim	len	nir/nirtypes.html#len,TypeGraph	proc len(tree: TypeGraph): int		123
+nim	sons	nir/nirtypes.html#sons.i,TypeGraph,TypeId	iterator sons(tree: TypeGraph; n: TypeId): TypeId		134
+nim	`[]`	nir/nirtypes.html#[].t,TypeGraph,TypeId	template `[]`(t: TypeGraph; n: TypeId): TypeNode		143
+nim	elementType	nir/nirtypes.html#elementType,TypeGraph,TypeId	proc elementType(tree: TypeGraph; n: TypeId): TypeId		145
+nim	kind	nir/nirtypes.html#kind,TypeGraph,TypeId	proc kind(tree: TypeGraph; n: TypeId): NirTypeKind		149
+nim	arrayLen	nir/nirtypes.html#arrayLen,TypeGraph,TypeId	proc arrayLen(tree: TypeGraph; n: TypeId): BiggestUInt		167
+nim	openType	nir/nirtypes.html#openType,TypeGraph,NirTypeKind	proc openType(tree: var TypeGraph; kind: NirTypeKind): TypePatchPos		171
+nim	sealType	nir/nirtypes.html#sealType,TypeGraph,TypePatchPos	proc sealType(tree: var TypeGraph; p: TypePatchPos): TypeId		177
+nim	nominalType	nir/nirtypes.html#nominalType,TypeGraph,NirTypeKind,string	proc nominalType(tree: var TypeGraph; kind: NirTypeKind; name: string): TypeId		183
+nim	addNominalType	nir/nirtypes.html#addNominalType,TypeGraph,NirTypeKind,string	proc addNominalType(tree: var TypeGraph; kind: NirTypeKind; name: string)		188
+nim	addVarargs	nir/nirtypes.html#addVarargs,TypeGraph	proc addVarargs(tree: var TypeGraph)		192
+nim	getFloat128Type	nir/nirtypes.html#getFloat128Type,TypeGraph	proc getFloat128Type(tree: var TypeGraph): TypeId		195
+nim	addBuiltinType	nir/nirtypes.html#addBuiltinType,TypeGraph,TypeId	proc addBuiltinType(g: var TypeGraph; id: TypeId)		199
+nim	addType	nir/nirtypes.html#addType,TypeGraph,TypeId	proc addType(g: var TypeGraph; t: TypeId)		204
+nim	addArrayLen	nir/nirtypes.html#addArrayLen,TypeGraph,uint64	proc addArrayLen(g: var TypeGraph; len: uint64)		222
+nim	addName	nir/nirtypes.html#addName,TypeGraph,string	proc addName(g: var TypeGraph; name: string)		225
+nim	addAnnotation	nir/nirtypes.html#addAnnotation,TypeGraph,string	proc addAnnotation(g: var TypeGraph; name: string)		228
+nim	addField	nir/nirtypes.html#addField,TypeGraph,string,TypeId	proc addField(g: var TypeGraph; name: string; typ: TypeId)		231
+nim	ptrTypeOf	nir/nirtypes.html#ptrTypeOf,TypeGraph,TypeId	proc ptrTypeOf(g: var TypeGraph; t: TypeId): TypeId		237
+nim	toString	nir/nirtypes.html#toString,string,TypeGraph,TypeId	proc toString(dest: var string; g: TypeGraph; i: TypeId)		242
+nim	toString	nir/nirtypes.html#toString,string,TypeGraph	proc toString(dest: var string; g: TypeGraph)		322
+nimgrp	tostring	nir/nirtypes.html#toString-procs-all	proc		242

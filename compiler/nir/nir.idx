@@ -1,0 +1,7 @@
+nimTitle	nir	nir/nir.html	module nir/nir		0
+nim	PCtx	nir/nir.html#PCtx	type PCtx		17
+nim	newCtx	nir/nir.html#newCtx,PSym,ModuleGraph,IdGenerator	proc newCtx(module: PSym; g: ModuleGraph; idgen: IdGenerator): PCtx		22
+nim	refresh	nir/nir.html#refresh,PCtx,PSym,IdGenerator	proc refresh(c: PCtx; module: PSym; idgen: IdGenerator)		26
+nim	setupGlobalCtx	nir/nir.html#setupGlobalCtx,PSym,ModuleGraph,IdGenerator	proc setupGlobalCtx(module: PSym; graph: ModuleGraph; idgen: IdGenerator)		31
+nim	setupNirReplGen	nir/nir.html#setupNirReplGen,ModuleGraph,PSym,IdGenerator	proc setupNirReplGen(graph: ModuleGraph; module: PSym; idgen: IdGenerator): PPassContext		38
+nim	runCode	nir/nir.html#runCode,PPassContext,PNode	proc runCode(c: PPassContext; n: PNode): PNode		54

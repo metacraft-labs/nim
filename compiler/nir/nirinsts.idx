@@ -1,0 +1,146 @@
+nimTitle	nirinsts	nir/nirinsts.html	module nir/nirinsts		0
+nim	SymId	nir/nirinsts.html#SymId	type SymId		17
+nim	`$`	nir/nirinsts.html#$,SymId	proc `$`(s: SymId): string		19
+nim	hash	nir/nirinsts.html#hash,SymId	proc hash(s: SymId): Hash		20
+nim	`==`	nir/nirinsts.html#==,SymId,SymId	proc `==`(a, b: SymId): bool		21
+nim	Nop	nir/nirinsts.html#Nop	Opcode.Nop		24
+nim	ImmediateVal	nir/nirinsts.html#ImmediateVal	Opcode.ImmediateVal		24
+nim	IntVal	nir/nirinsts.html#IntVal	Opcode.IntVal		24
+nim	StrVal	nir/nirinsts.html#StrVal	Opcode.StrVal		24
+nim	SymDef	nir/nirinsts.html#SymDef	Opcode.SymDef		24
+nim	SymUse	nir/nirinsts.html#SymUse	Opcode.SymUse		24
+nim	Typed	nir/nirinsts.html#Typed	Opcode.Typed		24
+nim	PragmaId	nir/nirinsts.html#PragmaId	Opcode.PragmaId		24
+nim	NilVal	nir/nirinsts.html#NilVal	Opcode.NilVal		24
+nim	Label	nir/nirinsts.html#Label	Opcode.Label		24
+nim	Goto	nir/nirinsts.html#Goto	Opcode.Goto		24
+nim	CheckedGoto	nir/nirinsts.html#CheckedGoto	Opcode.CheckedGoto		24
+nim	LoopLabel	nir/nirinsts.html#LoopLabel	Opcode.LoopLabel		24
+nim	GotoLoop	nir/nirinsts.html#GotoLoop	Opcode.GotoLoop		24
+nim	ModuleSymUse	nir/nirinsts.html#ModuleSymUse	Opcode.ModuleSymUse		24
+nim	ArrayConstr	nir/nirinsts.html#ArrayConstr	Opcode.ArrayConstr		24
+nim	ObjConstr	nir/nirinsts.html#ObjConstr	Opcode.ObjConstr		24
+nim	Ret	nir/nirinsts.html#Ret	Opcode.Ret		24
+nim	Yld	nir/nirinsts.html#Yld	Opcode.Yld		24
+nim	Select	nir/nirinsts.html#Select	Opcode.Select		24
+nim	SelectPair	nir/nirinsts.html#SelectPair	Opcode.SelectPair		24
+nim	SelectList	nir/nirinsts.html#SelectList	Opcode.SelectList		24
+nim	SelectValue	nir/nirinsts.html#SelectValue	Opcode.SelectValue		24
+nim	SelectRange	nir/nirinsts.html#SelectRange	Opcode.SelectRange		24
+nim	SummonGlobal	nir/nirinsts.html#SummonGlobal	Opcode.SummonGlobal		24
+nim	SummonThreadLocal	nir/nirinsts.html#SummonThreadLocal	Opcode.SummonThreadLocal		24
+nim	Summon	nir/nirinsts.html#Summon	Opcode.Summon		24
+nim	SummonParam	nir/nirinsts.html#SummonParam	Opcode.SummonParam		24
+nim	SummonConst	nir/nirinsts.html#SummonConst	Opcode.SummonConst		24
+nim	Kill	nir/nirinsts.html#Kill	Opcode.Kill		24
+nim	AddrOf	nir/nirinsts.html#AddrOf	Opcode.AddrOf		24
+nim	ArrayAt	nir/nirinsts.html#ArrayAt	Opcode.ArrayAt		24
+nim	FieldAt	nir/nirinsts.html#FieldAt	Opcode.FieldAt		24
+nim	Load	nir/nirinsts.html#Load	Opcode.Load		24
+nim	Store	nir/nirinsts.html#Store	Opcode.Store		24
+nim	Asgn	nir/nirinsts.html#Asgn	Opcode.Asgn		24
+nim	SetExc	nir/nirinsts.html#SetExc	Opcode.SetExc		24
+nim	TestExc	nir/nirinsts.html#TestExc	Opcode.TestExc		24
+nim	Call	nir/nirinsts.html#Call	Opcode.Call		24
+nim	IndirectCall	nir/nirinsts.html#IndirectCall	Opcode.IndirectCall		24
+nim	CheckedCall	nir/nirinsts.html#CheckedCall	Opcode.CheckedCall		24
+nim	CheckedIndirectCall	nir/nirinsts.html#CheckedIndirectCall	Opcode.CheckedIndirectCall		24
+nim	CheckedAdd	nir/nirinsts.html#CheckedAdd	Opcode.CheckedAdd		24
+nim	CheckedSub	nir/nirinsts.html#CheckedSub	Opcode.CheckedSub		24
+nim	CheckedMul	nir/nirinsts.html#CheckedMul	Opcode.CheckedMul		24
+nim	CheckedDiv	nir/nirinsts.html#CheckedDiv	Opcode.CheckedDiv		24
+nim	CheckedMod	nir/nirinsts.html#CheckedMod	Opcode.CheckedMod		24
+nim	Add	nir/nirinsts.html#Add	Opcode.Add		24
+nim	Sub	nir/nirinsts.html#Sub	Opcode.Sub		24
+nim	Mul	nir/nirinsts.html#Mul	Opcode.Mul		24
+nim	Div	nir/nirinsts.html#Div	Opcode.Div		24
+nim	Mod	nir/nirinsts.html#Mod	Opcode.Mod		24
+nim	BitShl	nir/nirinsts.html#BitShl	Opcode.BitShl		24
+nim	BitShr	nir/nirinsts.html#BitShr	Opcode.BitShr		24
+nim	BitAnd	nir/nirinsts.html#BitAnd	Opcode.BitAnd		24
+nim	BitOr	nir/nirinsts.html#BitOr	Opcode.BitOr		24
+nim	BitXor	nir/nirinsts.html#BitXor	Opcode.BitXor		24
+nim	BitNot	nir/nirinsts.html#BitNot	Opcode.BitNot		24
+nim	BoolNot	nir/nirinsts.html#BoolNot	Opcode.BoolNot		24
+nim	Eq	nir/nirinsts.html#Eq	Opcode.Eq		24
+nim	Le	nir/nirinsts.html#Le	Opcode.Le		24
+nim	Lt	nir/nirinsts.html#Lt	Opcode.Lt		24
+nim	Cast	nir/nirinsts.html#Cast	Opcode.Cast		24
+nim	NumberConv	nir/nirinsts.html#NumberConv	Opcode.NumberConv		24
+nim	CheckedObjConv	nir/nirinsts.html#CheckedObjConv	Opcode.CheckedObjConv		24
+nim	ObjConv	nir/nirinsts.html#ObjConv	Opcode.ObjConv		24
+nim	TestOf	nir/nirinsts.html#TestOf	Opcode.TestOf		24
+nim	Emit	nir/nirinsts.html#Emit	Opcode.Emit		24
+nim	ProcDecl	nir/nirinsts.html#ProcDecl	Opcode.ProcDecl		24
+nim	PragmaPair	nir/nirinsts.html#PragmaPair	Opcode.PragmaPair		24
+nim	Opcode	nir/nirinsts.html#Opcode	enum Opcode		24
+nim	FastCall	nir/nirinsts.html#FastCall	PragmaKey.FastCall		103
+nim	StdCall	nir/nirinsts.html#StdCall	PragmaKey.StdCall		103
+nim	CDeclCall	nir/nirinsts.html#CDeclCall	PragmaKey.CDeclCall		103
+nim	SafeCall	nir/nirinsts.html#SafeCall	PragmaKey.SafeCall		103
+nim	SysCall	nir/nirinsts.html#SysCall	PragmaKey.SysCall		103
+nim	InlineCall	nir/nirinsts.html#InlineCall	PragmaKey.InlineCall		103
+nim	NoinlineCall	nir/nirinsts.html#NoinlineCall	PragmaKey.NoinlineCall		103
+nim	ThisCall	nir/nirinsts.html#ThisCall	PragmaKey.ThisCall		103
+nim	NoCall	nir/nirinsts.html#NoCall	PragmaKey.NoCall		103
+nim	ExternName	nir/nirinsts.html#ExternName	PragmaKey.ExternName		103
+nim	HeaderImport	nir/nirinsts.html#HeaderImport	PragmaKey.HeaderImport		103
+nim	DllImport	nir/nirinsts.html#DllImport	PragmaKey.DllImport		103
+nim	DllExport	nir/nirinsts.html#DllExport	PragmaKey.DllExport		103
+nim	ObjExport	nir/nirinsts.html#ObjExport	PragmaKey.ObjExport		103
+nim	PragmaKey	nir/nirinsts.html#PragmaKey	enum PragmaKey		103
+nim	ValueProducing	nir/nirinsts.html#ValueProducing	const ValueProducing		119
+nim	Instr	nir/nirinsts.html#Instr	object Instr		160
+nim	kind	nir/nirinsts.html#kind.t,Instr	template kind(n: Instr): Opcode		164
+nim	Tree	nir/nirinsts.html#Tree	object Tree		174
+nim	Values	nir/nirinsts.html#Values	object Values		177
+nim	PatchPos	nir/nirinsts.html#PatchPos	type PatchPos		182
+nim	NodePos	nir/nirinsts.html#NodePos	type NodePos		183
+nim	InvalidPatchPos	nir/nirinsts.html#InvalidPatchPos	const InvalidPatchPos		186
+nim	prepare	nir/nirinsts.html#prepare,Tree,PackedLineInfo,Opcode	proc prepare(tree: var Tree; info: PackedLineInfo; kind: Opcode): PatchPos		190
+nim	patch	nir/nirinsts.html#patch,Tree,PatchPos	proc patch(tree: var Tree; pos: PatchPos)		197
+nim	build	nir/nirinsts.html#build.t,Tree,PackedLineInfo,Opcode,untyped	template build(tree: var Tree; info: PackedLineInfo; kind: Opcode; body: untyped)		205
+nim	buildTyped	nir/nirinsts.html#buildTyped.t,Tree,PackedLineInfo,Opcode,TypeId,untyped	template buildTyped(tree: var Tree; info: PackedLineInfo; kind: Opcode; typ: TypeId;\n           body: untyped)		210
+nim	len	nir/nirinsts.html#len,Tree	proc len(tree: Tree): int		216
+nim	sons	nir/nirinsts.html#sons.i,Tree,NodePos	iterator sons(tree: Tree; n: NodePos): NodePos		227
+nim	`[]`	nir/nirinsts.html#[].t,Tree,NodePos	template `[]`(t: Tree; n: NodePos): Instr		236
+nim	copyTree	nir/nirinsts.html#copyTree,Tree,Tree	proc copyTree(dest: var Tree; src: Tree)		241
+nim	LabelId	nir/nirinsts.html#LabelId	type LabelId		251
+nim	newLabel	nir/nirinsts.html#newLabel,int	proc newLabel(labelGen: var int): LabelId		253
+nim	addNewLabel	nir/nirinsts.html#addNewLabel,Tree,int,PackedLineInfo,Opcode	proc addNewLabel(t: var Tree; labelGen: var int; info: PackedLineInfo; k: Opcode): LabelId		257
+nim	boolVal	nir/nirinsts.html#boolVal,Tree,PackedLineInfo,bool	proc boolVal(t: var Tree; info: PackedLineInfo; b: bool)		263
+nim	gotoLabel	nir/nirinsts.html#gotoLabel,Tree,PackedLineInfo,Opcode,LabelId	proc gotoLabel(t: var Tree; info: PackedLineInfo; k: Opcode; L: LabelId)		266
+nim	addLabel	nir/nirinsts.html#addLabel,Tree,PackedLineInfo,Opcode,LabelId	proc addLabel(t: var Tree; info: PackedLineInfo; k: Opcode; L: LabelId)		270
+nim	addSymUse	nir/nirinsts.html#addSymUse,Tree,PackedLineInfo,SymId	proc addSymUse(t: var Tree; info: PackedLineInfo; s: SymId)		274
+nim	addSymDef	nir/nirinsts.html#addSymDef,Tree,PackedLineInfo,SymId	proc addSymDef(t: var Tree; info: PackedLineInfo; s: SymId)		277
+nim	addTyped	nir/nirinsts.html#addTyped,Tree,PackedLineInfo,TypeId	proc addTyped(t: var Tree; info: PackedLineInfo; typ: TypeId)		280
+nim	addSummon	nir/nirinsts.html#addSummon,Tree,PackedLineInfo,SymId,TypeId	proc addSummon(t: var Tree; info: PackedLineInfo; s: SymId; typ: TypeId; opc = Summon)		283
+nim	addImmediateVal	nir/nirinsts.html#addImmediateVal,Tree,PackedLineInfo,int	proc addImmediateVal(t: var Tree; info: PackedLineInfo; x: int)		290
+nim	addPragmaId	nir/nirinsts.html#addPragmaId,Tree,PackedLineInfo,PragmaKey	proc addPragmaId(t: var Tree; info: PackedLineInfo; x: PragmaKey)		294
+nim	addIntVal	nir/nirinsts.html#addIntVal,Tree,BiTable[int64],PackedLineInfo,TypeId,int64	proc addIntVal(t: var Tree; integers: var BiTable[int64]; info: PackedLineInfo;\n          typ: TypeId; x: int64)		297
+nim	addStrVal	nir/nirinsts.html#addStrVal,Tree,BiTable[string],PackedLineInfo,string	proc addStrVal(t: var Tree; strings: var BiTable[string]; info: PackedLineInfo;\n          s: string)		301
+nim	addNilVal	nir/nirinsts.html#addNilVal,Tree,PackedLineInfo,TypeId	proc addNilVal(t: var Tree; info: PackedLineInfo; typ: TypeId)		304
+nim	toString	nir/nirinsts.html#toString,Tree,NodePos,BiTable[string],BiTable[int64],string,int	proc toString(t: Tree; pos: NodePos; strings: BiTable[string];\n         integers: BiTable[int64]; r: var string; nesting = 0)		326
+nim	Value	nir/nirinsts.html#Value	type Value		371
+nim	prepare	nir/nirinsts.html#prepare,Value,PackedLineInfo,Opcode	proc prepare(dest: var Value; info: PackedLineInfo; k: Opcode): PatchPos		373
+nim	patch	nir/nirinsts.html#patch,Value,PatchPos	proc patch(dest: var Value; pos: PatchPos)		377
+nim	localToValue	nir/nirinsts.html#localToValue,PackedLineInfo,SymId	proc localToValue(info: PackedLineInfo; s: SymId): Value		380
+nim	hasValue	nir/nirinsts.html#hasValue,Value	proc hasValue(v: Value): bool		384
+nim	isEmpty	nir/nirinsts.html#isEmpty,Value	proc isEmpty(v: Value): bool		386
+nim	extractTemp	nir/nirinsts.html#extractTemp,Value	proc extractTemp(v: Value): SymId		388
+nim	copyTree	nir/nirinsts.html#copyTree,Tree,Value	proc copyTree(dest: var Tree; src: Value)		394
+nim	addImmediateVal	nir/nirinsts.html#addImmediateVal,Value,PackedLineInfo,int	proc addImmediateVal(t: var Value; info: PackedLineInfo; x: int)		396
+nim	build	nir/nirinsts.html#build.t,Value,PackedLineInfo,Opcode,untyped	template build(tree: var Value; info: PackedLineInfo; kind: Opcode; body: untyped)		400
+nim	addTyped	nir/nirinsts.html#addTyped,Value,PackedLineInfo,TypeId	proc addTyped(t: var Value; info: PackedLineInfo; typ: TypeId)		405
+nim	buildTyped	nir/nirinsts.html#buildTyped.t,Value,PackedLineInfo,Opcode,TypeId,untyped	template buildTyped(tree: var Value; info: PackedLineInfo; kind: Opcode; typ: TypeId;\n           body: untyped)		408
+nim	addStrVal	nir/nirinsts.html#addStrVal,Value,BiTable[string],PackedLineInfo,string	proc addStrVal(t: var Value; strings: var BiTable[string]; info: PackedLineInfo;\n          s: string)		414
+nim	addNilVal	nir/nirinsts.html#addNilVal,Value,PackedLineInfo,TypeId	proc addNilVal(t: var Value; info: PackedLineInfo; typ: TypeId)		417
+nimgrp	prepare	nir/nirinsts.html#prepare-procs-all	proc		190
+nimgrp	addtyped	nir/nirinsts.html#addTyped-procs-all	proc		280
+nimgrp	addstrval	nir/nirinsts.html#addStrVal-procs-all	proc		301
+nimgrp	addnilval	nir/nirinsts.html#addNilVal-procs-all	proc		304
+nimgrp	addimmediateval	nir/nirinsts.html#addImmediateVal-procs-all	proc		290
+nimgrp	patch	nir/nirinsts.html#patch-procs-all	proc		197
+nimgrp	copytree	nir/nirinsts.html#copyTree-procs-all	proc		241
+nimgrp	build	nir/nirinsts.html#build-templates-all	template		205
+nimgrp	buildtyped	nir/nirinsts.html#buildTyped-templates-all	template		210

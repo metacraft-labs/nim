@@ -1,0 +1,6 @@
+nimTitle	nirlineinfos	nir/nirlineinfos.html	module nir/nirlineinfos		0
+nim	PackedLineInfo	nir/nirlineinfos.html#PackedLineInfo	type PackedLineInfo		40
+nim	LineInfoManager	nir/nirlineinfos.html#LineInfoManager	object LineInfoManager		42
+nim	pack	nir/nirlineinfos.html#pack,LineInfoManager,LitId,int32,int32	proc pack(m: var LineInfoManager; file: LitId; line, col: int32): PackedLineInfo		45
+nim	unpack	nir/nirlineinfos.html#unpack,LineInfoManager,PackedLineInfo	proc unpack(m: LineInfoManager; i: PackedLineInfo): (LitId, int32, int32)		56
+nim	getFileId	nir/nirlineinfos.html#getFileId,LineInfoManager,PackedLineInfo	proc getFileId(m: LineInfoManager; i: PackedLineInfo): LitId		66

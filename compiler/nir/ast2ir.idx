@@ -1,0 +1,8 @@
+nimTitle	ast2ir	nir/ast2ir.html	module nir/ast2ir		0
+nim	ModuleCon	nir/ast2ir.html#ModuleCon	type ModuleCon		24
+nim	ProcCon	nir/ast2ir.html#ProcCon	object ProcCon		36
+nim	initModuleCon	nir/ast2ir.html#initModuleCon,ModuleGraph,ConfigRef,IdGenerator,PSym	proc initModuleCon(graph: ModuleGraph; config: ConfigRef; idgen: IdGenerator;\n              module: PSym): ModuleCon		49
+nim	initProcCon	nir/ast2ir.html#initProcCon,ModuleCon,PSym,ConfigRef	proc initProcCon(m: ModuleCon; prc: PSym; config: ConfigRef): ProcCon		63
+nim	intoDest	nir/ast2ir.html#intoDest.t,Value,PackedLineInfo,TypeId,untyped	template intoDest(d: var Value; info: PackedLineInfo; typ: TypeId; body: untyped)		572
+nim	genStmt	nir/ast2ir.html#genStmt,ProcCon,PNode	proc genStmt(c: var ProcCon; n: PNode): int		2180
+nim	genExpr	nir/ast2ir.html#genExpr,ProcCon,PNode	proc genExpr(c: var ProcCon; n: PNode; requiresValue = true): int		2186
