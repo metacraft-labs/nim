@@ -107,6 +107,7 @@ type                          # please make sure we have under 32 options
     optProduceAsm             # produce assembler code
     optPanics                 # turn panics (sysFatal) into a process termination
     optSourcemap
+    optTraceVM                # enable VM execution tracing (CodeTracer)
     optProfileVM              # enable VM profiler
     optEnableDeepCopy         # ORC specific: enable 'deepcopy' for all types.
     optShowNonExportedFields  # for documentation: show fields that are not exported
@@ -485,6 +486,7 @@ type
     nimMainPrefix*: string
     vmProfileData*: ProfileData
     macroSourcemap*: MacroSourcemap
+    traceOutputPath*: string  # output path for --trace (VM execution tracing)
 
     expandProgress*: bool
     expandLevels*: int

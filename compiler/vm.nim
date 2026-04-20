@@ -25,6 +25,9 @@ from semfold import leValueConv, ordinalValToString
 from evaltempl import evalTemplate
 from magicsys import getSysType
 
+when defined(codetracerTracing):
+  import vm_trace
+
 const
   traceCode = defined(nimVMDebug)
 
@@ -585,10 +588,16 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       let info = c.debug[pc]
       # other useful variables: c.loopIterations
       echo "$# [$#] $#" % [c.config$info, $instr.opcode, c.config.sourceLine(info)]
+    when defined(codetracerTracing):
+      if c.vmTracer != nil:
+        traceStep(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc])
     c.profiler.enter(c, tos)
     case instr.opcode
     of opcEof: return regs[ra]
     of opcRet:
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceReturn(cast[ptr VmTracer](c.vmTracer)[])
       let newPc = c.cleanUpOnReturn(tos)
       # Perform any cleanup action before returning
       if newPc < 0:
@@ -1443,6 +1452,9 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # logic as for loops:
         if procInfo.pc < pc: handleJmpBack()
         #echo "new pc ", newPc, " calling: ", prc.name.s
+        when defined(codetracerTracing):
+          if c.vmTracer != nil:
+            traceCall(cast[ptr VmTracer](c.vmTracer)[], prc.name.s, c.debug[pc])
         var newFrame = PStackFrame(prc: prc, comesFrom: pc, next: tos)
         newSeq(newFrame.slots, procInfo.usedRegisters+ord(isClosure))
         # setup slot for proc result:

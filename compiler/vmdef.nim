@@ -279,6 +279,8 @@ type
     procToCodePos*: Table[int, VmProcInfo]
     cannotEval*: bool
     locals*: IntSet
+    when defined(codetracerTracing):
+      vmTracer*: pointer  # ptr VmTracer (from vm_trace module), nil when tracing disabled
 
   PStackFrame* = ref TStackFrame
   TStackFrame* {.acyclic.} = object

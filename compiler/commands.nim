@@ -1190,6 +1190,9 @@ proc processSwitch*(switch, arg: string, pass: TCmdLinePass, info: TLineInfo;
   of "sourcemap": # xxx document in --fullhelp
     conf.globalOptions.incl optSourcemap
     conf.options.incl optLineDir
+  of "trace":
+    conf.globalOptions.incl optTraceVM
+    conf.traceOutputPath = arg
   of "deepcopy":
     processOnOffSwitchG(conf, {optEnableDeepCopy}, arg, pass, info)
   of "": # comes from "-" in for example: `nim c -r -` (gets stripped from -)
