@@ -2041,7 +2041,7 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       regs[ra].node.info = regs[rb].node.info
     of opcNSetLineInfoLine:
       decodeB(rkNode)
-      regs[ra].node.info.line = regs[rb].intVal.uint16
+      regs[ra].node.info.line = regs[rb].intVal.uint32
     of opcNSetLineInfoColumn:
       decodeB(rkNode)
       regs[ra].node.info.col = regs[rb].intVal.int16

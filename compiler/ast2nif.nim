@@ -118,7 +118,7 @@ proc oldLineInfo(w: var LineInfoWriter; info: PackedLineInfo): TLineInfo =
       let filePath = pool.files[x.file]
       fileIdx = msgs.fileInfoIdx(w.config, AbsoluteFile filePath)
       w.revTab[x.file] = fileIdx
-    result = TLineInfo(line: x.line.uint16, col: x.col.int16, fileIndex: fileIdx)
+    result = TLineInfo(line: x.line.uint32, col: x.col.int16, fileIndex: fileIdx)
 
 
 # ------------- Writer ---------------------------------------------------------------

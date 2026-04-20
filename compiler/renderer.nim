@@ -66,6 +66,7 @@ type
     mangler: seq[PSym]
     line*: uint32
 
+proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}, config: ConfigRef = nil): string
 
 # We render the source code in a two phases: The first
 # determines how long the subtree will likely be, the second

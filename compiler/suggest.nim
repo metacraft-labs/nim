@@ -859,7 +859,7 @@ proc suggestModuleNames(c: PContext, n: PNode) =
   produceOutput(suggestions, c.config)
   suggestQuit()
 
-proc findImportStmtOnLine(n: PNode, line: uint16): PNode =
+proc findImportStmtOnLine(n: PNode, line: uint32): PNode =
   if n.kind in {nkImportStmt, nkFromStmt} and n.info.line == line:
     return n
   for i in 0..<n.safeLen:

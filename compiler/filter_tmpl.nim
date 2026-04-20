@@ -37,7 +37,7 @@ const
 proc newLine(p: var TTmplParser) =
   llStreamWrite(p.outp, repeat(')', p.emitPar))
   p.emitPar = 0
-  if p.info.line > uint16(1): llStreamWrite(p.outp, "\n")
+  if p.info.line > uint32(1): llStreamWrite(p.outp, "\n")
   if p.pendingExprLine:
     llStreamWrite(p.outp, spaces(2))
     p.pendingExprLine = false

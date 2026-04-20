@@ -1204,11 +1204,11 @@ proc rawGetTok*(L: var Lexer, tok: var Token) =
     when defined(nimsuggest):
       L.previousTokenEnd.line = L.tokenEnd.line
       L.previousTokenEnd.col = L.tokenEnd.col
-      L.tokenEnd.line = tok.line.uint16
+      L.tokenEnd.line = tok.line.uint32
       L.tokenEnd.col = getColNumber(L, L.bufpos).int16
       # we attach the cursor to the last *strong* token
       if tok.tokType notin weakTokens:
-        L.previousToken.line = tok.line.uint16
+        L.previousToken.line = tok.line.uint32
         L.previousToken.col = tok.col.int16
 
   reset(tok)

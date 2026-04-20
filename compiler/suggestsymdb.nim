@@ -7,7 +7,7 @@ type
     len: int
 
   TinyLineInfo* = object
-    line*: uint16
+    line*: uint32
     col*: int16
 
   SymInfoPair* = object
