@@ -16,7 +16,7 @@ import
   rodutils, renderer, cgendata, aliases,
   lowerings, lineinfos, pathutils, transf,
   injectdestructors, astmsgs, modulepaths, pushpoppragmas,
-  mangleutils, cbuilderbase, modulegraphs, json
+  mangleutils, cbuilderbase, modulegraphs, json, c_sourcemap
 
 from expanddefaults import caseObjDefaultBranch
 
@@ -2510,6 +2510,8 @@ proc shouldRecompile(m: BModule; code: Rope, cfile: Cfile): bool =
       rawMessage(m.config, errCannotOpenFile, cfile.cname.string)
     result = true
 
+var cSourceMap: CSourceMap
+
 proc writeModule(m: BModule) =
   let cfile = getCFile(m)
   if moduleHasChanged(m.g.graph, m.module):
@@ -2534,6 +2536,12 @@ proc writeModule(m: BModule) =
       if m.config.cmd == cmdTcc:
         tccgen.compileCCode($code, m.config)
         return
+
+    # Build C sourcemap from #line directives in the generated C code
+    if optSourcemap in m.config.globalOptions:
+      if cSourceMap == nil:
+        cSourceMap = newCSourceMap()
+      cSourceMap.genSourceMap(code, cfile.string)
 
     if not shouldRecompile(m, code, cf): cf.flags = {CfileFlag.Cached}
     addFileToCompile(m.config, cf)
@@ -2676,6 +2684,12 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
   for m in cgenModules(g):
     m.writeModule()
   writeMapping(config, g.mapping)
+  # Write C sourcemap (Nim-to-C line mappings for CodeTracer)
+  if optSourcemap in config.globalOptions and cSourceMap != nil:
+    let fullPathForMap = config.prepareToWriteOutput
+    let (outDirForMap, nameForMap, _) = splitFile(fullPathForMap)
+    cSourceMap.writeSourceMap(outDirForMap.string, nameForMap.string)
+
   if g.generatedHeader != nil: writeHeader(g.generatedHeader)
 
   # start of macro sourcemap code
