@@ -16,7 +16,9 @@ import
   rodutils, renderer, cgendata, aliases,
   lowerings, lineinfos, pathutils, transf,
   injectdestructors, astmsgs, modulepaths, pushpoppragmas,
-  mangleutils, cbuilderbase, modulegraphs, json
+  mangleutils, cbuilderbase, modulegraphs, c_sourcemap
+
+import std/json
 
 from expanddefaults import caseObjDefaultBranch
 

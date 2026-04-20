@@ -303,7 +303,7 @@ type
     scope*, localUsages*, globalUsages*: int # more usages is better
     tokenLen*: int
     version*: int
-    endLine*: uint16
+    endLine*: uint32
     endCol*: int
     inlayHintInfo*: SuggestInlayHint
 

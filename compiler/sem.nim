@@ -476,7 +476,7 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
   # we should do the record
   # setup/record => `evalMacroCall` => setup/record for a child => `evalMacroCall` for it
   var expandMap = false
-  if s.name.s notin dontExpandDebug:
+  if optSourcemap in c.config.globalOptions and s.name.s notin dontExpandDebug:
     # don't follow stdlib
     if c.module.owner != nil and c.module.owner.name.s == "stdlib":
       # echo c.module.owner.name.s
@@ -492,6 +492,7 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
     if "/.cache/nim/" in nimcache.string:
       echo "[warn]: ignoring ", nimcache.string
     else:
+      createDir(nimcache.string)
       let filename = AbsoluteFile(nimcache / RelativeFile("expanded.nim"))
       if c.config.macroSourcemap.isNil:
         c.config.macroSourcemap = MacroSourcemap(
