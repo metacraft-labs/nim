@@ -2616,7 +2616,36 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
                  " generic parameter(s)")
   # temporary storage:
   #for i in L..<maxSlots: tos.slots[i] = newNode(nkEmpty)
+
+  when defined(codetracerTracing):
+    # Set up per-call VM tracing for ideTraceExpand when cursor matches this macro call
+    var traceExpandActive = false
+    var savedVmTracer: pointer = nil
+    if g.config.ideCmd == ideTraceExpand and c.vmTracer == nil:
+      let callInfo = nOrig.info
+      let trackPos = g.config.traceExpandPosition
+      if callInfo.fileIndex == trackPos.fileIndex and
+         callInfo.line == trackPos.line:
+        let nimcache = getNimcacheDir(g.config)
+        createDir(nimcache)
+        let tracePath = string(nimcache / RelativeFile("macro_trace_" & sym.name.s & ".ct"))
+        let tracerRes = initVmTracer(tracePath, sym.name.s, g.config)
+        if tracerRes.isOk:
+          savedVmTracer = c.vmTracer
+          c.vmTracer = tracerRes.get()
+          traceExpandActive = true
+          g.config.traceExpandResult = tracePath
+
   result = rawExecute(c, start.pc, tos).regToNode
+
+  when defined(codetracerTracing):
+    # Tear down per-call tracing if we set it up
+    if traceExpandActive:
+      let tracer = cast[ptr VmTracer](c.vmTracer)
+      syncVmTracer(tracer)
+      discard closeVmTracer(tracer)
+      c.vmTracer = savedVmTracer
+
   if result.info.line < 0: result.info = nOrig.info
   if cyclicTree(result): globalError(c.config, n.info, "macro produced a cyclic tree")
   dec(g.config.evalMacroCounter)

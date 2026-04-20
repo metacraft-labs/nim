@@ -534,6 +534,7 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
   of "globalsymbols": conf.ideCmd = ideGlobalSymbols
   of "declaration": conf.ideCmd = ideDeclaration
   of "expand": conf.ideCmd = ideExpand
+  of "traceexpand": conf.ideCmd = ideTraceExpand
   of "chkfile": conf.ideCmd = ideChkFile
   of "recompile": conf.ideCmd = ideRecompile
   of "type": conf.ideCmd = ideType
@@ -1016,13 +1017,13 @@ proc outlineNode(graph: ModuleGraph, n: PNode, endInfo: TLineInfo, infoPairs: Su
     result = (sym.owner.kind in {skModule, skType} or sym.kind in {skProc, skMethod, skIterator, skTemplate, skType})
 
   if n.kind == nkSym and n.sym.checkSymbol(n.info):
-    graph.suggestResult(n.sym, n.sym.info, ideOutline, endInfo.line, endInfo.col)
+    graph.suggestResult(n.sym, n.sym.info, ideOutline, uint16(endInfo.line), endInfo.col)
     return true
   elif n.kind in {nkIdent, nkAccQuoted}:
     let symData = findByTLineInfo(n.info, infoPairs)
     if symData != nil and symData.sym.checkSymbol(symData.info):
        let sym = symData.sym
-       graph.suggestResult(sym, sym.info, ideOutline, endInfo.line, endInfo.col)
+       graph.suggestResult(sym, sym.info, ideOutline, uint16(endInfo.line), endInfo.col)
        return true
 
 proc handleIdentOrSym(graph: ModuleGraph, n: PNode, endInfo: TLineInfo, infoPairs: SuggestFileSymbolDatabase): bool =
@@ -1041,7 +1042,7 @@ proc iterateOutlineNodes(graph: ModuleGraph, n: PNode, infoPairs: SuggestFileSym
     let symData = findByTLineInfo(n.info, infoPairs)
     if symData != nil and symData.sym.kind == skEnumField and symData.info.exactEquals(symData.sym.info):
        let sym = symData.sym
-       graph.suggestResult(sym, sym.info, ideOutline, n.endInfo.line, n.endInfo.col)
+       graph.suggestResult(sym, sym.info, ideOutline, uint16(n.endInfo.line), n.endInfo.col)
   elif (n.kind in {nkFuncDef, nkProcDef, nkMethodDef, nkIteratorDef, nkTypeDef, nkMacroDef, nkTemplateDef, nkConverterDef, nkEnumFieldDef, nkConstDef}):
     matched = handleIdentOrSym(graph, n, n.endInfo, infoPairs)
   else:
@@ -1099,7 +1100,7 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.unmarkAllDirty()
 
   # these commands require partially compiled project
-  elif cmd in {ideSug, ideCon, ideOutline, ideHighlight, ideDef, ideChkFile, ideType, ideDeclaration, ideExpand} and
+  elif cmd in {ideSug, ideCon, ideOutline, ideHighlight, ideDef, ideChkFile, ideType, ideDeclaration, ideExpand, ideTraceExpand} and
        (graph.needsCompilation(fileIndex) or cmd in {ideSug, ideCon}):
     # for ideSug use v2 implementation
     if cmd in {ideSug, ideCon}:
@@ -1253,6 +1254,27 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
 
     graph.markDirty fileIndex
     graph.markClientsDirty fileIndex
+  of ideTraceExpand:
+    when defined(codetracerTracing):
+      conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
+      conf.traceExpandResult = ""
+
+      graph.markDirty fileIndex
+      graph.markClientsDirty fileIndex
+      graph.recompilePartially()
+
+      var suggest = Suggest()
+      suggest.section = ideTraceExpand
+      suggest.version = 3
+      suggest.line = line
+      suggest.column = col
+      suggest.doc = conf.traceExpandResult
+      suggestResult(graph.config, suggest)
+
+      graph.markDirty fileIndex
+      graph.markClientsDirty fileIndex
+    else:
+      discard
   of ideInlayHints:
     myLog fmt "Executing inlayHints"
     var endLine = 0

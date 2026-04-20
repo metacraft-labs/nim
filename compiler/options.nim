@@ -208,7 +208,7 @@ type
   IdeCmd* = enum
     ideNone, ideSug, ideCon, ideDef, ideUse, ideDus, ideChk, ideChkFile, ideMod,
     ideHighlight, ideOutline, ideKnown, ideMsg, ideProject, ideGlobalSymbols,
-    ideRecompile, ideChanged, ideType, ideDeclaration, ideExpand, ideInlayHints
+    ideRecompile, ideChanged, ideType, ideDeclaration, ideExpand, ideTraceExpand, ideInlayHints
 
   Feature* = enum  ## experimental features; DO NOT RENAME THESE!
     dotOperators,
@@ -492,6 +492,8 @@ type
     expandLevels*: int
     expandNodeResult*: string
     expandPosition*: TLineInfo
+    traceExpandPosition*: TLineInfo   ## cursor position for ideTraceExpand
+    traceExpandResult*: string        ## path to .ct trace file produced by ideTraceExpand
 
     currentConfigDir*: string # used for passPP only; absolute dir
     clientProcessId*: int
@@ -1108,6 +1110,7 @@ proc parseIdeCmd*(s: string): IdeCmd =
   of "recompile": ideRecompile
   of "changed": ideChanged
   of "type": ideType
+  of "traceExpand": ideTraceExpand
   else: ideNone
 
 proc `$`*(c: IdeCmd): string =
@@ -1129,6 +1132,7 @@ proc `$`*(c: IdeCmd): string =
   of ideGlobalSymbols: "globalSymbols"
   of ideDeclaration: "declaration"
   of ideExpand: "expand"
+  of ideTraceExpand: "traceExpand"
   of ideRecompile: "recompile"
   of ideChanged: "changed"
   of ideType: "type"
