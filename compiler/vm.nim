@@ -625,9 +625,15 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         regs[ra].intVal = regs[rb].intVal
       else:
         stackTrace(c, tos, pc, "opcAsgnInt: got " & $regs[rb].kind)
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcAsgnFloat:
       decodeB(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcCastFloatToInt32:
       let rb = instr.regB
       ensureKind(rkInt)
@@ -680,8 +686,14 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       regs[ra].node = node2
     of opcAsgnComplex:
       asgnComplex(regs[ra], regs[instr.regB])
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcFastAsgnComplex:
       fastAsgnComplex(regs[ra], regs[instr.regB])
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcAsgnRef:
       asgnRef(regs[ra], regs[instr.regB])
     of opcNodeToReg:
@@ -895,6 +907,9 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         else:
           let n = src[rc]
           regs[ra].node = n
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcLdObjAddr:
       # a = addr(b.c)
       decodeBC(rkNodeAddr)
@@ -924,6 +939,9 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       else:
         writeField(dest[shiftedRb], regs[rc])
         dest[shiftedRb].flags.incl nfSkipFieldChecking
+      when defined(codetracerTracing):
+        if c.vmTracer != nil:
+          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[rc])
     of opcWrStrIdx:
       decodeBC(rkNode)
       let idx = regs[rb].intVal.int

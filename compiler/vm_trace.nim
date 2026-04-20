@@ -20,10 +20,13 @@ when not defined(codetracerTracing):
 
 import std/tables
 import msgs, options, lineinfos
+import ast
 import results
 export results
 import codetracer_trace_writer
 import codetracer_trace_types
+import vm_value_serializer
+import vmdef
 
 type
   VmTracer* = object
@@ -34,6 +37,7 @@ type
     functions*: Table[string, uint64] ## name → functionId
     nextPathId*: uint64
     nextFunctionId*: uint64
+    nextVariableId*: uint64
     depth*: int
     config*: ConfigRef
 
@@ -132,6 +136,17 @@ proc traceReturn*(tracer: var VmTracer) =
   if tracer.depth > 0:
     tracer.depth -= 1
   let res = tracer.writer.writeReturn()
+  if res.isErr:
+    discard
+
+proc traceAssignment*(tracer: var VmTracer, reg: TFullReg,
+                      typ: PType = nil) =
+  ## Emit a Value event for a register-writing opcode.
+  ## Serializes the register value and writes it into the trace.
+  let value = serializeVmValue(reg, typ)
+  let varId = tracer.nextVariableId
+  tracer.nextVariableId += 1
+  let res = tracer.writer.writeValue(varId, value)
   if res.isErr:
     discard
 
