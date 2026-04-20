@@ -8,6 +8,11 @@ when not defined(nimKochBootstrap):
   import ast2nif
   import "../dist/nimony/src/lib" / [nifstreams, bitabs]
 
+when defined(codetracerTracing):
+  when defined(nimKochBootstrap):
+    import vmdef
+  import vm_trace
+
 import pipelineutils
 
 import ../dist/checksums/src/checksums/sha1
@@ -205,6 +210,14 @@ proc processPipelineModule*(graph: ModuleGraph; module: PSym; idgen: IdGenerator
       let top = processPipeline(graph, semNode, bModule)
       if top != nil and topLevelStmts != nil:
         topLevelStmts.add top
+
+      when defined(codetracerTracing):
+        # After each REPL line, sync trace data to disk so concurrent
+        # readers can see events incrementally.
+        if graph.interactive and graph.vm != nil:
+          let vmCtx = PCtx(graph.vm)
+          if vmCtx.vmTracer != nil:
+            syncVmTracer(cast[ptr VmTracer](vmCtx.vmTracer))
 
     closeParser(p)
     if s.kind != llsStdIn: break

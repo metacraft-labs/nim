@@ -37,6 +37,9 @@ when not defined(nimKochBootstrap):
 when not defined(leanCompiler):
   import docgen
 
+when defined(codetracerTracing):
+  import vm_trace, vmdef
+
 proc writeDepsFile(g: ModuleGraph) =
   let fname = g.config.nimcacheDir / RelativeFile(g.config.projectName & ".deps")
   let f = open(fname.string, fmWrite)
@@ -198,6 +201,20 @@ proc commandInteractive(graph: ModuleGraph) =
   when hasFFI: defineSymbol(graph.config.symbols, "nimffi")
   setPipeLinePass(graph, InterpreterPass)
   compilePipelineSystemModule(graph)
+
+  when defined(codetracerTracing):
+    # Attach VM tracer after the system module has been compiled
+    # (which is when graph.vm gets created via setupEvalGen).
+    let conf = graph.config
+    if optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0:
+      if graph.vm != nil:
+        let tracerRes = initVmTracer(conf.traceOutputPath, "nim-repl", conf)
+        if tracerRes.isOk:
+          PCtx(graph.vm).vmTracer = tracerRes.get()
+        else:
+          rawMessage(conf, warnUser,
+            "failed to initialize VM tracer: " & tracerRes.error)
+
   if graph.config.commandArgs.len > 0:
     discard graph.compilePipelineModule(fileInfoIdx(graph.config, graph.config.projectFull), {})
   else:
@@ -206,6 +223,17 @@ proc commandInteractive(graph: ModuleGraph) =
     var idgen = IdGenerator(module: m.itemId.module, symId: m.itemId.item, typeId: 0)
     let s = llStreamOpenStdIn(onPrompt = proc() = flushDot(graph.config))
     discard processPipelineModule(graph, m, idgen, s)
+
+  when defined(codetracerTracing):
+    # Close the tracer on REPL exit
+    if graph.vm != nil:
+      let vm = PCtx(graph.vm)
+      if vm.vmTracer != nil:
+        let closeRes = closeVmTracer(cast[ptr VmTracer](vm.vmTracer))
+        if closeRes.isErr:
+          rawMessage(graph.config, warnUser,
+            "failed to close VM tracer: " & closeRes.error)
+        vm.vmTracer = nil
 
 proc commandScan(cache: IdentCache, config: ConfigRef) =
   var f = addFileExt(AbsoluteFile mainCommandArg(config), NimExt)

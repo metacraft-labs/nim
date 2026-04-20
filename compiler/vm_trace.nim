@@ -150,6 +150,13 @@ proc traceAssignment*(tracer: var VmTracer, reg: TFullReg,
   if res.isErr:
     discard
 
+proc syncVmTracer*(tracer: ptr VmTracer) =
+  ## Flush trace data to disk for concurrent readers.
+  ## Call after each REPL line to make events visible incrementally.
+  if tracer == nil:
+    return
+  discard tracer.writer.sync()
+
 proc closeVmTracer*(tracer: ptr VmTracer): Result[void, string] =
   ## Close the trace writer and free the VmTracer.
   if tracer == nil:
