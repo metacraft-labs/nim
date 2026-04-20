@@ -1,0 +1,8 @@
+markupTitle	Incremental Compilation (IC)	ic.html	Incremental Compilation (IC)		0
+heading	Overview	ic.html#overview	 Overview		0
+heading	NIF File Format	ic.html#nif-file-format	 NIF File Format		0
+heading	The nim ic Switch	ic.html#the-nim-ic-switch	 The <tt class="docutils literal"><span class="pre">nim ic</span></tt> Switch		0
+heading	Prerequisites	ic.html#prerequisites	  Prerequisites		0
+heading	Key Modules for IC Logic	ic.html#key-modules-for-ic-logic	 Key Modules for IC Logic		0
+heading	Code, Logic & Debugging	ic.html#code-logic-amp-debugging	 <strong>Code, Logic &amp; Debugging</strong>		0
+heading	See also	ic.html#see-also	 See also		0

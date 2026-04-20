@@ -1,0 +1,2 @@
+nimTitle	deps	deps.html	module deps		0
+nim	commandIc	deps.html#commandIc,ConfigRef	proc commandIc(conf: ConfigRef)		340
