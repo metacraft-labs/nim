@@ -151,10 +151,10 @@ proc fileInfoKind*(conf: ConfigRef; fileIdx: FileIndex): FileInfoKind =
 
 proc newLineInfo*(fileInfoIdx: FileIndex, line, col: int): TLineInfo =
   result = TLineInfo(fileIndex: fileInfoIdx)
-  if line < int high(uint16):
-    result.line = uint16(line)
+  if line < int high(uint32):
+    result.line = uint32(line)
   else:
-    result.line = high(uint16)
+    result.line = high(uint32)
   if col < int high(int16):
     result.col = int16(col)
   else:

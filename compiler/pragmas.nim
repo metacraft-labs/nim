@@ -698,7 +698,7 @@ proc pragmaLine(c: PContext, n: PNode) =
         localError(c.config, n.info, errIntLiteralExpected)
       else:
         n.info.fileIndex = fileInfoIdx(c.config, AbsoluteFile(x.strVal))
-        n.info.line = uint16(y.intVal)
+        n.info.line = uint32(y.intVal)
     else:
       localError(c.config, n.info, "tuple expected")
   else:

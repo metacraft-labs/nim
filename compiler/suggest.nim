@@ -146,7 +146,7 @@ proc symToSuggest*(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info
                   quality: range[0..100]; prefix: PrefixMatch;
                   inTypeContext: bool; scope: int;
                   useSuppliedInfo = false,
-                  endLine: uint16 = 0,
+                  endLine: uint32 = 0,
                   endCol = 0, extractDocs = true): Suggest =
   new(result)
   result.section = section
@@ -859,7 +859,7 @@ proc suggestModuleNames(c: PContext, n: PNode) =
   produceOutput(suggestions, c.config)
   suggestQuit()
 
-proc findImportStmtOnLine(n: PNode, line: uint16): PNode =
+proc findImportStmtOnLine(n: PNode, line: uint32): PNode =
   if n.kind in {nkImportStmt, nkFromStmt} and n.info.line == line:
     return n
   for i in 0..<n.safeLen:

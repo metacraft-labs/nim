@@ -21,7 +21,7 @@ import
   extccomp, layeredtable, pathutils
 
 import vtables
-import std/[strtabs, math, tables, intsets, strutils, packedsets]
+import std/[strtabs, math, tables, intsets, strutils, packedsets, sets]
 
 when not defined(leanCompiler):
   import spawn
@@ -34,8 +34,8 @@ when defined(nimPreviewSlimSystem):
 
 # implementation
 
-const dontExpandDebug = toSet[string](
-  @["!=", ">=", "assert", "assertImpl", "builtin", "in", ">",
+const dontExpandDebug = toHashSet(
+  ["!=", ">=", "assert", "assertImpl", "builtin", "in", ">",
   "dotdotImpl", "dotdotLessImpl", "sysAssert", ">=%", "+!", "[]", "[]=", "ones"])
 proc semExpr(c: PContext, n: PNode, flags: TExprFlags = {}, expectedType: PType = nil): PNode
 proc semExprWithType(c: PContext, n: PNode, flags: TExprFlags = {}, expectedType: PType = nil): PNode
