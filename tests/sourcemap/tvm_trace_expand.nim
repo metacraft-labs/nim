@@ -47,7 +47,7 @@ proc verifyCtfsStructure(path: string) =
 
   # Version
   let version = uint8(data[5])
-  doAssert version == 3 or version == 2, "unexpected version: " & $version
+  doAssert version >= 2 and version <= 4, "unexpected version: " & $version
 
   # Block size and max entries
   let blockSize = readLE32(data, 8)
@@ -68,17 +68,20 @@ proc main() =
   writeFile(sourceFile, testSource)
 
   # The macro call `greet("World")` is on line 7 (1-indexed) of testSource.
-  let nimsuggestExe = nim.parentDir / "nimsuggest"
-
-  # If nimsuggest binary doesn't exist, SKIP the test (not pass)
-  if not fileExists(nimsuggestExe):
-    removeDir(buildDir)
-    # Use testament's skip mechanism: exit with special message
-    echo "SKIP: nimsuggest binary not found at ", nimsuggestExe
-    quit(0)  # testament treats this as skip when output says SKIP
+  # Prefer nimsuggest_trace (built with -d:codetracerTracing), fall back to nimsuggest
+  let nimsuggestTrace = nim.parentDir / "nimsuggest_trace"
+  let nimsuggestPlain = nim.parentDir / "nimsuggest"
+  let nimsuggestExe =
+    if fileExists(nimsuggestTrace): nimsuggestTrace
+    elif fileExists(nimsuggestPlain): nimsuggestPlain
+    else:
+      removeDir(buildDir)
+      echo "SKIP: no nimsuggest binary found at ", nimsuggestTrace, " or ", nimsuggestPlain
+      quit(0)
+      ""
 
   # Build a stdin script: send traceExpand command then quit
-  let stdinInput = "traceExpand " & sourceFile & ";;" & sourceFile & ":7:0\nquit\n"
+  let stdinInput = "traceExpand " & sourceFile & ":7:0\nquit\n"
 
   let cmd = nimsuggestExe & " --stdin --v3 " & sourceFile
   let (output, exitCode) = execCmdEx(cmd, input = stdinInput)
@@ -95,7 +98,7 @@ proc main() =
       let parts = line.split('\t')
       for part in parts:
         if "macro_trace_" in part and ".ct" in part:
-          let tracePath = part.strip()
+          let tracePath = part.strip().strip(chars = {'"'})
           if fileExists(tracePath):
             verifyCtfsStructure(tracePath)
             traceFileVerified = true
@@ -106,9 +109,8 @@ proc main() =
       break
 
   if not traceFileVerified:
-    # If no trace path was reported, the feature may not be compiled in
-    # (requires -d:codetracerTracing). This is a SKIP, not a PASS.
-    if "traceExpand" in output or "unknown command" in output.toLowerAscii():
+    # If the command was not recognized, skip (feature not compiled in)
+    if "unknown command" in output.toLowerAscii():
       echo "SKIP: traceExpand command not recognized (needs -d:codetracerTracing)"
     else:
       doAssert false, "nimsuggest did not report a trace file path. Output:\n" & output

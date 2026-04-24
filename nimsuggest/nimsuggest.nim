@@ -1108,6 +1108,10 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       conf.m.trackPosAttached = false
     else:
       conf.m.trackPos = default(TLineInfo)
+      when defined(codetracerTracing):
+        if cmd == ideTraceExpand:
+          conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
+          conf.traceExpandResult = ""
       graph.recompilePartially(fileIndex)
 
   case cmd
@@ -1256,12 +1260,15 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.markClientsDirty fileIndex
   of ideTraceExpand:
     when defined(codetracerTracing):
-      conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
-      conf.traceExpandResult = ""
+      if conf.traceExpandResult == "":
+        # traceExpandPosition was not set during the partial recompile above
+        # (e.g. the file was already compiled). Set it now and recompile.
+        conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
+        conf.traceExpandResult = ""
 
-      graph.markDirty fileIndex
-      graph.markClientsDirty fileIndex
-      graph.recompilePartially()
+        graph.markDirty fileIndex
+        graph.markClientsDirty fileIndex
+        graph.recompilePartially()
 
       var suggest = Suggest()
       suggest.section = ideTraceExpand
@@ -1270,6 +1277,10 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       suggest.column = col
       suggest.doc = conf.traceExpandResult
       suggestResult(graph.config, suggest)
+
+      # Reset for next call
+      conf.traceExpandPosition = default(TLineInfo)
+      conf.traceExpandResult = ""
 
       graph.markDirty fileIndex
       graph.markClientsDirty fileIndex
