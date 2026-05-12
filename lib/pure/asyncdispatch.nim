@@ -241,6 +241,40 @@ export asyncstreams
 
 # TODO: Check if yielded future is nil and throw a more meaningful exception
 
+when defined(asyncdispatchClockHook):
+  # Optional clock-injection hook for deterministic fake-time tests
+  # (NE-Time-Fork-Asyncdispatch in nim-everywhere). Gated behind
+  # ``-d:asyncdispatchClockHook`` — un-hooked builds compile this
+  # whole block out and the 6 in-module ``getMonoTime()`` reads
+  # (processTimers ×2, drain ×2, sleepAsync ×2; ``withTimeout`` and
+  # ``waitFor`` reach them transitively via ``sleepAsync``) consult
+  # ``std/monotimes.getMonoTime`` directly with zero added symbols
+  # and zero added cost. With the flag on, each call site's inline
+  # ``when`` expression resolves to ``currentMonoTime()`` (the
+  # template below), which routes through the threadvar hook when a
+  # source is installed and falls back to ``getMonoTime`` otherwise.
+  var customMonoTimeSource {.threadvar.}: proc(): MonoTime {.gcsafe.}
+
+  proc setMonoTimeSource*(source: proc(): MonoTime {.gcsafe.}) =
+    ## Override the monotonic-clock source consulted by asyncdispatch
+    ## for the current thread. Pass `nil` to restore the default
+    ## ``std/monotimes.getMonoTime``. Intended for deterministic test
+    ## infrastructure (e.g. fake-time); production builds should leave
+    ## this unset.
+    customMonoTimeSource = source
+
+  proc clearMonoTimeSource*() {.inline.} =
+    ## Reset the custom monotonic-clock source on the current thread to
+    ## ``nil``, restoring ``std/monotimes.getMonoTime`` for subsequent
+    ## reads.
+    customMonoTimeSource = nil
+
+  template currentMonoTime(): MonoTime =
+    (if customMonoTimeSource != nil:
+       customMonoTimeSource()
+     else:
+       getMonoTime())
+
 type
   PDispatcherBase = ref object of RootRef
     timers*: HeapQueue[tuple[finishAt: MonoTime, fut: Future[void]]]
@@ -251,7 +285,7 @@ proc processTimers(
 ): Option[int] {.inline.} =
   # Pop the timers in the order in which they will expire (smaller `finishAt`).
   var count = p.timers.len
-  let t = getMonoTime()
+  let t = (when defined(asyncdispatchClockHook): currentMonoTime() else: getMonoTime())
   while count > 0 and t >= p.timers[0].finishAt:
     p.timers.pop().fut.complete()
     dec count
@@ -260,7 +294,7 @@ proc processTimers(
   # Return the number of milliseconds in which the next timer will expire.
   if p.timers.len == 0: return
 
-  let millisecs = (p.timers[0].finishAt - getMonoTime()).inMilliseconds
+  let millisecs = (p.timers[0].finishAt - (when defined(asyncdispatchClockHook): currentMonoTime() else: getMonoTime())).inMilliseconds
   return some(millisecs.int + 1)
 
 proc processPendingCallbacks(p: PDispatcherBase; didSomeWork: var bool) =
@@ -1698,10 +1732,10 @@ proc drain*(timeout = 500) =
   ## if there are no pending operations. In contrast to `poll` this
   ## processes as many events as are available until the timeout has elapsed.
   var elapsed = 0
-  let start = getMonoTime()
+  let start = (when defined(asyncdispatchClockHook): currentMonoTime() else: getMonoTime())
   while hasPendingOperations():
     discard runOnce(timeout - elapsed)
-    elapsed = int (getMonoTime() - start).inMilliseconds
+    elapsed = int ((when defined(asyncdispatchClockHook): currentMonoTime() else: getMonoTime()) - start).inMilliseconds
     if elapsed >= timeout:
       break
 
@@ -1923,10 +1957,10 @@ proc sleepAsync*(ms: int | float): owned(Future[void]) =
   var retFuture = newFuture[void]("sleepAsync")
   let p = getGlobalDispatcher()
   when ms is int:
-    p.timers.push((getMonoTime() + initDuration(milliseconds = ms), retFuture))
+    p.timers.push(((when defined(asyncdispatchClockHook): currentMonoTime() else: getMonoTime()) + initDuration(milliseconds = ms), retFuture))
   elif ms is float:
     let ns = (ms * 1_000_000).int64
-    p.timers.push((getMonoTime() + initDuration(nanoseconds = ns), retFuture))
+    p.timers.push(((when defined(asyncdispatchClockHook): currentMonoTime() else: getMonoTime()) + initDuration(nanoseconds = ns), retFuture))
   return retFuture
 
 proc withTimeout*[T](fut: Future[T], timeout: int): owned(Future[bool]) =
