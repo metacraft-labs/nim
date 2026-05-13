@@ -483,6 +483,13 @@ proc genSingleVar(p: BProc, a: PNode) =
       discard
     else:
       return
+  # CT-Sourcemap-V3-M6 Part A: emit a position annotation for the
+  # var-statement itself. The init <expr> is already covered via M5's
+  # per-expression recordAt inside expr(), but cgen routes the var's
+  # prototype/init through assignLocalVar / loadInto without an outer
+  # genLineDir, so the var line otherwise has no segment. Symmetric
+  # with genClosureVar below.
+  genLineDir(p, a)
   genSingleVar(p, v, a[0], a[2])
 
 proc genClosureVar(p: BProc, a: PNode) =

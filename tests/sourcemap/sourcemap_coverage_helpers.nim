@@ -67,10 +67,17 @@ const
   ## Excluded kinds are purely structural — `skType`, `skModule`,
   ## `skMacro`, `skGenericParam`, `skEnumField` (definition site only)
   ## — they don't generate runtime code.
+  ##
+  ## **M6:** `skField` removed from this set. Field _declarations_
+  ## inside `type T = object` emit no runtime code and therefore have
+  ## no segment to attach to. Field _uses_ (`obj.x`) are already
+  ## counted via M5's per-expression `recordAt` on the base expression
+  ## (`obj`), so dropping the field-declaration positions from the
+  ## denominator does not lose any covered numerator entries.
   expressionSymKinds* = [
     "skVar", "skLet", "skConst", "skParam", "skResult",
     "skProc", "skFunc", "skMethod", "skIterator", "skConverter",
-    "skField", "skTemp", "skForVar",
+    "skTemp", "skForVar",
     "skGlobalVar", "skGlobalLet"
   ]
 
@@ -127,17 +134,57 @@ proc parseHighlightRangeRow(line: string): tuple[ok: bool, kind: string,
     return (false, "", "", 0, 0)
   return (true, parts[1], parts[2], lineNum, colNum)
 
-proc runNimsuggestHighlightRange(srcFile: string): seq[string] =
-  ## Spawn `nimsuggest --stdin --v3 <srcFile>`, send one
-  ## `highlightRange` command followed by `quit`, return raw output
-  ## lines (already split, with EOF marker stripped).
+type
+  OutlineRange* = tuple[startLine, startCol, endLine, endCol: int]
+    ## A `(start, end)` source-range emitted by `ideOutline` (v3).
+    ## All coordinates: line is 1-based, col is 0-based.
+
+proc parseOutlineRow(line: string): tuple[ok: bool, kind: string,
+    startLine, startCol, endLine, endCol: int] =
+  ## Parse one nimsuggest text-protocol row produced by `ideOutline`
+  ## (`--v3`). The row format mirrors `parseHighlightRangeRow` but
+  ## carries two extra fields at the tail (added by the v3 outline
+  ## path, see `proc \`$\`*(Suggest)` in `compiler/suggest.nim`):
+  ##
+  ##   section\tsymkind\tqualifiedPath\tforth\tfilePath\tline\tcol\tdoc\tquality\tendLine\tendCol
+  ##
+  ## We need the symkind (`parts[1]`) plus the four
+  ## (line, col, endLine, endCol) positions.
+  let parts = line.split('\t')
+  if parts.len < 11:
+    return (false, "", 0, 0, 0, 0)
+  if parts[0] != "outline":
+    return (false, "", 0, 0, 0, 0)
+  var sLine, sCol, eLine, eCol: int
+  try:
+    sLine = parseInt(parts[5])
+    sCol = parseInt(parts[6])
+    eLine = parseInt(parts[9])
+    eCol = parseInt(parts[10])
+  except ValueError:
+    return (false, "", 0, 0, 0, 0)
+  return (true, parts[1], sLine, sCol, eLine, eCol)
+
+proc runNimsuggestHighlightRangeAndOutline(srcFile: string): seq[string] =
+  ## Spawn `nimsuggest --stdin --v3 <srcFile>`, send a `highlightRange`
+  ## command followed by an `outline` command, then `quit`. Return raw
+  ## output lines (already split, with EOF marker stripped).
+  ##
+  ## `highlightRange` yields the denominator (every sem-resolved
+  ## occurrence). `outline` is consulted by `collectExpressionPositions`
+  ## to subtract template/macro definition-body interiors, which the
+  ## test denominator should not include — see the
+  ## `OutlineRange`/`skipRanges` plumbing below.
   let exe = findNimsuggestExe()
-  # Use the --v3 protocol — that's where `ideHighlightRange` runs.
+  # Use the --v3 protocol — that's where both `ideHighlightRange` and
+  # the extended `ideOutline` (with endLine/endCol fields) run.
   let p = startProcess(exe,
     args = @["--stdin", "--v3", srcFile],
     options = {poUsePath, poStdErrToStdOut})
   defer: p.close()
-  let cmd = "highlightRange " & srcFile & ":0:0 100000:0\nquit\n"
+  let cmd = "highlightRange " & srcFile & ":0:0 100000:0\n" &
+            "outline " & srcFile & ":0:0\n" &
+            "quit\n"
   p.inputStream.write(cmd)
   p.inputStream.flush()
   p.inputStream.close()
@@ -148,21 +195,65 @@ proc runNimsuggestHighlightRange(srcFile: string): seq[string] =
     result.add ln
   discard p.waitForExit()
 
+proc inRange(skipRanges: seq[OutlineRange]; line, col: int): bool =
+  ## True iff `(line, col)` is strictly inside the *interior* of any
+  ## outline range. We include the range start and exclude the range
+  ## end so the definition's own identifier position
+  ## (`template foo(...) = ...` → the `foo` token at the start line) is
+  ## *not* skipped — only the body interior.
+  ##
+  ## "Interior" semantics: positions on `startLine` strictly after
+  ## `startCol` (i.e. on the same line as the definition header but
+  ## past its name) are still considered exterior — they're part of
+  ## the signature, not the body. Positions strictly past the header
+  ## line are interior up to (but not including) the end line/col.
+  for r in skipRanges:
+    if line < r.startLine: continue
+    if line > r.endLine: continue
+    # On the first line: positions are part of the signature, not the
+    # body. Don't exclude.
+    if line == r.startLine: continue
+    # On the last line: nimsuggest's endCol is the column *after* the
+    # body, so any col < endCol on endLine is still inside.
+    if line == r.endLine and col >= r.endCol: continue
+    return true
+  return false
+
 proc collectExpressionPositions*(srcFile: string): HashSet[ExpressionPosition] =
   ## Spawn nimsuggest against `srcFile` and collect every
   ## sem-resolved expression's `(file, line, col)` tuple, filtered to
   ## the kinds in `expressionSymKinds`.
+  ##
+  ## **M6:** also issue an `outline` query to the same subprocess and
+  ## use the returned `skTemplate` / `skMacro` ranges to drop
+  ## occurrences that fall inside template/macro definition bodies.
+  ## Body interiors are non-executable surface — they generate no C
+  ## bytes at the body site (call-site expansions are covered via
+  ## `bridgeExpansionInfo`).
   ##
   ## Raises `IOError` if nimsuggest produced zero `highlightRange`
   ## rows — that almost always means the subprocess failed to start
   ## the file (e.g. compile error) and would silently turn into a
   ## fake "100% covered, 0 expressions" result downstream.
   result = initHashSet[ExpressionPosition]()
-  let lines = runNimsuggestHighlightRange(srcFile)
+  let lines = runNimsuggestHighlightRangeAndOutline(srcFile)
   let kindSet = block:
     var s = initHashSet[string]()
     for k in expressionSymKinds: s.incl k
     s
+  # First pass: collect template/macro body ranges from the outline
+  # response. Both responses appear interleaved on stdout from the
+  # same subprocess.
+  var skipRanges: seq[OutlineRange] = @[]
+  for ln in lines:
+    if not ln.startsWith("outline"): continue
+    let o = parseOutlineRow(ln)
+    if not o.ok: continue
+    if o.kind != "skTemplate" and o.kind != "skMacro": continue
+    if o.endLine < o.startLine: continue
+    skipRanges.add((startLine: o.startLine, startCol: o.startCol,
+                    endLine: o.endLine, endCol: o.endCol))
+  # Second pass: highlightRange rows, with the skipRanges filter.
   var rangeRowCount = 0
   for ln in lines:
     if not ln.startsWith("highlightRange"): continue
@@ -177,6 +268,8 @@ proc collectExpressionPositions*(srcFile: string): HashSet[ExpressionPosition] =
     # attach to. They appear with `qualifiedPath = system.<name>`.
     if row.kind == "skConst" and row.qualifiedPath.startsWith("system."):
       continue
+    # M6: drop occurrences inside template/macro definition bodies.
+    if inRange(skipRanges, row.nimLine, row.col): continue
     result.incl((file: srcFile, line: row.nimLine, col: row.col))
   if rangeRowCount == 0:
     raise newException(IOError,

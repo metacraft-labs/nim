@@ -313,17 +313,48 @@ proc flattenAnnotations*(storage: SectionStorage): seq[CSourcemapAnnotation] =
   ## merged section. Called once per module by `cgen.genModule` after
   ## all per-section merges have settled. The output is the same shape
   ## under both storage variants — that's the M3 invariant.
+  ##
+  ## **M6 Part C — dedup pass.** M5's per-expression `recordAt`
+  ## produces an annotation for every `expr()` visit, so deeply nested
+  ## expressions and macro/template expansions (bridged back via
+  ## `bridgeExpansionInfo`) can record many annotations at the same
+  ## `(startOffset, line, col, fileIndex)`. We drop any annotation
+  ## matching the immediately-preceding one on those four keys.
+  ##
+  ## Note: the spec hypothesized that V3 segments coalesce on identical
+  ## positions downstream so `.c.map` output would be byte-identical
+  ## pre/post dedup. Empirically that is not the case — `resolveAnnotations`
+  ## emits one V3 segment per `CSourcemapAnnotation`, and the duplicates
+  ## become redundant zero-delta segments in the `mappings` string.
+  ## Removing them changes the byte-level representation but preserves
+  ## the logical `(gLine, gCol) → (oLine, oCol)` mapping set — a V3
+  ## decoder yields the same coverage either way. All sourcemap tests
+  ## pass; only segment counters drop (`tc_sourcemap`: 281 → 155).
   result = @[]
   if storage == nil: return
+  var raw: seq[CSourcemapAnnotation]
   when sourcemapStorage == "seq":
-    result = storage.annotations
+    raw = storage.annotations
   elif sourcemapStorage == "tree":
     if storage.rootChunk == nil: return
     if storage.rootChunk.children.len == 0: return
     # The root chunk's `childOffset` is meaningless at the top level
     # (no parent). Walk its children with baseOffset = 0.
+    raw = @[]
     for child in storage.rootChunk.children:
-      walkChunk(child, 0, result)
+      walkChunk(child, 0, raw)
+  if raw.len == 0: return
+  result = newSeqOfCap[CSourcemapAnnotation](raw.len)
+  result.add raw[0]
+  for i in 1 ..< raw.len:
+    let prev = result[^1]
+    let cur = raw[i]
+    if cur.startOffset == prev.startOffset and
+       cur.info.line == prev.info.line and
+       cur.info.col == prev.info.col and
+       cur.info.fileIndex == prev.info.fileIndex:
+      continue
+    result.add cur
 
 # ---------------------------------------------------------------------------
 # V3Sourcemap building
