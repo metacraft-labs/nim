@@ -5,6 +5,12 @@ type
   Builder* = object
     buf*: string
     indents*: int
+    sourcemapStorage*: RootRef
+      ## C sourcemap V3 (M2): opaque handle to per-section
+      ## annotation storage. The concrete type is
+      ## `c_sourcemap.SectionStorage`; kept as `RootRef` here so
+      ## `cbuilderbase` doesn't depend on `lineinfos`/`options`.
+      ## `nil` when `--sourcemap:on` is not set (zero overhead).
 
 template newBuilder*(s: string): Builder =
   Builder(buf: s)

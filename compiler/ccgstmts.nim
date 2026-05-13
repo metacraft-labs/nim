@@ -69,11 +69,16 @@ template startBlockWith(p: BProc, body: typed): int =
   startBlockInside(p)
 
 proc blockBody(b: var TBlock; result: var Builder) =
-  result.add extract(b.sections[cpsLocals])
+  # V3 (M2): use `mergeAppend` instead of `add(extract(...))` so the
+  # block's sourcemap annotations travel with the bytes into the
+  # parent's `cpsStmts`. Without this, expression-level mappings
+  # inside nested blocks (while/if/case bodies) would be silently
+  # dropped.
+  mergeAppend(transientSection(b.sections[cpsLocals]), transientSection(result))
   if b.frameLen > 0:
     result.addInPlaceOp(Add, NimInt, dotField("FR_", "len"), cIntValue(b.frameLen.int))
-  result.add(extract(b.sections[cpsInit]))
-  result.add(extract(b.sections[cpsStmts]))
+  mergeAppend(transientSection(b.sections[cpsInit]), transientSection(result))
+  mergeAppend(transientSection(b.sections[cpsStmts]), transientSection(result))
   if b.frameLen > 0:
     result.addInPlaceOp(Sub, NimInt, dotField("FR_", "len"), cIntValue(b.frameLen.int))
 
@@ -712,8 +717,10 @@ proc genWhileStmt(p: BProc, t: PNode) =
       p.breakIdx = startBlockWith(p):
         stmt = initWhileStmt(p.s(cpsStmts), cIntValue(1))
       p.blocks[p.breakIdx].isLoop = true
-      # V2: expression-level annotation for the while condition.
-      emitSourcemapRangeMarker(p.s(cpsStmts), p, t[0])
+      # V3 (M2): expression-level annotation for the while condition.
+      let cond = t[0]
+      let condEnd = if cond.safeLen > 0: cond[^1] else: cond
+      recordRangeAt(procSection(p, cpsStmts), cond.info, condEnd.info)
       a = initLocExpr(p, t[0])
       if (t[0].kind != nkIntLit) or (t[0].intVal == 0):
         let ra = a.rdLoc
@@ -1869,9 +1876,9 @@ proc genEmit(p: BProc, t: PNode) =
   if p.prc == nil:
     # top level emit pragma?
     let section = determineSection(t[1])
-    # V2: emit side-channel sourcemap marker (was: #line directive).
-    emitSourcemapMarker(p.module.s[section], p.module, t.info, t.info)
-    p.module.s[section].add(s)
+    # V3 (M2): record an annotation for the emit's Nim site, then
+    # append the emitted snippet to the module's section.
+    emitAt(moduleSection(p.module, section), s, t.info)
   else:
     genLineDir(p, t)
     line(p, cpsStmts, s)
@@ -1960,10 +1967,10 @@ proc genAsgn(p: BProc, e: PNode, fastAsgn: bool) =
     a.flags.incl(lfEnforceDeref)
     a.flags.incl(lfPrepareForMutation)
     genLineDir(p, le) # it can be a nkBracketExpr, which may raise
-    # V2: expression-level annotation. Record a range covering the
-    # whole `le = ri` expression so columns on either side are
-    # reachable from the JSON.
-    emitSourcemapRangeMarker(p.s(cpsStmts), p.module, le, ri)
+    # V3 (M2): expression-level annotation. Record a range covering
+    # the whole `le = ri` expression so columns on either side are
+    # reachable.
+    recordRangeAt(procSection(p, cpsStmts), le.info, ri.info)
     expr(p, le, a)
     a.flags.excl(lfPrepareForMutation)
     if fastAsgn: incl(a.flags, lfNoDeepCopy)
@@ -1976,6 +1983,14 @@ proc genStmts(p: BProc, t: PNode) =
 
   let isPush = p.config.hasHint(hintExtendedContext)
   if isPush: pushInfoContext(p.config, t.info)
+  # V3 (M2): record a sourcemap annotation at the *start* of every
+  # generated statement. Many sub-statement emit paths already fire
+  # `genLineDir` themselves, but top-level statements and statements
+  # whose first byte is emitted by a path that bypasses `genLineDir`
+  # need this explicit anchor to map back to their Nim line.
+  if t.kind != nkEmpty and not t.isNil and
+      optSourcemap in p.module.config.globalOptions:
+    recordAt(procSection(p, cpsStmts), t.info)
   expr(p, t, a)
   if isPush: popInfoContext(p.config)
   internalAssert p.config, a.k in {locNone, locTemp, locLocalVar, locExpr}

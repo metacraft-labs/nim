@@ -99,13 +99,14 @@ proc fixupCall(p: BProc, le, ri: PNode, d: var TLoc,
                result: var Builder, call: var CallBuilder) =
   let canRaise = p.config.exc == excGoto and canRaiseDisp(p, ri[0])
   genLineDir(p, ri)
-  # V2: expression-level annotation. genLineDir already recorded a
-  # line-granular marker (start info); now also record an explicit
-  # range so the JSON entry's nimEndCol points past the last argument
-  # instead of at the call name. Useful for column breakpoints on
+  # V3 (M2): expression-level annotation. genLineDir already recorded a
+  # line-granular annotation (start info); now also record an explicit
+  # range so consumers can map the call's full Nim column span to the
+  # corresponding C bytes. Useful for column breakpoints on
   # `foo(a, b)`'s closing paren or last argument's end.
   if ri.len > 1:
-    emitSourcemapRangeMarker(p.s(cpsStmts), p, ri)
+    let endNode = ri[^1]
+    recordRangeAt(procSection(p, cpsStmts), ri.info, endNode.info)
   # getUniqueType() is too expensive here:
   var typ = skipTypes(ri[0].typ, abstractInst)
   if typ.returnType != nil:

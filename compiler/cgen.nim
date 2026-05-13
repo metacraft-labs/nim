@@ -298,66 +298,13 @@ proc safeLineNm(info: TLineInfo): int =
 proc genPostprocessDir(field1, field2, field3: string): string =
   result = postprocessDirStart & field1 & postprocessDirSep & field2 & postprocessDirSep & field3 & postprocessDirEnd
 
-proc emitSourcemapMarker(r: var Builder; m: BModule;
-                         info: TLineInfo; endInfo: TLineInfo) =
-  ## C source-map V2 emit primitive. Records the annotation in the
-  ## per-module side table and writes its index as an opaque marker
-  ## into `r`. The marker is later stripped before the C file is
-  ## written to disk (see `c_sourcemap.stripMarkersAndCollect`), so
-  ## gcc never sees it and DWARF stays clean.
-  ##
-  ## Skipped (zero overhead) when `--sourcemap:on` is not in effect.
-  if optSourcemap notin m.config.globalOptions: return
-  if info.fileIndex == InvalidFileIdx or info.line == 0: return
-  let idx = m.sourcemapAnnotations.len
-  m.sourcemapAnnotations.add((info: info, endInfo: endInfo))
-  r.add(renderMarker(idx))
-
-proc emitSourcemapRangeMarker(r: var Builder; m: BModule;
-                              startNode, endNode: PNode) =
-  ## Bonus expression-level variant: records distinct start and end
-  ## Nim positions so the JSON consumer can map a C byte range to a
-  ## Nim sub-line expression range. `startNode` and `endNode` carry
-  ## the source positions of an expression's first and last token
-  ## (typically `n` and `n[^1]`); when they refer to different lines,
-  ## the JSON entry still records the (start line, start col, end
-  ## line, end col) on the Nim side, which downstream consumers can
-  ## use for column breakpoints and other granular features.
-  if optSourcemap notin m.config.globalOptions: return
-  if startNode.isNil or startNode.info.fileIndex == InvalidFileIdx or
-      startNode.info.line == 0:
-    return
-  let endInfo =
-    if endNode.isNil: startNode.info
-    else: endNode.info
-  emitSourcemapMarker(r, m, startNode.info, endInfo)
-
-proc emitSourcemapRangeMarker(r: var Builder; p: BProc; n: PNode) =
-  ## Convenience: range-mark expression `n` using `n` itself for the
-  ## start position and `n[^1]` (its trailing leaf) for the end. For
-  ## leaf nodes both ends coincide.
-  if n.isNil or n.safeLen == 0:
-    emitSourcemapRangeMarker(r, p.module, n, n)
-  else:
-    emitSourcemapRangeMarker(r, p.module, n, n[^1])
-
 proc genCLineDir(r: var Builder, fileIdx: FileIndex, line: int; conf: ConfigRef) =
-  ## V2: the upstream `#line N FX_K` emit is gone — keeping the proc
-  ## as a no-op so the migration is incremental. Mappings are recorded
-  ## via `emitSourcemapMarker` at the call sites that have a real
-  ## `BModule`/`BProc` in scope. This overload had only a `ConfigRef`,
-  ## which isn't enough to record annotations, and its only callers
-  ## (`genInitCode`, `genDatInitCode` with `InvalidFileIdx`) want to
-  ## suppress line info anyway — so dropping the emit is correct.
-  discard
-
-proc genCLineDir(r: var Builder, fileIdx: FileIndex, line: int; p: BProc; info: TLineInfo; lastFileIndex: FileIndex) =
-  ## V2: replaced `#line N FX_K` emit with side-channel marker.
-  if line > 0 and fileIdx != InvalidFileIdx:
-    emitSourcemapMarker(r, p.module, info, info)
-
-proc genCLineDir(r: var Builder, info: TLineInfo; conf: ConfigRef) =
-  ## V2: no-op (ConfigRef-only — no BModule available).
+  ## V3 (M2): zero-overhead stub. Mappings are now recorded directly
+  ## by `emitAt` / `emitRangeAt` / `recordAt` at call sites that
+  ## have a `BModule`/`BProc` in scope. This overload only had a
+  ## `ConfigRef`, which isn't enough to attach annotations, and its
+  ## only callers (`genInitCode`, `genDatInitCode` with
+  ## `InvalidFileIdx`) wanted to suppress line info anyway.
   discard
 
 proc freshLineInfo(p: BProc; info: TLineInfo): bool =
@@ -369,16 +316,27 @@ proc freshLineInfo(p: BProc; info: TLineInfo): bool =
   else:
     result = false
 
+proc genCLineDir(r: var Builder, fileIdx: FileIndex, line: int; p: BProc; info: TLineInfo; lastFileIndex: FileIndex) =
+  ## V3 (M2): record a fresh-line annotation at the current end of
+  ## the builder's text. The annotation has zero width — it points
+  ## at the byte offset where the *next* emitted byte will live, which
+  ## is exactly the position the V2 marker design also recorded.
+  if line > 0 and fileIdx != InvalidFileIdx:
+    recordAt(transientSection(r, p.module), info)
+
+proc genCLineDir(r: var Builder, info: TLineInfo; conf: ConfigRef) =
+  ## V3 (M2): no-op (no BModule available to attach storage).
+  discard
+
 proc genCLineDir(r: var Builder, p: BProc, info: TLineInfo; conf: ConfigRef) =
-  ## V2: when sourcemap is on, emit a side-channel marker for the
-  ## fresh-line-info change. The `freshLineInfo` filter is preserved
-  ## so we still avoid generating redundant annotations for back-to-back
-  ## emits at the same Nim line.
+  ## V3 (M2): record a fresh-line annotation when `--sourcemap:on`.
+  ## The `freshLineInfo` filter is preserved so we still avoid emitting
+  ## redundant annotations for back-to-back emits at the same Nim line.
   if optSourcemap in conf.globalOptions and
       info.fileIndex != InvalidFileIdx and
       info.safeLineNm > 0:
     if freshLineInfo(p, info):
-      emitSourcemapMarker(r, p.module, info, info)
+      recordAt(transientSection(r, p.module), info)
 
 proc genLineDir(p: BProc, t: PNode) =
   if p == p.module.preInitProc: return
@@ -1445,8 +1403,10 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
   prc.infoImpl = tmpInfo
 
   var generatedProc = newBuilder("")
-  # V2: emit side-channel sourcemap marker for the proc's start.
-  emitSourcemapMarker(generatedProc, m, prc.info, prc.info)
+  # V3 (M2): record a zero-width annotation for the proc's start so
+  # the first byte of the generated proc header maps back to the Nim
+  # proc declaration.
+  recordAt(transientSection(generatedProc, m), prc.info)
   generatedProc.addDeclWithVisibility(visibility):
     if sfPure in prc.flags:
       mergeAppend(transientSection(header), transientSection(generatedProc))
@@ -2369,15 +2329,28 @@ proc genModule(m: BModule, cfile: Cfile): Rope =
   if m.config.cppCustomNamespace.len > 0:
     closeNamespaceNim(res)
 
+  # V3 (M2): pull the merged annotation list off the transient `res`
+  # builder. Offsets in `res.sourcemapStorage.annotations` are already
+  # absolute (within `res.buf`) — exactly the absolute offsets we need
+  # in the final pre-postprocess C text. Captured before `extract`
+  # copies the buffer out, so we never leak the storage seq elsewhere.
+  if optSourcemap in m.config.globalOptions:
+    let st = storageOf(res)
+    if st != nil:
+      m.sourcemapAnnotations = st.annotations
+    else:
+      m.sourcemapAnnotations = @[]
+
   result = extract(res)
-  # V2: the `#define FX_<n> "path"` block that V1 emitted at the top
+  # V3: the `#define FX_<n> "path"` block that V1 emitted at the top
   # of each .c file is gone. V1 used those to resolve `#line N FX_K`
-  # directives; V2 records (path, line, col) directly in the
+  # directives; V3 records (path, line, col) directly in the
   # side-channel annotation table, so the .c file no longer needs the
   # define block. Saves bytes per .c, and keeps the C file clean.
 
   if moduleIsEmpty:
     result = ""
+    m.sourcemapAnnotations = @[]
 
   postprocessCode(m.config, result)
 
@@ -2560,8 +2533,6 @@ proc shouldRecompile(m: BModule; code: Rope, cfile: Cfile): bool =
       rawMessage(m.config, errCannotOpenFile, cfile.cname.string)
     result = true
 
-var cSrcMap: CSourceMap
-
 proc writeModule(m: BModule) =
   let cfile = getCFile(m)
   if moduleHasChanged(m.g.graph, m.module):
@@ -2587,16 +2558,20 @@ proc writeModule(m: BModule) =
         tccgen.compileCCode($code, m.config)
         return
 
-    # V2: scan the final concatenated code for side-channel sourcemap
-    # markers. Each marker resolves to an annotation index recorded
-    # during codegen; the (line, col) of the byte just past the marker
-    # is the C-side position. The markers are stripped from `code` so
-    # the .c file on disk is clean C with no V1 `#line` directives.
-    if optSourcemap in m.config.globalOptions:
-      if cSrcMap == nil:
-        cSrcMap = newCSourceMap()
-      code = stripMarkersAndCollect(cSrcMap, code, m.sourcemapAnnotations,
-                                    cfile.string, m.config)
+    # V3 (M2): write a Source Map V3 sidecar `<cFile>.map` derived from
+    # the side-table annotations captured by `genModule`. The .c file
+    # itself is unchanged byte-for-byte — annotations live exclusively
+    # off-band.
+    if optSourcemap in m.config.globalOptions and
+        m.sourcemapAnnotations.len > 0:
+      let sm = newV3Sourcemap(extractFilename(cfile.string))
+      var absOffsets = newSeq[int](m.sourcemapAnnotations.len)
+      for i, ann in m.sourcemapAnnotations:
+        absOffsets[i] = ann.startOffset
+      var resolved = resolveAnnotations(sm, code, absOffsets,
+                                        m.sourcemapAnnotations, m.config)
+      sm.emitMappings(resolved)
+      sm.writeMapTo(cfile.string)
 
     if not shouldRecompile(m, code, cf): cf.flags = {CfileFlag.Cached}
     addFileToCompile(m.config, cf)
@@ -2739,11 +2714,8 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
   for m in cgenModules(g):
     m.writeModule()
   writeMapping(config, g.mapping)
-  # Write C sourcemap (Nim-to-C line mappings for CodeTracer)
-  if optSourcemap in config.globalOptions and cSrcMap != nil:
-    let fullPathForMap = config.prepareToWriteOutput
-    let (outDirForMap, nameForMap, _) = splitFile(fullPathForMap)
-    cSrcMap.writeSourceMap(outDirForMap.string, nameForMap.string)
+  # V3 (M2): C sourcemap is now per-module Source Map V3 `<cFile>.map`
+  # written by `writeModule`. No aggregate `ct_sourcemap_*` file.
 
   if g.generatedHeader != nil: writeHeader(g.generatedHeader)
 

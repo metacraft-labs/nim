@@ -4,14 +4,24 @@ discard """
   matrix: "--gc:refc; --gc:orc"
 """
 
-## Test that --sourcemap:on generates ct_sourcemap_*.json files for the C backend
-## and that they contain correct bidirectional Nim-to-C line mappings.
+## C sourcemap V3 — basic smoke test.
+##
+## At M2 the C backend writes a Source Map V3 (`.map`) sidecar next
+## to every generated `.c` file when `--sourcemap:on` is set. The
+## format is the same wire shape Chrome DevTools and Nim's own JS
+## backend produce — off-the-shelf parsers read it. This test
+## verifies the top-level JSON structure and decodes at least one
+## VLQ-encoded segment to confirm the encoder produces valid output.
 
 import std/[os, json, strutils, osproc, assertions]
 
 const
   testsDir = currentSourcePath().parentDir
   buildDir = testsDir / "build_tc_sourcemap"
+
+  alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  continuationBit = 1 shl 5
+  valueMask = continuationBit - 1
 
 # A small multi-proc Nim program to compile with sourcemap
 const testProgram = """
@@ -31,94 +41,92 @@ when isMainModule:
   echo y
 """
 
+proc decodeVLQ(s: string): seq[int] =
+  var b64Table: array[128, int]
+  for i, c in alphabet: b64Table[c.ord] = i
+  var shift = 0
+  var value = 0
+  for c in s:
+    let v = b64Table[c.ord]
+    value += (v and valueMask) shl shift
+    if (v and continuationBit) != 0:
+      shift += 5
+      continue
+    result.add((value shr 1) * (if (value and 1) != 0: -1 else: 1))
+    shift = 0
+    value = 0
+
 proc main() =
   let nim = getCurrentCompilerExe()
   let nimcache = buildDir / "nimcache"
   let srcFile = buildDir / "test_sourcemap_prog.nim"
   let outFile = buildDir / "test_sourcemap_prog"
 
-  # Setup
   createDir(buildDir)
   writeFile(srcFile, testProgram)
 
-  # Compile with --sourcemap:on
   let cmd = nim & " c --nimcache:" & nimcache &
     " --sourcemap:on --hints:off -o:" & outFile & " " & srcFile
   let (output, exitCode) = execCmdEx(cmd)
   doAssert exitCode == 0, "Compilation failed: " & output
 
-  # Find the ct_sourcemap file (written next to the output binary)
-  var sourcemapFile = ""
-  for f in walkDir(buildDir):
-    if f.path.extractFilename.startsWith("ct_sourcemap_"):
-      sourcemapFile = f.path
+  # Find the `.map` sidecar produced for the test program's .c file.
+  var mapFile = ""
+  for f in walkDir(nimcache):
+    let n = f.path.extractFilename
+    if n.endsWith(".c.map") and "test_sourcemap_prog" in n:
+      mapFile = f.path
       break
+  doAssert mapFile.len > 0,
+    "expected `.map` sidecar in " & nimcache
 
-  doAssert sourcemapFile.len > 0, "ct_sourcemap_* file not found in " & buildDir
+  let js = parseJson(readFile(mapFile))
 
-  # Parse the sourcemap JSON
-  let content = readFile(sourcemapFile)
-  let js = parseJson(content)
+  # V3 envelope
+  doAssert js.hasKey("version"), "Missing 'version'"
+  doAssert js["version"].getInt == 3,
+    "Expected sourcemap version 3, got " & $js["version"]
+  doAssert js.hasKey("file"), "Missing 'file'"
+  doAssert js.hasKey("sources"), "Missing 'sources'"
+  doAssert js.hasKey("names"), "Missing 'names'"
+  doAssert js.hasKey("mappings"), "Missing 'mappings'"
+  doAssert js.hasKey("sourcesContent"), "Missing 'sourcesContent'"
 
-  # Verify structure
-  doAssert js.hasKey("nimSources"), "Missing nimSources key"
-  doAssert js.hasKey("cSources"), "Missing cSources key"
-  doAssert js.hasKey("mappings"), "Missing mappings key"
+  doAssert js["sources"].kind == JArray, "sources must be an array"
+  doAssert js["sources"].len > 0, "no sources recorded"
+  doAssert js["names"].kind == JArray, "names must be an array"
+  doAssert js["mappings"].kind == JString, "mappings must be a string"
 
-  # Verify we have at least one Nim source and one C source
-  doAssert js["nimSources"].len > 0, "No Nim sources in sourcemap"
-  doAssert js["cSources"].len > 0, "No C sources in sourcemap"
-
-  # Verify our test file appears in nimSources
+  # The Nim source file path must appear in `sources`.
   var foundTestFile = false
-  for key, val in js["nimSources"]:
-    if "test_sourcemap_prog" in key:
+  for src in js["sources"]:
+    if "test_sourcemap_prog" in src.getStr:
       foundTestFile = true
       break
-  doAssert foundTestFile, "test_sourcemap_prog.nim not found in nimSources"
+  doAssert foundTestFile,
+    "test_sourcemap_prog.nim not in sources: " & $js["sources"]
 
-  # V2: top-level `version` field marks the format.
-  doAssert js.hasKey("version"), "Missing version key"
-  doAssert js["version"].getInt == 2,
-    "Expected sourcemap version 2, got " & $js["version"]
+  let mappings = js["mappings"].getStr
+  doAssert mappings.len > 0, "mappings string is empty"
 
-  # Verify mappings exist and are non-empty
-  doAssert js["mappings"].kind == JArray, "mappings should be an array"
-  doAssert js["mappings"].len > 0, "mappings array is empty"
+  # Decode at least one segment to confirm VLQ encoding is valid.
+  var segmentCount = 0
+  var maxFields = 0
+  for line in mappings.split(';'):
+    for seg in line.split(','):
+      if seg.len == 0: continue
+      let v = decodeVLQ(seg)
+      doAssert v.len in {1, 4, 5},
+        "V3 segment must have 1, 4, or 5 VLQs; got " & $v.len &
+        " for segment '" & seg & "'"
+      maxFields = max(maxFields, v.len)
+      inc segmentCount
+  doAssert segmentCount > 0, "no mapping segments decoded"
+  doAssert maxFields >= 4,
+    "expected at least one 4-VLQ segment (genCol, srcIdx, origLine, origCol)"
 
-  # Verify at least one mapping entry has actual line data with the V2
-  # shape (7-tuple). V1 readers indexing only [0]/[1] still see the
-  # right values (cPathID and cStartLine).
-  var hasLineData = false
-  for pathMap in js["mappings"]:
-    if pathMap.kind == JObject and pathMap.len > 0:
-      for nimLine, groups in pathMap:
-        if groups.kind == JArray and groups.len > 0:
-          for group in groups:
-            if group.kind == JArray and group.len > 0:
-              hasLineData = true
-              let entry = group[0]
-              doAssert entry.kind == JArray,
-                "Line entry should be an array"
-              # V2 shape: [cPathID, cStartLine, cStartCol,
-              #           cEndLine, cEndCol, nimStartCol, nimEndCol].
-              doAssert entry.len == 7,
-                "V2 line entry should have 7 elements, got " &
-                $entry.len & " (" & $entry & ")"
-              # V1 compatibility: [0] is still cPathID, [1] is still
-              # cStartLine — readers that only look at those continue
-              # to work.
-              doAssert entry[0].kind == JInt and entry[1].kind == JInt
-              break
-            if hasLineData: break
-        if hasLineData: break
-      if hasLineData: break
-
-  doAssert hasLineData, "No actual line mapping data found"
-
-  # Cleanup
   removeDir(buildDir)
-
-  echo "C sourcemap test passed"
+  echo "C sourcemap V3 basic test passed (",
+       segmentCount, " segments decoded)"
 
 main()

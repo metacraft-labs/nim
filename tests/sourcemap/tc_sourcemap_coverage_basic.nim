@@ -49,12 +49,16 @@ proc main() =
   let (output, exitCode) = execCmdEx(cmd)
   doAssert exitCode == 0, "Compilation failed:\n" & output
 
-  let smPath = buildDir / "ct_sourcemap_test_prog"
-  doAssert fileExists(smPath),
-    "Expected sourcemap at " & smPath & ", contents of buildDir:\n" &
+  # V3 sourcemap: per-`.c` `.map` sidecars live in the nimcache dir.
+  # Verify at least one was produced before walking them.
+  var foundMaps = 0
+  for f in walkDir(nimcache):
+    if f.path.endsWith(".c.map"): inc foundMaps
+  doAssert foundMaps > 0,
+    "No V3 `.map` sidecars in " & nimcache & "; build dir:\n" &
       toSeq(walkDirRec(buildDir)).join("\n")
 
-  let cov = verifyCoverage(srcFile, smPath, strictness = "warn")
+  let cov = verifyCoverage(srcFile, nimcache, strictness = "warn")
 
   echo "[basic-coverage] total expressions: ", cov.total
   echo "[basic-coverage] covered:           ", cov.covered

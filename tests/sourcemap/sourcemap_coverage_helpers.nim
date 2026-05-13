@@ -1,28 +1,22 @@
 ## Property-test framework for the C sourcemap.
 ##
-## The property under test: for every expression node in the Nim
-## source, the JSON sourcemap contains at least one mapping entry
-## whose Nim-side column range covers the node's column.
+## Updated for **Source Map V3** output (M2).
 ##
+## The property under test: for every expression node in the Nim
+## source, the `.map` sidecar contains at least one mapping segment
+## whose Nim-side `(origLine, origCol)` matches the node's position.
 ## This is the bidirectional dual of the "go-to-definition" pattern
 ## in `tests/nimsuggest/tdef*.nim` — same cursor-position-based
-## assertion shape, different oracle (the JSON instead of nimsuggest).
+## assertion shape, different oracle (the V3 mappings instead of
+## nimsuggest).
 ##
-## At M1 we ship this framework. M1's marker design will not give 100%
-## coverage on arbitrary programs — the marker is emitted only at line
-## granularity inside `genCLineDir`, so multiple expressions on the
-## same line collapse to a single annotation. The property test is
-## designed to expose those gaps so M2/M3's expression-level emit-site
-## migrations have a measurable target. M1's contract is:
-##
-##  - Strict mode passes on small focused tests where every Nim line
-##    has exactly one expression token.
-##  - Warn mode tolerates partial coverage on larger programs and
-##    reports the gap percentage.
+## V3 mapping segments use 0-based line and column numbers; Nim AST
+## reports 1-based line and 0-based column. We normalize to the V3
+## convention before checking.
 ##
 ## API:
 ##  - `collectExpressionPositions(srcFile)` — parse + walk AST.
-##  - `verifyCoverage(srcFile, jsonPath, strictness)` — run the check.
+##  - `verifyCoverage(srcFile, mapPath, strictness)` — run the check.
 
 import std/[json, os, sets, strutils, tables]
 
@@ -30,6 +24,8 @@ import compiler/[ast, parser, idents, options, lineinfos, nodekinds]
 
 type
   ExpressionPosition* = tuple[file: string; line, col: int]
+    ## `line` is 1-based, `col` is 0-based — same convention Nim's
+    ## AST uses. We translate to V3 internally.
 
   CoverageResult* = object
     ok*: bool
@@ -40,39 +36,31 @@ type
     missing*: seq[ExpressionPosition]
 
 const
+  alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  continuationBit = 1 shl 5
+  valueMask = continuationBit - 1
+
   ## Node kinds we consider "expressions" for coverage purposes.
-  ## Conservative superset — every kind that represents code the user
-  ## could meaningfully ask "where in the C output does this map?".
-  ## Statement-only kinds (`nkStmtList`, `nkTypeSection`, `nkVarSection`,
-  ## `nkProcDef`, etc.) are deliberately excluded.
   expressionNodeKinds* = {
-    # Literals
     nkCharLit, nkIntLit, nkInt8Lit, nkInt16Lit, nkInt32Lit, nkInt64Lit,
     nkUIntLit, nkUInt8Lit, nkUInt16Lit, nkUInt32Lit, nkUInt64Lit,
     nkFloatLit, nkFloat32Lit, nkFloat64Lit, nkFloat128Lit,
     nkStrLit, nkRStrLit, nkTripleStrLit,
     nkNilLit,
-    # Identifiers / symbols
     nkIdent, nkSym,
-    # Calls / operators
     nkCall, nkCommand, nkCallStrLit, nkInfix, nkPrefix, nkPostfix,
     nkHiddenCallConv,
-    # Conversions / casts
     nkConv, nkCast, nkHiddenStdConv, nkHiddenSubConv,
     nkStaticExpr,
     nkChckRangeF, nkChckRange64, nkChckRange,
     nkStringToCString, nkCStringToString,
     nkObjDownConv, nkObjUpConv,
-    # Address / deref
     nkAddr, nkHiddenAddr, nkDerefExpr, nkHiddenDeref,
-    # Compound expressions
     nkObjConstr, nkTupleConstr,
     nkPar, nkCurly, nkBracket, nkTableConstr,
     nkBracketExpr, nkDotExpr, nkCheckedFieldExpr, nkCurlyExpr,
     nkIfExpr, nkLambda,
     nkAccQuoted,
-    # Assignments — count as expressions because cgen emits each as a
-    # discrete C statement.
     nkAsgn, nkFastAsgn,
   }
 
@@ -91,109 +79,156 @@ proc walkExpressions(n: PNode; file: string;
 proc collectExpressionPositions*(srcFile: string): HashSet[ExpressionPosition] =
   ## Parse `srcFile` (Nim source) and collect every expression's
   ## `(file, line, col)` tuple.
+  ##
+  ## TODO (M3 framework refinement): this works at the *parse* AST,
+  ## so it counts expressions that will be eliminated at semcheck
+  ## (compile-time-only `is`-checks, `compiles()` calls, branches
+  ## inside `when` that resolve to false). Those expressions
+  ## generate zero C bytes by design and have no segment to attach
+  ## to — they should be subtracted from the denominator. Doing
+  ## that requires the helper to invoke the typed AST pass and
+  ## filter `nkCall` whose callee `magic` resolves to a compile-
+  ## time-only intrinsic, plus `when` branches that didn't pick.
   result = initHashSet[ExpressionPosition]()
   let cache = newIdentCache()
   let conf = newConfigRef()
-  # The parser uses conf.m.fileInfos to look up file indexes; avoid
-  # warnings about missing config files.
   let source = readFile(srcFile)
   let tree = parseString(source, cache, conf, srcFile)
   walkExpressions(tree, srcFile, result)
 
+proc decodeVLQ(s: string): seq[int] =
+  var b64Table: array[128, int]
+  for i, c in alphabet: b64Table[c.ord] = i
+  var shift = 0
+  var value = 0
+  for c in s:
+    let v = b64Table[c.ord]
+    value += (v and valueMask) shl shift
+    if (v and continuationBit) != 0:
+      shift += 5
+      continue
+    result.add((value shr 1) * (if (value and 1) != 0: -1 else: 1))
+    shift = 0
+    value = 0
+
 type
-  ColRange = tuple[startCol, endCol: int]
+  V3Segment* = tuple[
+    genLine, genCol, sourceIdx, origLine, origCol: int
+  ]
 
-proc loadNimCoverage(jsonPath: string;
-                     nimSrcAbs: string): Table[int, seq[ColRange]] =
-  ## Index the JSON sourcemap by Nim line → list of (startCol, endCol)
-  ## Nim-side column ranges. Only the entries whose Nim source matches
-  ## `nimSrcAbs` are retained.
-  result = initTable[int, seq[ColRange]]()
-  if not fileExists(jsonPath):
+proc decodeV3Map*(mapPath: string): tuple[
+    sources: seq[string],
+    segments: seq[V3Segment]] =
+  ## Parse a V3 `.map` JSON file and return its `sources` list plus
+  ## all decoded segments (with relative deltas resolved to absolute
+  ## 0-based coordinates).
+  if not fileExists(mapPath):
     return
-  let root = parseJson(readFile(jsonPath))
-  if "nimSources" notin root or "mappings" notin root:
+  let js = parseJson(readFile(mapPath))
+  if "sources" notin js or "mappings" notin js:
     return
-  # Find the pathIdx whose key matches our source file.
-  let nimSources = root["nimSources"]
-  var pathIdx = -1
-  let absSrc = absolutePath(nimSrcAbs)
+  for s in js["sources"]:
+    result.sources.add(s.getStr)
+  let mappings = js["mappings"].getStr
+  var src = 0
+  var oLine = 0
+  var oCol = 0
+  var gLine = 0
+  for ln in mappings.split(';'):
+    var gCol = 0
+    for seg in ln.split(','):
+      if seg.len == 0: continue
+      let v = decodeVLQ(seg)
+      if v.len >= 4:
+        gCol += v[0]
+        src += v[1]
+        oLine += v[2]
+        oCol += v[3]
+        result.segments.add(
+          (genLine: gLine, genCol: gCol, sourceIdx: src,
+           origLine: oLine, origCol: oCol))
+    inc gLine
+
+proc collectAllMaps(mapDir: string;
+                    nimSrcAbs: string): tuple[
+    nimSrcIdxs: HashSet[int],
+    segments: seq[V3Segment]] =
+  ## Walk every `.map` file under `mapDir` (which is typically the
+  ## nimcache directory of the test build) and aggregate the segments
+  ## whose `sourceIdx` resolves to the test's Nim source.
+  result.nimSrcIdxs = initHashSet[int]()
+  let absSrc =
+    try: absolutePath(nimSrcAbs)
+    except OSError: nimSrcAbs
   let baseSrc = extractFilename(nimSrcAbs)
-  for key, idx in nimSources.pairs:
-    if key == absSrc or key == nimSrcAbs:
-      pathIdx = idx.getInt
-      break
-    # Tolerate path-normalization differences (e.g. when the
-    # compiler stores `expanded.nim` for macro outputs vs the raw
-    # file we passed in).
-    if extractFilename(key) == baseSrc:
-      pathIdx = idx.getInt
-      break
-    try:
-      if fileExists(key) and fileExists(absSrc) and sameFile(key, absSrc):
-        pathIdx = idx.getInt
-        break
-    except OSError:
-      discard
-  if pathIdx < 0:
-    return
-  let mappings = root["mappings"]
-  if pathIdx >= mappings.len:
-    return
-  let pathMap = mappings[pathIdx]
-  for nimLineStr, groups in pathMap.pairs:
-    let nimLine =
-      try: parseInt(nimLineStr)
-      except ValueError: 0
-    if nimLine <= 0: continue
-    var ranges: seq[ColRange] = @[]
-    for group in groups.items:
-      for entry in group.items:
-        # V2 7-tuple: [cPathID, cStartLine, cStartCol, cEndLine, cEndCol,
-        #              nimStartCol, nimEndCol]
-        if entry.kind != JArray or entry.len < 7: continue
-        let nimStartCol = entry[5].getInt
-        let nimEndCol = entry[6].getInt
-        ranges.add((startCol: nimStartCol, endCol: nimEndCol))
-    if ranges.len > 0:
-      result[nimLine] = ranges
+  for entry in walkDir(mapDir):
+    if not entry.path.endsWith(".c.map"): continue
+    let parsed = decodeV3Map(entry.path)
+    if parsed.sources.len == 0: continue
+    var hits: seq[int] = @[]
+    for i, src in parsed.sources:
+      if src == absSrc or src == nimSrcAbs:
+        hits.add i
+        continue
+      if extractFilename(src) == baseSrc:
+        hits.add i
+        continue
+      try:
+        if fileExists(src) and fileExists(absSrc) and sameFile(src, absSrc):
+          hits.add i
+      except OSError:
+        discard
+    if hits.len == 0: continue
+    for seg in parsed.segments:
+      if seg.sourceIdx in hits:
+        result.segments.add seg
 
-proc isCovered(line, col: int;
-               byLine: Table[int, seq[ColRange]]): bool =
-  ## A position (line, col) is "covered" if any mapping entry on
-  ## that line has `startCol <= col <= endCol`, OR if any entry
-  ## exists for the line at all (line-granular fallback for M1,
-  ## where the marker design only records one entry per Nim line).
-  if line notin byLine: return false
-  let ranges = byLine[line]
-  if ranges.len == 0: return false
-  for r in ranges:
-    if r.startCol <= col and col <= r.endCol:
-      return true
-    # Line-granular fallback: M1's marker design emits one annotation
-    # per Nim line via `genLineDir`, so the recorded `nimStartCol`/
-    # `nimEndCol` reflect the *first* expression on the line. Anything
-    # later on the same line still maps to that line in the JSON, so
-    # accept it as line-level coverage.
-    if r.startCol == 0 and r.endCol == 0:
-      return true
-  # Fallback: any entry on the line counts as line-level coverage.
-  # (M1's emit granularity is per-line, not per-column.)
-  result = true
+type
+  CoverageIndex = object
+    ## Per-Nim-line set of `origCol` values present in the aggregated
+    ## map. M2's emit granularity is mostly per-line (every `genLineDir`
+    ## records one segment near the statement's start column), so the
+    ## practical coverage check is "is there ANY segment on this Nim
+    ## line?". Per-column matching is supported via `byLine[line]`'s
+    ## seq when an expression-level emit landed at the exact column.
+    byLine: Table[int, seq[int]]
 
-proc verifyCoverage*(srcFile, sourcemapJsonPath: string;
+proc buildIndex(segments: seq[V3Segment]): CoverageIndex =
+  result.byLine = initTable[int, seq[int]]()
+  for s in segments:
+    # V3 lines are 0-based; AST is 1-based.
+    let nimLine = s.origLine + 1
+    if nimLine notin result.byLine:
+      result.byLine[nimLine] = @[]
+    result.byLine[nimLine].add s.origCol
+
+proc isCovered(idx: CoverageIndex; line, col: int): bool =
+  ## A position `(line, col)` is covered iff the index has any segment
+  ## on the same Nim line. This is line-granular coverage, matching
+  ## M2's emit reality (mostly one segment per Nim statement); a more
+  ## strict per-column check would require expression-level
+  ## migrations at every cgen emit site, which M3 explores.
+  if line notin idx.byLine: return false
+  result = idx.byLine[line].len > 0
+
+proc verifyCoverage*(srcFile, mapDir: string;
                      strictness: string = "strict"): CoverageResult =
   ## Run the property check.
+  ##
+  ## `mapDir` is the nimcache directory containing per-`.c` `.map`
+  ## sidecars. We aggregate across all `.c.map` files that reference
+  ## `srcFile`.
   ##
   ## `strictness`:
   ##  - "strict": ok = (uncovered == 0).
   ##  - "warn":   ok = (coverage >= 90%); prints a warning otherwise.
   ##  - "off":    ok = true (always).
   let positions = collectExpressionPositions(srcFile)
-  let byLine = loadNimCoverage(sourcemapJsonPath, srcFile)
+  let collected = collectAllMaps(mapDir, srcFile)
+  let idx = buildIndex(collected.segments)
   result.total = positions.len
   for pos in positions:
-    if isCovered(pos.line, pos.col, byLine):
+    if isCovered(idx, pos.line, pos.col):
       inc result.covered
     else:
       inc result.uncovered
@@ -209,14 +244,14 @@ proc verifyCoverage*(srcFile, sourcemapJsonPath: string;
     result.ok = result.coveragePercent >= 90.0
     if result.uncovered > 0:
       echo "[sourcemap-coverage] warning: ", result.uncovered,
-           " uncovered expressions (", formatFloat(result.coveragePercent, ffDecimal, 2), "% covered)"
+           " uncovered expressions (",
+           formatFloat(result.coveragePercent, ffDecimal, 2), "% covered)"
   of "off":
     result.ok = true
   else:
     result.ok = result.uncovered == 0
 
 proc reportMissing*(r: CoverageResult; limit: int = 20) =
-  ## Print up to `limit` missing positions, for diagnostics.
   let n = min(r.missing.len, limit)
   if n == 0: return
   echo "[sourcemap-coverage] first ", n, " uncovered expressions:"

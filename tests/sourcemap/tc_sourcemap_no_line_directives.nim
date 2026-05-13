@@ -4,15 +4,17 @@ discard """
   matrix: "--gc:orc"
 """
 
-## C Source Map V2 — cleanliness assertion.
+## C Source Map V3 — cleanliness assertion.
 ##
-## The headline V2 promise is that the generated .c file no longer
+## The headline V2+V3 promise is that the generated .c file no longer
 ## contains any preprocessor directives the V1 sourcemap mechanism
-## used to leave behind (`#line N FX_K`, `#define FX_<n> "..."`).
-## Without those, gcc's DWARF maps assembly to *real* C lines, not
-## back-projected Nim lines, which is what makes the C view actually
-## steppable in gdb/lldb and what CodeTracer's three-way switching
-## needs end-to-end.
+## used to leave behind (`#line N FX_K`, `#define FX_<n> "..."`),
+## nor any side-channel markers from V2's earlier marker-based
+## prototype. Without those, gcc's DWARF maps assembly to *real* C
+## lines, not back-projected Nim lines — what makes the C view
+## actually steppable in gdb/lldb and what CodeTracer's three-way
+## switching needs end-to-end. At V3 the mapping data lives entirely
+## in the per-`.c` `.map` sidecar (Source Map V3 format).
 
 import std/[os, strutils, osproc, assertions]
 
@@ -56,17 +58,23 @@ proc main() =
     doAssert "#define FX_" notin body,
       "V2 violation: '#define FX_' line still present in " &
       entry.path
-    # Also ensure no raw markers leaked from the side-channel
-    # stripper (would indicate a bug in c_sourcemap.stripMarkersAndCollect).
+    # Also ensure no raw markers leaked from the (now-retired) V2
+    # marker scheme. The .c must be plain C.
     doAssert "@CTSM" notin body,
-      "V2 violation: raw side-channel marker leaked into " &
-      entry.path
+      "raw V2 side-channel marker leaked into " & entry.path
 
   doAssert checkedFiles > 0,
     "No .c files found under nimcache to inspect"
 
+  # And confirm the `.map` sidecar exists for at least one .c
+  var mapFiles = 0
+  for entry in walkDir(nimcache):
+    if entry.path.endsWith(".c.map"): inc mapFiles
+  doAssert mapFiles > 0,
+    "Expected at least one V3 `.map` sidecar in " & nimcache
+
   removeDir(buildDir)
-  echo "C sourcemap V2 cleanliness test passed (",
-       checkedFiles, " files checked)"
+  echo "C sourcemap V3 cleanliness test passed (",
+       checkedFiles, " .c files, ", mapFiles, " .map sidecars)"
 
 main()
