@@ -99,13 +99,20 @@ proc fixupCall(p: BProc, le, ri: PNode, d: var TLoc,
                result: var Builder, call: var CallBuilder) =
   let canRaise = p.config.exc == excGoto and canRaiseDisp(p, ri[0])
   genLineDir(p, ri)
-  # V2: expression-level annotation. genLineDir already recorded a
+  # V3: expression-level annotation. genLineDir already recorded a
   # line-granular marker (start info); now also record an explicit
   # range so the JSON entry's nimEndCol points past the last argument
   # instead of at the call name. Useful for column breakpoints on
   # `foo(a, b)`'s closing paren or last argument's end.
-  if ri.len > 1:
-    emitSourcemapRangeMarker(p.s(cpsStmts), p, ri)
+  if optSourcemap in p.config.globalOptions and ri.len > 1 and
+      ri.info.fileIndex != InvalidFileIdx and ri.info.line > 0:
+    let endInfo = ri[^1].info
+    let secRef = procSection(p, cpsStmts)
+    if secRef.storage != nil:
+      let off = secRef.text[].len
+      secRef.storage.annotations.add CSourcemapAnnotation(
+        startOffset: off, endOffset: off,
+        info: ri.info, endInfo: endInfo)
   # getUniqueType() is too expensive here:
   var typ = skipTypes(ri[0].typ, abstractInst)
   if typ.returnType != nil:

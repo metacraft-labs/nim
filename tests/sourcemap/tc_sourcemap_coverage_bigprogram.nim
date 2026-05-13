@@ -4,16 +4,30 @@ discard """
 """
 
 ## Stress-test the C sourcemap coverage on a curated 200+ line Nim
-## program. M1's marker design only emits annotations at the C
-## statement boundaries reached via `genLineDir` — top-level Nim
-## statements and many module-level expressions never reach that
-## path, so the measured coverage is well below 95%.
+## program.
 ##
-## M1's contract is to RECORD this baseline, not enforce a specific
-## floor. The asserted floor (35%) is intentionally low; the
-## interesting datum for M2/M3 is the actual percentage printed
-## below. M2 (per-section annotation seq + per-emit-site marker
-## migrations) is the milestone where coverage rises toward 95%.
+## M2 (side-table storage) added a per-expression annotation in
+## `ccgexprs.expr` plus per-statement annotation in `genLineDir`.
+## With the side-table design, every expression node that reaches
+## the C codegen pipeline now contributes a JSON entry — measured
+## coverage on `tsystem_misc.nim` rises from M1's 40.11% baseline
+## to ~54%.
+##
+## The remaining ~46% gap is structural, not addressable by
+## additional cgen emit sites:
+##  - `tsystem_misc.nim` is heavy in `doAssert` / `doAssertRaises`
+##    templates which expand into AST nodes whose `info.fileIndex`
+##    points to the synthetic `expanded.nim` file, NOT the user's
+##    source. Those annotations land in the JSON under `expanded.nim`,
+##    so the per-file coverage check on `big_prog.nim` skips them.
+##  - `doAssert not compiles(...)` blocks evaluate at compile time
+##    and emit nothing into the C output, so they cannot be mapped.
+##
+## Closing the gap further is an M3+ topic that requires either:
+##  (a) extending the JSON consumer to follow `expanded.nim` → user
+##      line provenance chains, or
+##  (b) modifying the templates' `{.line: loc.}` to preserve user
+##      source info for nested AST nodes.
 ##
 ## Chosen program: `tests/system/tsystem_misc.nim` — already in the
 ## test corpus, exercises high/low/sizeof, type conversions, slicing,
@@ -30,13 +44,13 @@ const
   buildDir = testsDir / "build_tc_sourcemap_coverage_bigprogram"
   sourceFile = testsDir.parentDir / "system" / "tsystem_misc.nim"
 
-  # M1's marker design only fires inside proc bodies and a few other
-  # codegen paths; top-level statements + module-level expressions
-  # are NOT covered. The measured baseline on this program at M1 is
-  # around 40%. We set the floor at 35% so the test reports the
-  # coverage delta without flapping; M2/M3 should comfortably exceed
-  # 90% as per-expression annotations land.
-  m1CoverageFloor = 35.0
+  # M2 floor: per-expression `expr` annotations + per-statement
+  # `genLineDir` annotations push coverage to ~54% (up from M1's
+  # 40.11%). The remaining gap is structural — see this file's
+  # top doc-comment for the macro / `compiles()` analysis. We
+  # set the floor at 50% so the test reports the delta without
+  # flapping on minor cgen drift.
+  m2CoverageFloor = 50.0
 
 proc main() =
   doAssert fileExists(sourceFile), "missing source: " & sourceFile
@@ -70,8 +84,8 @@ proc main() =
   if cov.uncovered > 0:
     cov.reportMissing(30)
 
-  doAssert cov.coveragePercent >= m1CoverageFloor,
-    "big-program coverage below M1 floor: " &
+  doAssert cov.coveragePercent >= m2CoverageFloor,
+    "big-program coverage below M2 floor: " &
       formatFloat(cov.coveragePercent, ffDecimal, 2) & "%"
 
   echo "Big-program sourcemap coverage test passed"

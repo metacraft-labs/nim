@@ -108,8 +108,8 @@ proc main() =
   doAssert sourcemapFile.len > 0,
     "ct_sourcemap_* not found in " & buildDir
   let js = parseJson(readFile(sourcemapFile))
-  doAssert js.hasKey("version") and js["version"].getInt == 2,
-    "Expected V2 sourcemap, got: " & $js{"version"}
+  doAssert js.hasKey("version") and js["version"].getInt == 3,
+    "Expected V3 sourcemap, got: " & $js{"version"}
 
   # Find the test file in nimSources.
   var testNimPathId = -1

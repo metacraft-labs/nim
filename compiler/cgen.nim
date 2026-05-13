@@ -298,67 +298,23 @@ proc safeLineNm(info: TLineInfo): int =
 proc genPostprocessDir(field1, field2, field3: string): string =
   result = postprocessDirStart & field1 & postprocessDirSep & field2 & postprocessDirSep & field3 & postprocessDirEnd
 
-proc emitSourcemapMarker(r: var Builder; m: BModule;
-                         info: TLineInfo; endInfo: TLineInfo) =
-  ## C source-map V2 emit primitive. Records the annotation in the
-  ## per-module side table and writes its index as an opaque marker
-  ## into `r`. The marker is later stripped before the C file is
-  ## written to disk (see `c_sourcemap.stripMarkersAndCollect`), so
-  ## gcc never sees it and DWARF stays clean.
-  ##
-  ## Skipped (zero overhead) when `--sourcemap:on` is not in effect.
-  if optSourcemap notin m.config.globalOptions: return
+proc recordLineAnnotation*(p: BProc; sec: TCProcSection; info: TLineInfo) =
+  ## V3: record a per-line annotation for the upcoming emit into
+  ## `p.s(sec)`. The annotation's start offset is the current text
+  ## length; the end offset is bumped retroactively as bytes get
+  ## appended (we use a zero-width annotation that the
+  ## post-processing pass extends to the next annotation boundary or
+  ## EOL during JSON build).
+  if optSourcemap notin p.config.globalOptions: return
   if info.fileIndex == InvalidFileIdx or info.line == 0: return
-  let idx = m.sourcemapAnnotations.len
-  m.sourcemapAnnotations.add((info: info, endInfo: endInfo))
-  r.add(renderMarker(idx))
-
-proc emitSourcemapRangeMarker(r: var Builder; m: BModule;
-                              startNode, endNode: PNode) =
-  ## Bonus expression-level variant: records distinct start and end
-  ## Nim positions so the JSON consumer can map a C byte range to a
-  ## Nim sub-line expression range. `startNode` and `endNode` carry
-  ## the source positions of an expression's first and last token
-  ## (typically `n` and `n[^1]`); when they refer to different lines,
-  ## the JSON entry still records the (start line, start col, end
-  ## line, end col) on the Nim side, which downstream consumers can
-  ## use for column breakpoints and other granular features.
-  if optSourcemap notin m.config.globalOptions: return
-  if startNode.isNil or startNode.info.fileIndex == InvalidFileIdx or
-      startNode.info.line == 0:
-    return
-  let endInfo =
-    if endNode.isNil: startNode.info
-    else: endNode.info
-  emitSourcemapMarker(r, m, startNode.info, endInfo)
-
-proc emitSourcemapRangeMarker(r: var Builder; p: BProc; n: PNode) =
-  ## Convenience: range-mark expression `n` using `n` itself for the
-  ## start position and `n[^1]` (its trailing leaf) for the end. For
-  ## leaf nodes both ends coincide.
-  if n.isNil or n.safeLen == 0:
-    emitSourcemapRangeMarker(r, p.module, n, n)
-  else:
-    emitSourcemapRangeMarker(r, p.module, n, n[^1])
-
-proc genCLineDir(r: var Builder, fileIdx: FileIndex, line: int; conf: ConfigRef) =
-  ## V2: the upstream `#line N FX_K` emit is gone — keeping the proc
-  ## as a no-op so the migration is incremental. Mappings are recorded
-  ## via `emitSourcemapMarker` at the call sites that have a real
-  ## `BModule`/`BProc` in scope. This overload had only a `ConfigRef`,
-  ## which isn't enough to record annotations, and its only callers
-  ## (`genInitCode`, `genDatInitCode` with `InvalidFileIdx`) want to
-  ## suppress line info anyway — so dropping the emit is correct.
-  discard
-
-proc genCLineDir(r: var Builder, fileIdx: FileIndex, line: int; p: BProc; info: TLineInfo; lastFileIndex: FileIndex) =
-  ## V2: replaced `#line N FX_K` emit with side-channel marker.
-  if line > 0 and fileIdx != InvalidFileIdx:
-    emitSourcemapMarker(r, p.module, info, info)
-
-proc genCLineDir(r: var Builder, info: TLineInfo; conf: ConfigRef) =
-  ## V2: no-op (ConfigRef-only — no BModule available).
-  discard
+  let secRef = procSection(p, sec)
+  if secRef.storage == nil: return
+  let off = secRef.text[].len
+  secRef.storage.annotations.add CSourcemapAnnotation(
+    startOffset: off,
+    endOffset: off,
+    info: info,
+    endInfo: info)
 
 proc freshLineInfo(p: BProc; info: TLineInfo): bool =
   if p.lastLineInfo.line != info.line or
@@ -369,17 +325,6 @@ proc freshLineInfo(p: BProc; info: TLineInfo): bool =
   else:
     result = false
 
-proc genCLineDir(r: var Builder, p: BProc, info: TLineInfo; conf: ConfigRef) =
-  ## V2: when sourcemap is on, emit a side-channel marker for the
-  ## fresh-line-info change. The `freshLineInfo` filter is preserved
-  ## so we still avoid generating redundant annotations for back-to-back
-  ## emits at the same Nim line.
-  if optSourcemap in conf.globalOptions and
-      info.fileIndex != InvalidFileIdx and
-      info.safeLineNm > 0:
-    if freshLineInfo(p, info):
-      emitSourcemapMarker(r, p.module, info, info)
-
 proc genLineDir(p: BProc, t: PNode) =
   if p == p.module.preInitProc: return
   let line = t.info.safeLineNm
@@ -389,10 +334,16 @@ proc genLineDir(p: BProc, t: PNode) =
     if code.endsWith('\\'):
       code.add "#"
     p.s(cpsStmts).add("// " & code & "\L")
-  let lastFileIndex = p.lastLineInfo.fileIndex
   let freshLine = freshLineInfo(p, t.info)
-  if freshLine:
-    genCLineDir(p.s(cpsStmts), t.info.fileIndex, line, p, t.info, lastFileIndex)
+  # V3: record a sourcemap annotation for every statement, not just
+  # those at fresh-line boundaries. `freshLineInfo` is still used to
+  # gate the `nimln` runtime emit (which is line-trace specific), but
+  # the sourcemap side-table benefits from per-statement granularity
+  # so multiple statements on the same Nim line each get their own
+  # JSON entry.
+  if optSourcemap in p.config.globalOptions and
+      t.info.fileIndex != InvalidFileIdx and t.info.safeLineNm > 0:
+    recordLineAnnotation(p, cpsStmts, t.info)
   if ({optLineTrace, optStackTrace} * p.options == {optLineTrace, optStackTrace}) and
       (p.prc == nil or sfPure notin p.prc.flags) and t.info.fileIndex != InvalidFileIdx:
       if freshLine:
@@ -720,7 +671,7 @@ proc getIntTemp(p: BProc): TLoc =
                 flags: {})
   p.s(cpsLocals).addVar(kind = Local, name = result.snippet, typ = NimInt)
 
-proc localVarDecl(res: var Builder, p: BProc; n: PNode,
+proc localVarDecl(p: BProc; sec: TCProcSection; n: PNode,
                   initializer: Snippet = "",
                   initializerKind: VarInitializerKind = Assignment) =
   let s = n.sym
@@ -730,9 +681,12 @@ proc localVarDecl(res: var Builder, p: BProc; n: PNode,
     fillLoc(s.locImpl, locLocalVar, n, OnStack)
     if s.kind == skLet: incl(s, lfNoDeepCopy)
 
-  genCLineDir(res, p, n.info, p.config)
+  if optSourcemap in p.config.globalOptions and
+      n.info.fileIndex != InvalidFileIdx and n.info.line > 0:
+    if freshLineInfo(p, n.info):
+      recordLineAnnotation(p, sec, n.info)
 
-  res.addVar(p.module, s,
+  p.s(sec).addVar(p.module, s,
     name = s.loc.snippet,
     typ = getTypeDesc(p.module, s.typ, dkVar),
     initializer = initializer,
@@ -748,7 +702,7 @@ proc assignLocalVar(p: BProc, n: PNode) =
     var didGenTemp = false
     initializer = genCppInitializer(p.module, p, n.typ, didGenTemp)
     initializerKind = CppConstructor
-  localVarDecl(p.s(cpsLocals), p, n, initializer, initializerKind)
+  localVarDecl(p, cpsLocals, n, initializer, initializerKind)
   if optLineDir in p.config.options:
     p.s(cpsLocals).add("\n")
 
@@ -1393,7 +1347,7 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
       if sfNoInit in prc.flags and p.module.compileToCpp and (let val = easyResultAsgn(procBody); val != nil):
         var a: TLoc = initLocExprSingleUse(p, val)
         let ra = rdLoc(a)
-        localVarDecl(p.s(cpsStmts), p, resNode, initializer = ra)
+        localVarDecl(p, cpsStmts, resNode, initializer = ra)
       else:
         # declare the result symbol:
         assignLocalVar(p, resNode)
@@ -1445,15 +1399,29 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
   prc.infoImpl = tmpInfo
 
   var generatedProc = newBuilder("")
-  # V2: emit side-channel sourcemap marker for the proc's start.
-  emitSourcemapMarker(generatedProc, m, prc.info, prc.info)
+  # V3: transient builder for the full proc body. Allocate a
+  # SectionStorage so emit primitives inside this scope (the proc
+  # header is the only direct emit; the body sections are merged in
+  # via `mergeAppend` which rebases their annotations).
+  var generatedProcStorage =
+    if optSourcemap in m.config.globalOptions: newSectionStorage() else: nil
+  let generatedProcSec =
+    transientSection(generatedProc, generatedProcStorage, m.config)
+  # Record an annotation for the proc's leading byte so the JSON map
+  # reflects the proc definition's Nim line.
+  if optSourcemap in m.config.globalOptions and
+      prc.info.fileIndex != InvalidFileIdx and prc.info.line > 0 and
+      generatedProcStorage != nil:
+    generatedProcStorage.annotations.add CSourcemapAnnotation(
+      startOffset: 0, endOffset: 0,
+      info: prc.info, endInfo: prc.info)
   generatedProc.addDeclWithVisibility(visibility):
     if sfPure in prc.flags:
-      mergeAppend(transientSection(header), transientSection(generatedProc))
+      mergeAppend(transientSection(header), generatedProcSec)
       generatedProc.finishProcHeaderWithBody():
-        mergeAppend(procSection(p, cpsLocals), transientSection(generatedProc))
-        mergeAppend(procSection(p, cpsInit), transientSection(generatedProc))
-        mergeAppend(procSection(p, cpsStmts), transientSection(generatedProc))
+        mergeAppend(procSection(p, cpsLocals), generatedProcSec)
+        mergeAppend(procSection(p, cpsInit), generatedProcSec)
+        mergeAppend(procSection(p, cpsStmts), generatedProcSec)
     else:
       if m.hcrOn and isReloadable(m, prc):
         m.s[cfsProcHeaders].addDeclWithVisibility(visibility):
@@ -1462,14 +1430,14 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
           # call each other using directly the "_actual" versions (an optimization) - see issue #11608
           mergeAppend(transientSection(header), moduleSection(m, cfsProcHeaders))
           m.s[cfsProcHeaders].finishProcHeaderAsProto()
-      mergeAppend(transientSection(header), transientSection(generatedProc))
+      mergeAppend(transientSection(header), generatedProcSec)
       generatedProc.finishProcHeaderWithBody():
         if optStackTrace in prc.options:
-          mergeAppend(procSection(p, cpsLocals), transientSection(generatedProc))
+          mergeAppend(procSection(p, cpsLocals), generatedProcSec)
           var procname = makeCString(prc.name.s)
           generatedProc.add(initFrame(p, procname, quotedFilename(p.config, prc.info)))
         else:
-          mergeAppend(procSection(p, cpsLocals), transientSection(generatedProc))
+          mergeAppend(procSection(p, cpsLocals), generatedProcSec)
         if optProfiler in prc.options:
           # invoke at proc entry for recursion:
           p.s(cpsInit).add('\t')
@@ -1478,15 +1446,15 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
           # this pair of {} is required for C++ (C++ is weird with its
           # control flow integrity checks):
           generatedProc.addScope():
-            mergeAppend(procSection(p, cpsInit), transientSection(generatedProc))
-            mergeAppend(procSection(p, cpsStmts), transientSection(generatedProc))
+            mergeAppend(procSection(p, cpsInit), generatedProcSec)
+            mergeAppend(procSection(p, cpsStmts), generatedProcSec)
           generatedProc.addLabel("BeforeRet_")
         else:
-          mergeAppend(procSection(p, cpsInit), transientSection(generatedProc))
-          mergeAppend(procSection(p, cpsStmts), transientSection(generatedProc))
+          mergeAppend(procSection(p, cpsInit), generatedProcSec)
+          mergeAppend(procSection(p, cpsStmts), generatedProcSec)
         if optStackTrace in prc.options: generatedProc.add(deinitFrame(p))
         generatedProc.add(returnStmt)
-  mergeAppend(transientSection(generatedProc), moduleSection(m, cfsProcs))
+  mergeAppend(generatedProcSec, moduleSection(m, cfsProcs))
   if isReloadable(m, prc):
     m.s[cfsDynLibInit].add('\t')
     m.s[cfsDynLibInit].addAssignmentWithValue(prc.loc.snippet):
@@ -2120,23 +2088,23 @@ proc genDatInitCode(m: BModule) =
   var moduleDatInitRequired = m.hcrOn
 
   var prc = newBuilder("")
+  let prcSec = trackedTransient(prc, m.config)
   let vis = if m.hcrOn: ExportLib else: Private
   prc.addDeclWithVisibility(vis):
     prc.addProcHeader(ccNimCall, getDatInitName(m), CVoid, cProcParams())
     prc.finishProcHeaderWithBody():
-      # we don't want to break into such init code - could happen if a line
-      # directive from a function written by the user spills after itself
-      genCLineDir(prc, InvalidFileIdx, 999999, m.config)
-
+      # V3: no `#line` directive injected at proc start; the init
+      # proc is intentionally not mapped to any Nim line (matches V2
+      # behavior).
       for i in cfsTypeInit1..cfsDynLibInit:
         if m.s[i].buf.len != 0:
           moduleDatInitRequired = true
-          mergeAppend(moduleSection(m, i), transientSection(prc))
+          mergeAppend(moduleSection(m, i), prcSec)
 
   prc.addNewline()
 
   if moduleDatInitRequired:
-    mergeAppend(transientSection(prc), moduleSection(m, cfsDatInitProc))
+    mergeAppend(prcSec, moduleSection(m, cfsDatInitProc))
     #rememberFlag(m.g.graph, m.module, HasDatInitProc)
 
 # Very similar to the contents of symInDynamicLib - basically only the
@@ -2165,9 +2133,8 @@ proc genInitCode(m: BModule) =
   var moduleInitRequired = m.hcrOn
   let initname = getInitName(m)
   var prcBody = newBuilder("")
-  # we don't want to break into such init code - could happen if a line
-  # directive from a function written by the user spills after itself
-  genCLineDir(prcBody, InvalidFileIdx, 999999, m.config)
+  let prcBodySec = trackedTransient(prcBody, m.config)
+  # V3: no `#line` directive injected at proc start.
   if m.typeNodes > 0:
     if m.hcrOn:
       m.s[cfsTypeInit1].addVar(name = m.typeNodesName, typ = ptrType(cgsymValue(m, "TNimNode")))
@@ -2200,10 +2167,10 @@ proc genInitCode(m: BModule) =
       if addHcrGuards:
         prcBody.addSingleIfStmt("nim_hcr_do_init_"):
           prcBody.addNewline()
-          mergeAppend(procSection(m.thing, section), transientSection(prcBody))
+          mergeAppend(procSection(m.thing, section), prcBodySec)
           prcBody.addNewline()
       else:
-        mergeAppend(procSection(m.thing, section), transientSection(prcBody))
+        mergeAppend(procSection(m.thing, section), prcBodySec)
 
   #echo "PRE INIT PROC ", m.module.name.s, " ", m.s[cfsVars].buf.len
 
@@ -2254,11 +2221,12 @@ proc genInitCode(m: BModule) =
         prcBody.add(deinitFrame(m.initProc))
 
   var procs = newBuilder("")
+  let procsSec = trackedTransient(procs, m.config)
   let vis = if m.hcrOn: ExportLib else: Private
   procs.addDeclWithVisibility(vis):
     procs.addProcHeader(ccNimCall, initname, CVoid, cProcParams())
     procs.finishProcHeaderWithBody():
-      mergeAppend(transientSection(prcBody), transientSection(procs))
+      mergeAppend(prcBodySec, procsSec)
 
   # we cannot simply add the init proc to ``m.s[cfsProcs]`` anymore because
   # that would lead to a *nesting* of merge sections which the merger does
@@ -2290,10 +2258,10 @@ proc genInitCode(m: BModule) =
       procs.addDeclWithVisibility(ExternC):
         procs.addProcHeader(ccNimCall, "nimLoadProcs" & $(i.ord - '0'.ord), CVoid, cProcParams())
         procs.finishProcHeaderWithBody():
-          mergeAppend(transientSection(el), transientSection(procs))
+          mergeAppend(transientSection(el), procsSec)
 
   if moduleInitRequired or sfMainModule in m.module.flags:
-    mergeAppend(transientSection(procs), moduleSection(m, cfsInitProc))
+    mergeAppend(procsSec, moduleSection(m, cfsInitProc))
     #rememberFlag(m.g.graph, m.module, HasModuleInitProc)
 
   genDatInitCode(m)
@@ -2341,40 +2309,45 @@ proc postprocessCode(conf: ConfigRef, r: var Rope) =
 
   r = res
 
-proc genModule(m: BModule, cfile: Cfile): Rope =
+proc genModule(m: BModule, cfile: Cfile;
+               finalStorage: var SectionStorage): Rope =
   var moduleIsEmpty = true
 
   var res = newBuilder(getFileHeader(m.config, cfile))
+  let resStorage =
+    if optSourcemap in m.config.globalOptions: newSectionStorage() else: nil
+  let resSec = transientSection(res, resStorage, m.config)
 
   generateThreadLocalStorage(m)
   generateHeaders(m)
-  mergeAppend(moduleSection(m, cfsHeaders), transientSection(res))
+  mergeAppend(moduleSection(m, cfsHeaders), resSec)
   if m.config.cppCustomNamespace.len > 0:
     openNamespaceNim(m.config.cppCustomNamespace, res)
   if m.s[cfsFrameDefines].buf.len > 0:
-    mergeAppend(moduleSection(m, cfsFrameDefines), transientSection(res))
+    mergeAppend(moduleSection(m, cfsFrameDefines), resSec)
 
   for i in cfsForwardTypes..cfsProcs:
     if m.s[i].buf.len > 0:
       moduleIsEmpty = false
-      mergeAppend(moduleSection(m, i), transientSection(res))
+      mergeAppend(moduleSection(m, i), resSec)
 
   if m.s[cfsInitProc].buf.len > 0:
     moduleIsEmpty = false
-    mergeAppend(moduleSection(m, cfsInitProc), transientSection(res))
+    mergeAppend(moduleSection(m, cfsInitProc), resSec)
   if m.s[cfsDatInitProc].buf.len > 0 or m.hcrOn:
     moduleIsEmpty = false
-    mergeAppend(moduleSection(m, cfsDatInitProc), transientSection(res))
+    mergeAppend(moduleSection(m, cfsDatInitProc), resSec)
 
   if m.config.cppCustomNamespace.len > 0:
     closeNamespaceNim(res)
 
   result = extract(res)
-  # V2: the `#define FX_<n> "path"` block that V1 emitted at the top
+  finalStorage = resStorage
+  # V3: the `#define FX_<n> "path"` block that V1 emitted at the top
   # of each .c file is gone. V1 used those to resolve `#line N FX_K`
-  # directives; V2 records (path, line, col) directly in the
-  # side-channel annotation table, so the .c file no longer needs the
-  # define block. Saves bytes per .c, and keeps the C file clean.
+  # directives; V3 records (path, line, col) directly in the
+  # side-table annotations, so the .c file no longer needs the
+  # define block.
 
   if moduleIsEmpty:
     result = ""
@@ -2580,23 +2553,25 @@ proc writeModule(m: BModule) =
 
   var cf = Cfile(nimname: m.module.name.s, cname: cfile,
                   obj: completeCfilePath(m.config, toObjFile(m.config, cfile)), flags: {})
-  var code = genModule(m, cf)
+  var finalStorage: SectionStorage = nil
+  var code = genModule(m, cf, finalStorage)
   if code != "" or m.config.symbolFiles != disabledSf:
     when hasTinyCBackend:
       if m.config.cmd == cmdTcc:
         tccgen.compileCCode($code, m.config)
         return
 
-    # V2: scan the final concatenated code for side-channel sourcemap
-    # markers. Each marker resolves to an annotation index recorded
-    # during codegen; the (line, col) of the byte just past the marker
-    # is the C-side position. The markers are stripped from `code` so
-    # the .c file on disk is clean C with no V1 `#line` directives.
-    if optSourcemap in m.config.globalOptions:
+    # V3: read the side-table annotations on the final concatenated
+    # `res` section and translate their byte ranges into (cLine, cCol)
+    # by a single pass over `code`. The `.c` file on disk contains
+    # no CodeTracer-specific markup — markers are never emitted at
+    # all in V3, so the byte output is identical to V2 with markers
+    # stripped (which is what reached disk anyway).
+    if optSourcemap in m.config.globalOptions and finalStorage != nil:
       if cSrcMap == nil:
         cSrcMap = newCSourceMap()
-      code = stripMarkersAndCollect(cSrcMap, code, m.sourcemapAnnotations,
-                                    cfile.string, m.config)
+      buildSourcemapFromStorage(cSrcMap, code, finalStorage.annotations,
+                                cfile.string, m.config)
 
     if not shouldRecompile(m, code, cf): cf.flags = {CfileFlag.Cached}
     addFileToCompile(m.config, cf)

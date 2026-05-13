@@ -68,19 +68,29 @@ template startBlockWith(p: BProc, body: typed): int =
   body
   startBlockInside(p)
 
-proc blockBody(b: var TBlock; result: var Builder) =
-  result.add extract(b.sections[cpsLocals])
+proc blockBody(p: BProc; b: var TBlock; parent: var TBlock) =
+  ## Merge `b`'s sections (locals/init/stmts) into `parent.cpsStmts`.
+  ## V3: side-table annotations on `b.sourcemapStorages[...]` are
+  ## rebased into `parent.sourcemapStorages[cpsStmts]` so the merged
+  ## bytes' mappings survive block teardown.
+  template merge(srcSec: TCProcSection) =
+    let srcRef = blockSection(p, b, srcSec)
+    let dstRef = blockSection(p, parent, cpsStmts)
+    mergeAppend(srcRef, dstRef)
+  merge(cpsLocals)
   if b.frameLen > 0:
-    result.addInPlaceOp(Add, NimInt, dotField("FR_", "len"), cIntValue(b.frameLen.int))
-  result.add(extract(b.sections[cpsInit]))
-  result.add(extract(b.sections[cpsStmts]))
+    parent.sections[cpsStmts].addInPlaceOp(Add, NimInt,
+      dotField("FR_", "len"), cIntValue(b.frameLen.int))
+  merge(cpsInit)
+  merge(cpsStmts)
   if b.frameLen > 0:
-    result.addInPlaceOp(Sub, NimInt, dotField("FR_", "len"), cIntValue(b.frameLen.int))
+    parent.sections[cpsStmts].addInPlaceOp(Sub, NimInt,
+      dotField("FR_", "len"), cIntValue(b.frameLen.int))
 
 proc endBlockInside(p: BProc) =
   let topBlock = p.blocks.len-1
   # the block is merged into the parent block
-  p.blocks[topBlock].blockBody(p.blocks[topBlock-1].sections[cpsStmts])
+  blockBody(p, p.blocks[topBlock], p.blocks[topBlock-1])
   setLen(p.blocks, topBlock)
 
 proc endBlockOutside(p: BProc, label: TLabel) =
@@ -423,7 +433,7 @@ proc genSingleVar(p: BProc, v: PSym; vn, value: PNode) =
         var tmp = initLocExprSingleUse(p, value)
         if value.kind != nkEmpty:
           initializer = tmp.rdLoc
-      localVarDecl(p.s(cpsStmts), p, vn, initializer, initializerKind)
+      localVarDecl(p, cpsStmts, vn, initializer, initializerKind)
       return
     assignLocalVar(p, vn)
     initLocalVar(p, v, imm)
@@ -712,8 +722,17 @@ proc genWhileStmt(p: BProc, t: PNode) =
       p.breakIdx = startBlockWith(p):
         stmt = initWhileStmt(p.s(cpsStmts), cIntValue(1))
       p.blocks[p.breakIdx].isLoop = true
-      # V2: expression-level annotation for the while condition.
-      emitSourcemapRangeMarker(p.s(cpsStmts), p, t[0])
+      # V3: expression-level annotation for the while condition.
+      if optSourcemap in p.config.globalOptions and
+          t[0].info.fileIndex != InvalidFileIdx and t[0].info.line > 0:
+        let endInfo =
+          if t[0].safeLen > 0: t[0][^1].info else: t[0].info
+        let secRef = procSection(p, cpsStmts)
+        if secRef.storage != nil:
+          let off = secRef.text[].len
+          secRef.storage.annotations.add CSourcemapAnnotation(
+            startOffset: off, endOffset: off,
+            info: t[0].info, endInfo: endInfo)
       a = initLocExpr(p, t[0])
       if (t[0].kind != nkIntLit) or (t[0].intVal == 0):
         let ra = a.rdLoc
@@ -1869,8 +1888,15 @@ proc genEmit(p: BProc, t: PNode) =
   if p.prc == nil:
     # top level emit pragma?
     let section = determineSection(t[1])
-    # V2: emit side-channel sourcemap marker (was: #line directive).
-    emitSourcemapMarker(p.module.s[section], p.module, t.info, t.info)
+    # V3: side-table annotation for the emitted block.
+    if optSourcemap in p.module.config.globalOptions and
+        t.info.fileIndex != InvalidFileIdx and t.info.line > 0:
+      let secRef = moduleSection(p.module, section)
+      if secRef.storage != nil:
+        let off = secRef.text[].len
+        secRef.storage.annotations.add CSourcemapAnnotation(
+          startOffset: off, endOffset: off + s.len,
+          info: t.info, endInfo: t.info)
     p.module.s[section].add(s)
   else:
     genLineDir(p, t)
@@ -1960,10 +1986,17 @@ proc genAsgn(p: BProc, e: PNode, fastAsgn: bool) =
     a.flags.incl(lfEnforceDeref)
     a.flags.incl(lfPrepareForMutation)
     genLineDir(p, le) # it can be a nkBracketExpr, which may raise
-    # V2: expression-level annotation. Record a range covering the
+    # V3: expression-level annotation. Record a range covering the
     # whole `le = ri` expression so columns on either side are
     # reachable from the JSON.
-    emitSourcemapRangeMarker(p.s(cpsStmts), p.module, le, ri)
+    if optSourcemap in p.config.globalOptions and
+        le.info.fileIndex != InvalidFileIdx and le.info.line > 0:
+      let secRef = procSection(p, cpsStmts)
+      if secRef.storage != nil:
+        let off = secRef.text[].len
+        secRef.storage.annotations.add CSourcemapAnnotation(
+          startOffset: off, endOffset: off,
+          info: le.info, endInfo: ri.info)
     expr(p, le, a)
     a.flags.excl(lfPrepareForMutation)
     if fastAsgn: incl(a.flags, lfNoDeepCopy)

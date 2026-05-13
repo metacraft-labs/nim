@@ -50,6 +50,25 @@ type
     cpsInit,                  # section for init of variables for C proc
     cpsStmts                  # section of local statements for C proc
   TCProcSections* = array[TCProcSection, Builder] # represents a generated C proc
+
+  SectionStorage* = ref object
+    ## C source-map V3 — M2: per-section side-table of annotations.
+    ## Each section's storage is allocated lazily (on first
+    ## `emitAt`/`emitRangeAt` call when `--sourcemap:on`) and lives on
+    ## the section's owner (`BModule.sourcemapStorages`,
+    ## `TBlock.sourcemapStorages`, or transient on the local builder
+    ## via `newSectionStorage`).
+    ##
+    ## The storage offsets `(startOffset, endOffset)` are byte offsets
+    ## into the section's `Builder.buf`. When `mergeAppend` /
+    ## `mergePrepend` move bytes from one buffer to another, the
+    ## annotations are translated to absolute offsets into the
+    ## destination buffer at the same time.
+    annotations*: seq[CSourcemapAnnotation]
+
+  TCFileSectionStorages* = array[TCFileSection, SectionStorage]
+  TCProcSectionStorages* = array[TCProcSection, SectionStorage]
+
   BModule* = ref TCGen
   BProc* = ref TCProc
   TBlock* = object
@@ -57,6 +76,8 @@ type
     label*: Rope              # generated text for the label
                               # nil if label is not used
     sections*: TCProcSections # the code belonging
+    sourcemapStorages*: TCProcSectionStorages
+      ## C source-map V3 — M2: per-block parallel storage to `sections`.
     isLoop*: bool             # whether block is a loop
     nestedTryStmts*: int16    # how many try statements is it nested into
     nestedExceptStmts*: int16 # how many except statements is it nested into
@@ -142,6 +163,8 @@ type
 
   TCGen = object of PPassContext # represents a C source file
     s*: TCFileSections        # sections of the C file
+    sourcemapStorages*: TCFileSectionStorages
+      ## C source-map V3 — M2: per-module parallel storage to `s`.
     flags*: set[CodegenFlag]
     module*: PSym
     filename*: AbsoluteFile
@@ -175,13 +198,6 @@ type
                                              # OpenGL wrapper
     sigConflicts*: CountTable[SigHash]
     g*: BModuleList
-    sourcemapAnnotations*: seq[CSourcemapAnnotation]
-      ## C source-map V2: side-channel annotation table. Indexes
-      ## into this seq are embedded as markers in the section
-      ## buffers via `emitSourcemapMarker`; after `genModule`
-      ## concatenates everything into the final C code, markers are
-      ## stripped and resolved to JSON entries. Empty/unused when
-      ## `--sourcemap:on` is not set.
 
 template config*(m: BModule): ConfigRef = m.g.config
 template config*(p: BProc): ConfigRef = p.module.g.config

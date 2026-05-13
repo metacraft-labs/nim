@@ -3544,6 +3544,23 @@ proc expr(p: BProc, n: PNode, d: var TLoc) =
     setFrameMsg p.config$n.info & " " & $n.kind
   p.currLineInfo = n.info
 
+  # V3: per-expression side-table annotation. Records `(n.info)` as a
+  # zero-width annotation at the current `cpsStmts` offset. Many
+  # expressions land on the same byte offset (sub-expressions emit
+  # into the same C statement) — that's fine: each annotation carries
+  # a distinct Nim `(line, col)`, so the JSON consumer can answer
+  # column-level queries against the user source.
+  if optSourcemap in p.config.globalOptions and
+      n.info.fileIndex != InvalidFileIdx and n.info.line > 0:
+    let secRef = procSection(p, cpsStmts)
+    if secRef.storage != nil:
+      let off = secRef.text[].len
+      let endInfo =
+        if n.safeLen > 0: n[^1].info else: n.info
+      secRef.storage.annotations.add CSourcemapAnnotation(
+        startOffset: off, endOffset: off,
+        info: n.info, endInfo: endInfo)
+
   case n.kind
   of nkSym:
     var sym = n.sym

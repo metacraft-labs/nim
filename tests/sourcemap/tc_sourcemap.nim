@@ -77,10 +77,10 @@ proc main() =
       break
   doAssert foundTestFile, "test_sourcemap_prog.nim not found in nimSources"
 
-  # V2: top-level `version` field marks the format.
+  # V3: top-level `version` field marks the format.
   doAssert js.hasKey("version"), "Missing version key"
-  doAssert js["version"].getInt == 2,
-    "Expected sourcemap version 2, got " & $js["version"]
+  doAssert js["version"].getInt == 3,
+    "Expected sourcemap version 3, got " & $js["version"]
 
   # Verify mappings exist and are non-empty
   doAssert js["mappings"].kind == JArray, "mappings should be an array"
