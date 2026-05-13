@@ -1,31 +1,50 @@
 ## Property-test framework for the C sourcemap.
 ##
-## Updated for **Source Map V3** output (M2).
+## Updated for **Source Map V3** output (M2) and refactored at M4 to
+## use nimsuggest as the expression-position oracle instead of the
+## compiler's parse AST.
 ##
-## The property under test: for every expression node in the Nim
-## source, the `.map` sidecar contains at least one mapping segment
-## whose Nim-side `(origLine, origCol)` matches the node's position.
+## The property under test: for every expression in the Nim source,
+## the `.map` sidecar contains at least one mapping segment whose
+## Nim-side `(origLine, origCol)` matches the expression's position.
 ## This is the bidirectional dual of the "go-to-definition" pattern
 ## in `tests/nimsuggest/tdef*.nim` — same cursor-position-based
 ## assertion shape, different oracle (the V3 mappings instead of
 ## nimsuggest).
 ##
-## V3 mapping segments use 0-based line and column numbers; Nim AST
-## reports 1-based line and 0-based column. We normalize to the V3
-## convention before checking.
+## V3 mapping segments use 0-based line and column numbers. nimsuggest
+## reports 1-based line and 0-based column (Nim's AST convention). We
+## normalize to the V3 convention before checking.
+##
+## ## M4 — sem-aware denominator
+##
+## Earlier milestones imported the compiler's AST modules and
+## walked the *untyped* parse AST to collect expression positions.
+## That over-counted: `static:` blocks, dead `when` branches, `is`-
+## checks resolved at sem time, generic procs that never get
+## instantiated, and the bodies of templates/macros are all visible
+## to the parse AST but contribute zero C bytes — they can never be
+## covered by a mapping segment.
+##
+## At M4 we replace the denominator with what nimsuggest's sem-time
+## observer (`SuggestFileSymbolDatabase`) records. We spawn
+## `nimsuggest --stdin --v3 <srcFile>`, issue
+##   `highlightRange <srcFile>:0:0 100000:0`
+## and parse the response. Each suggest row is one occurrence (def or
+## use) of a sem-resolved symbol — exactly the set of positions cgen
+## could be expected to emit a mapping for, filtered to the symbol
+## kinds that actually correspond to expressions.
 ##
 ## API:
-##  - `collectExpressionPositions(srcFile)` — parse + walk AST.
+##  - `collectExpressionPositions(srcFile)` — spawn nimsuggest, parse.
 ##  - `verifyCoverage(srcFile, mapPath, strictness)` — run the check.
 
-import std/[json, os, sets, strutils, tables]
-
-import compiler/[ast, parser, idents, options, lineinfos, nodekinds]
+import std/[json, os, osproc, sets, streams, strutils, tables]
 
 type
   ExpressionPosition* = tuple[file: string; line, col: int]
-    ## `line` is 1-based, `col` is 0-based — same convention Nim's
-    ## AST uses. We translate to V3 internally.
+    ## `line` is 1-based, `col` is 0-based — same convention nimsuggest
+    ## (and Nim's AST) uses. We translate to V3 internally.
 
   CoverageResult* = object
     ok*: bool
@@ -40,61 +59,129 @@ const
   continuationBit = 1 shl 5
   valueMask = continuationBit - 1
 
-  ## Node kinds we consider "expressions" for coverage purposes.
-  expressionNodeKinds* = {
-    nkCharLit, nkIntLit, nkInt8Lit, nkInt16Lit, nkInt32Lit, nkInt64Lit,
-    nkUIntLit, nkUInt8Lit, nkUInt16Lit, nkUInt32Lit, nkUInt64Lit,
-    nkFloatLit, nkFloat32Lit, nkFloat64Lit, nkFloat128Lit,
-    nkStrLit, nkRStrLit, nkTripleStrLit,
-    nkNilLit,
-    nkIdent, nkSym,
-    nkCall, nkCommand, nkCallStrLit, nkInfix, nkPrefix, nkPostfix,
-    nkHiddenCallConv,
-    nkConv, nkCast, nkHiddenStdConv, nkHiddenSubConv,
-    nkStaticExpr,
-    nkChckRangeF, nkChckRange64, nkChckRange,
-    nkStringToCString, nkCStringToString,
-    nkObjDownConv, nkObjUpConv,
-    nkAddr, nkHiddenAddr, nkDerefExpr, nkHiddenDeref,
-    nkObjConstr, nkTupleConstr,
-    nkPar, nkCurly, nkBracket, nkTableConstr,
-    nkBracketExpr, nkDotExpr, nkCheckedFieldExpr, nkCurlyExpr,
-    nkIfExpr, nkLambda,
-    nkAccQuoted,
-    nkAsgn, nkFastAsgn,
-  }
+  ## TSymKind values that correspond to expression-producing
+  ## occurrences. Definition sites of these symbols (`skVar foo`,
+  ## `skProc bar`, ...) and *uses* of them are both real positions in
+  ## the source where cgen has a place to attach a mapping.
+  ##
+  ## Excluded kinds are purely structural — `skType`, `skModule`,
+  ## `skMacro`, `skGenericParam`, `skEnumField` (definition site only)
+  ## — they don't generate runtime code.
+  expressionSymKinds* = [
+    "skVar", "skLet", "skConst", "skParam", "skResult",
+    "skProc", "skFunc", "skMethod", "skIterator", "skConverter",
+    "skField", "skTemp", "skForVar",
+    "skGlobalVar", "skGlobalLet"
+  ]
 
-proc walkExpressions(n: PNode; file: string;
-                     output: var HashSet[ExpressionPosition]) =
-  if n.isNil: return
-  if n.kind in expressionNodeKinds:
-    let line = int(n.info.line)
-    let col = int(n.info.col)
-    if line > 0:
-      output.incl((file: file, line: line, col: col))
-  if n.safeLen > 0:
-    for i in 0 ..< n.safeLen:
-      walkExpressions(n[i], file, output)
+proc findNimsuggestExe(): string =
+  ## Locate the `nimsuggest` binary. Strategy:
+  ##  1. Look next to the current compiler binary (`bin/nimsuggest`
+  ##     under the same parent directory as the running `nim`).
+  ##  2. Look up the compiler source root (`nimsuggest/nimsuggest`).
+  ##  3. Fall back to `findExe`.
+  let nimExe = getCurrentCompilerExe()
+  if nimExe.len > 0:
+    let binDir = nimExe.parentDir
+    let candidate1 = binDir / "nimsuggest"
+    if fileExists(candidate1):
+      return candidate1
+    when defined(windows):
+      let candidate1Exe = candidate1 & ".exe"
+      if fileExists(candidate1Exe):
+        return candidate1Exe
+    let candidate2 = binDir.parentDir / "nimsuggest" / "nimsuggest"
+    if fileExists(candidate2):
+      return candidate2
+    when defined(windows):
+      let candidate2Exe = candidate2 & ".exe"
+      if fileExists(candidate2Exe):
+        return candidate2Exe
+  let found = findExe("nimsuggest")
+  if found.len > 0:
+    return found
+  raise newException(IOError, "could not locate nimsuggest binary")
+
+proc parseHighlightRangeRow(line: string): tuple[ok: bool, kind: string,
+    qualifiedPath: string, nimLine: int, col: int] =
+  ## Parse one nimsuggest text-protocol row produced by
+  ## `ideHighlightRange`. The row format is the standard suggest line
+  ## emitted by `proc \`$\`*(Suggest)` in the nimsuggest pretty-printer:
+  ##
+  ##   section\tsymkind\tqualifiedPath\tforth\tfilePath\tline\tcol\tdoc[\tquality]
+  ##
+  ## (where `\t` is a literal tab). The `doc` field is escaped via
+  ## Nim's `escape` proc and may itself contain tabs — but those are
+  ## *encoded* in the escape, so a naive split on `\t` is safe as long
+  ## as we trust the producer not to inject raw tabs.
+  let parts = line.split('\t')
+  if parts.len < 7:
+    return (false, "", "", 0, 0)
+  if parts[0] != "highlightRange":
+    return (false, "", "", 0, 0)
+  var lineNum, colNum: int
+  try:
+    lineNum = parseInt(parts[5])
+    colNum = parseInt(parts[6])
+  except ValueError:
+    return (false, "", "", 0, 0)
+  return (true, parts[1], parts[2], lineNum, colNum)
+
+proc runNimsuggestHighlightRange(srcFile: string): seq[string] =
+  ## Spawn `nimsuggest --stdin --v3 <srcFile>`, send one
+  ## `highlightRange` command followed by `quit`, return raw output
+  ## lines (already split, with EOF marker stripped).
+  let exe = findNimsuggestExe()
+  # Use the --v3 protocol — that's where `ideHighlightRange` runs.
+  let p = startProcess(exe,
+    args = @["--stdin", "--v3", srcFile],
+    options = {poUsePath, poStdErrToStdOut})
+  defer: p.close()
+  let cmd = "highlightRange " & srcFile & ":0:0 100000:0\nquit\n"
+  p.inputStream.write(cmd)
+  p.inputStream.flush()
+  p.inputStream.close()
+  result = @[]
+  let outs = p.outputStream
+  while not outs.atEnd:
+    let ln = outs.readLine()
+    result.add ln
+  discard p.waitForExit()
 
 proc collectExpressionPositions*(srcFile: string): HashSet[ExpressionPosition] =
-  ## Parse `srcFile` (Nim source) and collect every expression's
-  ## `(file, line, col)` tuple.
+  ## Spawn nimsuggest against `srcFile` and collect every
+  ## sem-resolved expression's `(file, line, col)` tuple, filtered to
+  ## the kinds in `expressionSymKinds`.
   ##
-  ## TODO (M3 framework refinement): this works at the *parse* AST,
-  ## so it counts expressions that will be eliminated at semcheck
-  ## (compile-time-only `is`-checks, `compiles()` calls, branches
-  ## inside `when` that resolve to false). Those expressions
-  ## generate zero C bytes by design and have no segment to attach
-  ## to — they should be subtracted from the denominator. Doing
-  ## that requires the helper to invoke the typed AST pass and
-  ## filter `nkCall` whose callee `magic` resolves to a compile-
-  ## time-only intrinsic, plus `when` branches that didn't pick.
+  ## Raises `IOError` if nimsuggest produced zero `highlightRange`
+  ## rows — that almost always means the subprocess failed to start
+  ## the file (e.g. compile error) and would silently turn into a
+  ## fake "100% covered, 0 expressions" result downstream.
   result = initHashSet[ExpressionPosition]()
-  let cache = newIdentCache()
-  let conf = newConfigRef()
-  let source = readFile(srcFile)
-  let tree = parseString(source, cache, conf, srcFile)
-  walkExpressions(tree, srcFile, result)
+  let lines = runNimsuggestHighlightRange(srcFile)
+  let kindSet = block:
+    var s = initHashSet[string]()
+    for k in expressionSymKinds: s.incl k
+    s
+  var rangeRowCount = 0
+  for ln in lines:
+    if not ln.startsWith("highlightRange"): continue
+    inc rangeRowCount
+    let row = parseHighlightRangeRow(ln)
+    if not row.ok: continue
+    if row.kind notin kindSet: continue
+    if row.nimLine <= 0: continue
+    # Filter out compile-time magic constants from `system` (e.g.
+    # `isMainModule`, `nimVersion`, `defined(...)`). These resolve at
+    # sem time and never generate C bytes, so they have no segment to
+    # attach to. They appear with `qualifiedPath = system.<name>`.
+    if row.kind == "skConst" and row.qualifiedPath.startsWith("system."):
+      continue
+    result.incl((file: srcFile, line: row.nimLine, col: row.col))
+  if rangeRowCount == 0:
+    raise newException(IOError,
+      "nimsuggest returned no highlightRange rows for " & srcFile &
+      "; full output (" & $lines.len & " lines):\n" & lines.join("\n"))
 
 proc decodeVLQ(s: string): seq[int] =
   var b64Table: array[128, int]
@@ -196,7 +283,7 @@ type
 proc buildIndex(segments: seq[V3Segment]): CoverageIndex =
   result.byLine = initTable[int, seq[int]]()
   for s in segments:
-    # V3 lines are 0-based; AST is 1-based.
+    # V3 lines are 0-based; nimsuggest reports 1-based.
     let nimLine = s.origLine + 1
     if nimLine notin result.byLine:
       result.byLine[nimLine] = @[]

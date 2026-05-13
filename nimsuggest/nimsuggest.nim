@@ -127,7 +127,7 @@ proc myLog(s: string) =
 
 const
   seps = {':', ';', ' ', '\t'}
-  Help = "usage: sug|con|def|use|dus|chk|mod|highlight|outline|known|project file.nim[;dirtyfile.nim]:line:col\n" &
+  Help = "usage: sug|con|def|use|dus|chk|mod|highlight|highlightRange|outline|known|project file.nim[;dirtyfile.nim]:line:col\n" &
          "type 'quit' to quit\n" &
          "type 'debug' to toggle debug mode on/off\n" &
          "type 'terse' to toggle terse mode on/off"
@@ -522,6 +522,7 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
   of "mod": conf.ideCmd = ideMod
   of "chk": conf.ideCmd = ideChk
   of "highlight": conf.ideCmd = ideHighlight
+  of "highlightrange": conf.ideCmd = ideHighlightRange
   of "outline": conf.ideCmd = ideOutline
   of "quit":
     sentinel()
@@ -1100,7 +1101,7 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.unmarkAllDirty()
 
   # these commands require partially compiled project
-  elif cmd in {ideSug, ideCon, ideOutline, ideHighlight, ideDef, ideChkFile, ideType, ideDeclaration, ideExpand, ideTraceExpand} and
+  elif cmd in {ideSug, ideCon, ideOutline, ideHighlight, ideHighlightRange, ideDef, ideChkFile, ideType, ideDeclaration, ideExpand, ideTraceExpand} and
        (graph.needsCompilation(fileIndex) or cmd in {ideSug, ideCon}):
     # for ideSug use v2 implementation
     if cmd in {ideSug, ideCon}:
@@ -1148,6 +1149,34 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       myLog fmt "Found {usages.len} usages in {file.string}"
       for s in usages:
         graph.suggestResult(s.sym, s.info)
+  of ideHighlightRange:
+    # Range-query analogue of ideHighlight: emit one suggest row per
+    # (sym, info) pair in the file whose position falls inside the
+    # supplied range. Start position uses the existing line/col fields;
+    # end position is parsed from `tag` as `<endLine>:<endCol>`.
+    var endLine = 0
+    var endCol = 0
+    block parseEnd:
+      let trimmed = tag.strip()
+      if trimmed.len == 0: break parseEnd
+      var i = 0
+      i += parseInt(trimmed, endLine, i)
+      i += skipWhile(trimmed, seps, i)
+      discard parseInt(trimmed, endCol, i)
+    let startLine = line
+    let startCol = col
+    let fs = graph.fileSymbols(fileIndex)
+    var emitted = 0
+    for i in fs.lineInfo.low..fs.lineInfo.high:
+      let li = fs.lineInfo[i]
+      let l = li.line.int
+      let c = li.col.int
+      if (l > startLine or (l == startLine and c >= startCol)) and
+         (l < endLine   or (l == endLine   and c <= endCol)):
+        let info = TLineInfo(line: li.line, col: li.col, fileIndex: fileIndex)
+        graph.suggestResult(fs.sym[i], info, ideHighlightRange)
+        inc emitted
+    myLog fmt "Emitted {emitted} highlightRange rows in {file.string}"
   of ideRecompile:
     graph.recompileFullProject()
   of ideChanged:

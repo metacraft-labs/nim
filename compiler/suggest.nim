@@ -188,21 +188,21 @@ proc symToSuggest*(g: ModuleGraph; s: PSym, isLocal: bool, section: IdeCmd, info
     when defined(nimsuggest) and not defined(noDocgen) and not defined(leanCompiler):
       if extractDocs:
         result.doc = extractDocComment(g, s)
-  if s.kind == skModule and s.ast.len != 0 and section != ideHighlight:
+  if s.kind == skModule and s.ast.len != 0 and section notin {ideHighlight, ideHighlightRange}:
     result.filePath = toFullPath(g.config, s.ast[0].info)
     result.line = 1
     result.column = 0
     result.tokenLen = 0
   else:
     let infox =
-      if useSuppliedInfo or section in {ideUse, ideHighlight, ideOutline, ideDeclaration}:
+      if useSuppliedInfo or section in {ideUse, ideHighlight, ideHighlightRange, ideOutline, ideDeclaration}:
         info
       else:
         s.info
     result.filePath = toFullPath(g.config, infox)
     result.line = toLinenumber(infox)
     result.column = toColumn(infox)
-    result.tokenLen = if section notin {ideHighlight, ideInlayHints}:
+    result.tokenLen = if section notin {ideHighlight, ideHighlightRange, ideInlayHints}:
                         s.name.s.len
                       else:
                         getTokenLenFromSource(g.config, s.name.s, infox, section == ideInlayHints)
