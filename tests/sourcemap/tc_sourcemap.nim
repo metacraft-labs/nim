@@ -7,7 +7,7 @@ discard """
 ## Test that --sourcemap:on generates ct_sourcemap_*.json files for the C backend
 ## and that they contain correct bidirectional Nim-to-C line mappings.
 
-import std/[os, json, strutils, osproc, compilesettings, assertions]
+import std/[os, json, strutils, osproc, assertions]
 
 const
   testsDir = currentSourcePath().parentDir
@@ -77,11 +77,18 @@ proc main() =
       break
   doAssert foundTestFile, "test_sourcemap_prog.nim not found in nimSources"
 
+  # V2: top-level `version` field marks the format.
+  doAssert js.hasKey("version"), "Missing version key"
+  doAssert js["version"].getInt == 2,
+    "Expected sourcemap version 2, got " & $js["version"]
+
   # Verify mappings exist and are non-empty
   doAssert js["mappings"].kind == JArray, "mappings should be an array"
   doAssert js["mappings"].len > 0, "mappings array is empty"
 
-  # Verify at least one mapping entry has actual line data
+  # Verify at least one mapping entry has actual line data with the V2
+  # shape (7-tuple). V1 readers indexing only [0]/[1] still see the
+  # right values (cPathID and cStartLine).
   var hasLineData = false
   for pathMap in js["mappings"]:
     if pathMap.kind == JObject and pathMap.len > 0:
@@ -90,10 +97,18 @@ proc main() =
           for group in groups:
             if group.kind == JArray and group.len > 0:
               hasLineData = true
-              # Each entry should be [pathID, line]
               let entry = group[0]
-              doAssert entry.kind == JArray, "Line entry should be [pathID, line]"
-              doAssert entry.len == 2, "Line entry should have 2 elements"
+              doAssert entry.kind == JArray,
+                "Line entry should be an array"
+              # V2 shape: [cPathID, cStartLine, cStartCol,
+              #           cEndLine, cEndCol, nimStartCol, nimEndCol].
+              doAssert entry.len == 7,
+                "V2 line entry should have 7 elements, got " &
+                $entry.len & " (" & $entry & ")"
+              # V1 compatibility: [0] is still cPathID, [1] is still
+              # cStartLine — readers that only look at those continue
+              # to work.
+              doAssert entry[0].kind == JInt and entry[1].kind == JInt
               break
             if hasLineData: break
         if hasLineData: break

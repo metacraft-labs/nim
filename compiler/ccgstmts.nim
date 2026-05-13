@@ -712,6 +712,8 @@ proc genWhileStmt(p: BProc, t: PNode) =
       p.breakIdx = startBlockWith(p):
         stmt = initWhileStmt(p.s(cpsStmts), cIntValue(1))
       p.blocks[p.breakIdx].isLoop = true
+      # V2: expression-level annotation for the while condition.
+      emitSourcemapRangeMarker(p.s(cpsStmts), p, t[0])
       a = initLocExpr(p, t[0])
       if (t[0].kind != nkIntLit) or (t[0].intVal == 0):
         let ra = a.rdLoc
@@ -1867,7 +1869,8 @@ proc genEmit(p: BProc, t: PNode) =
   if p.prc == nil:
     # top level emit pragma?
     let section = determineSection(t[1])
-    genCLineDir(p.module.s[section], t.info, p.config)
+    # V2: emit side-channel sourcemap marker (was: #line directive).
+    emitSourcemapMarker(p.module.s[section], p.module, t.info, t.info)
     p.module.s[section].add(s)
   else:
     genLineDir(p, t)
@@ -1957,6 +1960,10 @@ proc genAsgn(p: BProc, e: PNode, fastAsgn: bool) =
     a.flags.incl(lfEnforceDeref)
     a.flags.incl(lfPrepareForMutation)
     genLineDir(p, le) # it can be a nkBracketExpr, which may raise
+    # V2: expression-level annotation. Record a range covering the
+    # whole `le = ri` expression so columns on either side are
+    # reachable from the JSON.
+    emitSourcemapRangeMarker(p.s(cpsStmts), p.module, le, ri)
     expr(p, le, a)
     a.flags.excl(lfPrepareForMutation)
     if fastAsgn: incl(a.flags, lfNoDeepCopy)

@@ -11,7 +11,8 @@
 
 import
   ast, ropes, options,
-  lineinfos, pathutils, modulegraphs, cbuilderbase
+  lineinfos, pathutils, modulegraphs, cbuilderbase,
+  c_sourcemap
 
 import std/[intsets, tables, sets]
 
@@ -174,6 +175,13 @@ type
                                              # OpenGL wrapper
     sigConflicts*: CountTable[SigHash]
     g*: BModuleList
+    sourcemapAnnotations*: seq[CSourcemapAnnotation]
+      ## C source-map V2: side-channel annotation table. Indexes
+      ## into this seq are embedded as markers in the section
+      ## buffers via `emitSourcemapMarker`; after `genModule`
+      ## concatenates everything into the final C code, markers are
+      ## stripped and resolved to JSON entries. Empty/unused when
+      ## `--sourcemap:on` is not set.
 
 template config*(m: BModule): ConfigRef = m.g.config
 template config*(p: BProc): ConfigRef = p.module.g.config
