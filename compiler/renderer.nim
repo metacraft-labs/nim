@@ -1151,11 +1151,18 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
     # TODO is it ok to not do it? for now don't do it here
     # it overwrites more precise locations
     # g.config.macroSourcemap.topLevelLines[g.line.int] = (toMsgFilename(g.config, n.info), n.info.line.int)
-    
+
+    # M5: record the raw TLineInfo of the stmt-level node so cgen can
+    # bridge expanded.nim positions to user source. We only record if
+    # no gsub already populated this line — gsub provides more precise
+    # column info for sub-expressions.
+    if n.info.fileIndex != g.config.macroSourcemap.fileIndex and
+       not g.config.macroSourcemap.topLevelLineInfos.hasKey(g.line.int):
+      g.config.macroSourcemap.topLevelLineInfos[g.line.int] = n.info
 
     # n.info => seq[info.line]?
     n.info = info
-  
+
   # echo "after gstmts ", n.kind, " ", n.info
 
 
@@ -2275,9 +2282,13 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
          LIB2_MACRO_PATH notin filename:
         if not g.config.macroSourcemap.topLevelLines.hasKey(g.line.int):
           g.config.macroSourcemap.topLevelLines[g.line.int] = (filename, n.info.line.int)
+          # M5: also remember the raw TLineInfo so cgen can bridge
+          # `info` values that get rewritten to expanded.nim back to
+          # the original user position (fileIndex + line + col).
+          g.config.macroSourcemap.topLevelLineInfos[g.line.int] = n.info
     n.info = info
 
-  
+
   # echo "after gsub ", n.kind, " ", n.info
 
 proc renderTree*(n: PNode, renderFlags: TRenderFlags = {}, config: ConfigRef = nil): string =

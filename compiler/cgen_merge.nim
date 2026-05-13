@@ -26,6 +26,8 @@
 ## the merge primitives degenerate to plain string append/prepend —
 ## byte-identical to the pre-V2 cgen behavior.
 
+import std/tables
+
 import cbuilderbase, cgendata, c_sourcemap, options, lineinfos
 
 type
@@ -86,16 +88,45 @@ proc transientSection*(builder: var Builder; m: BModule): SectionRef =
 proc sourcemapActive(sec: SectionRef): bool {.inline.} =
   sec.config != nil and optSourcemap in sec.config.globalOptions
 
+proc bridgeExpansionInfo*(conf: ConfigRef; info: TLineInfo): TLineInfo {.inline.} =
+  ## M5: when `info.fileIndex` points at `expanded.nim` (the macro/
+  ## template expansion artifact produced by the macro-sourcemap
+  ## branch's renderer), look up the original user-source position
+  ## the renderer recorded in `topLevelLineInfos` and return that
+  ## instead. Otherwise, return `info` unchanged.
+  ##
+  ## This is the "expansion call-site bridging" lever (M5 Lever B). It
+  ## keeps the AST's `n.info` pointing at `expanded.nim` (so the macro
+  ## sourcemap tooling still sees the expansion-body position) while
+  ## making cgen emit user-file mappings for the underlying bytes.
+  ##
+  ## Falls through to `info` when:
+  ##   - sourcemap is off,
+  ##   - `--sourcemap:on` is on but the macro sourcemap context wasn't
+  ##     populated (e.g. stdlib modules whose `expandMap` was false),
+  ##   - `info.fileIndex` is not `expanded.nim`,
+  ##   - or the line wasn't registered by the renderer (e.g. a node
+  ##     whose original `info.fileIndex` was already `expanded.nim`).
+  result = info
+  if conf == nil: return
+  let ms = conf.macroSourcemap
+  if ms.isNil: return
+  if info.fileIndex != ms.fileIndex: return
+  let key = info.line.int
+  if ms.topLevelLineInfos.hasKey(key):
+    result = ms.topLevelLineInfos[key]
+
 proc emitAt*(sec: SectionRef; content: string; info: TLineInfo) =
   ## Append `content` to `sec`'s text and, when `--sourcemap:on`, record
   ## an annotation pointing at `info` for the byte range `[start, end)`
   ## of `content` within the section's text.
   if sourcemapActive(sec) and info.fileIndex != InvalidFileIdx and
       info.line > 0'u16:
+    let bridged = bridgeExpansionInfo(sec.config, info)
     let startOff = sec.text[].len
     let storage = getOrCreateStorage(sec.builder[])
     storage.addRangeAnnotation(startOff, startOff + content.len,
-                               info, info)
+                               bridged, bridged)
   sec.text[].add(content)
 
 proc emitRangeAt*(sec: SectionRef; content: string;
@@ -105,10 +136,12 @@ proc emitRangeAt*(sec: SectionRef; content: string;
   ## end column matters: e.g. `foo(a, b, c)` start=`foo`, end=`c`).
   if sourcemapActive(sec) and startInfo.fileIndex != InvalidFileIdx and
       startInfo.line > 0'u16:
+    let bridgedStart = bridgeExpansionInfo(sec.config, startInfo)
+    let bridgedEnd = bridgeExpansionInfo(sec.config, endInfo)
     let startOff = sec.text[].len
     let storage = getOrCreateStorage(sec.builder[])
     storage.addRangeAnnotation(startOff, startOff + content.len,
-                               startInfo, endInfo)
+                               bridgedStart, bridgedEnd)
   sec.text[].add(content)
 
 proc recordAt*(sec: SectionRef; info: TLineInfo) =
@@ -119,18 +152,21 @@ proc recordAt*(sec: SectionRef; info: TLineInfo) =
   ## points at the byte offset where the *next* emitted byte will live.
   if not sourcemapActive(sec): return
   if info.fileIndex == InvalidFileIdx or info.line <= 0'u16: return
+  let bridged = bridgeExpansionInfo(sec.config, info)
   let startOff = sec.text[].len
   let storage = getOrCreateStorage(sec.builder[])
-  storage.addPointAnnotation(startOff, info)
+  storage.addPointAnnotation(startOff, bridged)
 
 proc recordRangeAt*(sec: SectionRef; startInfo, endInfo: TLineInfo) =
   ## Like `recordAt` but with a distinct end-of-range Nim position.
   if not sourcemapActive(sec): return
   if startInfo.fileIndex == InvalidFileIdx or
       startInfo.line <= 0'u16: return
+  let bridgedStart = bridgeExpansionInfo(sec.config, startInfo)
+  let bridgedEnd = bridgeExpansionInfo(sec.config, endInfo)
   let startOff = sec.text[].len
   let storage = getOrCreateStorage(sec.builder[])
-  storage.addRangeAnnotation(startOff, startOff, startInfo, endInfo)
+  storage.addRangeAnnotation(startOff, startOff, bridgedStart, bridgedEnd)
 
 # ---------------------------------------------------------------------------
 # mergeAppend / mergePrepend — text + annotation splicing.

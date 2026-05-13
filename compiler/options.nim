@@ -353,6 +353,14 @@ type
     # {path: {line top level: line in expanded.nim}}
     expandedEntries*: Table[string, Table[int, int]]
     topLevelLines*: Table[int, (string, int)]
+    # M5 (CT-Sourcemap-V3): parallel index that stores the original
+    # `TLineInfo` (including `fileIndex` and `col`) for each
+    # expanded-line key. This is the cgen-side oracle for bridging an
+    # `info` that points at `expanded.nim` back to the original user
+    # source. Populated by the renderer at the same site as
+    # `topLevelLines`. `topLevelLines` is kept for the JSON sourcemap
+    # consumer; `topLevelLineInfos` is kept for cgen.
+    topLevelLineInfos*: Table[int, TLineInfo]
     definitionLocations*: Table[string, HashSet[int]]
     source*: string
     startLine*: uint32
