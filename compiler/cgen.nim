@@ -16,7 +16,7 @@ import
   rodutils, renderer, cgendata, aliases,
   lowerings, lineinfos, pathutils, transf,
   injectdestructors, astmsgs, modulepaths, pushpoppragmas,
-  mangleutils, cbuilderbase, modulegraphs, c_sourcemap
+  mangleutils, cbuilderbase, modulegraphs, c_sourcemap, cgen_merge
 
 import std/json
 
@@ -1008,9 +1008,9 @@ proc loadDynamicLib(m: BModule, lib: PLib) =
       m.s[cfsDynLibInit].addVar(name = rdLoc(dest), typ = getTypeDesc(m, lib.path.typ, dkVar))
       expr(p, lib.path, dest)
 
-      m.s[cfsVars].add(extract(p.s(cpsLocals)))
-      m.s[cfsDynLibInit].add(extract(p.s(cpsInit)))
-      m.s[cfsDynLibInit].add(extract(p.s(cpsStmts)))
+      mergeAppend(procSection(p, cpsLocals), moduleSection(m, cfsVars))
+      mergeAppend(procSection(p, cpsInit), moduleSection(m, cfsDynLibInit))
+      mergeAppend(procSection(p, cpsStmts), moduleSection(m, cfsDynLibInit))
       let rd = rdLoc(dest)
       m.s[cfsDynLibInit].addAssignment(tmp,
         cCall(loadFn, rd))
@@ -1449,27 +1449,27 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
   emitSourcemapMarker(generatedProc, m, prc.info, prc.info)
   generatedProc.addDeclWithVisibility(visibility):
     if sfPure in prc.flags:
-      generatedProc.add(extract(header))
+      mergeAppend(transientSection(header), transientSection(generatedProc))
       generatedProc.finishProcHeaderWithBody():
-        generatedProc.add(extract(p.s(cpsLocals)))
-        generatedProc.add(extract(p.s(cpsInit)))
-        generatedProc.add(extract(p.s(cpsStmts)))
+        mergeAppend(procSection(p, cpsLocals), transientSection(generatedProc))
+        mergeAppend(procSection(p, cpsInit), transientSection(generatedProc))
+        mergeAppend(procSection(p, cpsStmts), transientSection(generatedProc))
     else:
       if m.hcrOn and isReloadable(m, prc):
         m.s[cfsProcHeaders].addDeclWithVisibility(visibility):
           # Add forward declaration for "_actual"-suffixed functions defined in the same module (or inline).
           # This fixes the use of methods and also the case when 2 functions within the same module
           # call each other using directly the "_actual" versions (an optimization) - see issue #11608
-          m.s[cfsProcHeaders].add(extract(header))
+          mergeAppend(transientSection(header), moduleSection(m, cfsProcHeaders))
           m.s[cfsProcHeaders].finishProcHeaderAsProto()
-      generatedProc.add(extract(header))
+      mergeAppend(transientSection(header), transientSection(generatedProc))
       generatedProc.finishProcHeaderWithBody():
         if optStackTrace in prc.options:
-          generatedProc.add(extract(p.s(cpsLocals)))
+          mergeAppend(procSection(p, cpsLocals), transientSection(generatedProc))
           var procname = makeCString(prc.name.s)
           generatedProc.add(initFrame(p, procname, quotedFilename(p.config, prc.info)))
         else:
-          generatedProc.add(extract(p.s(cpsLocals)))
+          mergeAppend(procSection(p, cpsLocals), transientSection(generatedProc))
         if optProfiler in prc.options:
           # invoke at proc entry for recursion:
           p.s(cpsInit).add('\t')
@@ -1478,15 +1478,15 @@ proc genProcLvl3*(m: BModule, prc: PSym) =
           # this pair of {} is required for C++ (C++ is weird with its
           # control flow integrity checks):
           generatedProc.addScope():
-            generatedProc.add(extract(p.s(cpsInit)))
-            generatedProc.add(extract(p.s(cpsStmts)))
+            mergeAppend(procSection(p, cpsInit), transientSection(generatedProc))
+            mergeAppend(procSection(p, cpsStmts), transientSection(generatedProc))
           generatedProc.addLabel("BeforeRet_")
         else:
-          generatedProc.add(extract(p.s(cpsInit)))
-          generatedProc.add(extract(p.s(cpsStmts)))
+          mergeAppend(procSection(p, cpsInit), transientSection(generatedProc))
+          mergeAppend(procSection(p, cpsStmts), transientSection(generatedProc))
         if optStackTrace in prc.options: generatedProc.add(deinitFrame(p))
         generatedProc.add(returnStmt)
-  m.s[cfsProcs].add(extract(generatedProc))
+  mergeAppend(transientSection(generatedProc), moduleSection(m, cfsProcs))
   if isReloadable(m, prc):
     m.s[cfsDynLibInit].add('\t')
     m.s[cfsDynLibInit].addAssignmentWithValue(prc.loc.snippet):
@@ -1535,7 +1535,7 @@ proc genProcPrototype(m: BModule, sym: PSym) =
     if asPtr:
       m.s[cfsProcHeaders].addDeclWithVisibility(visibility):
         # genProcHeader would give variable declaration, add it directly
-        m.s[cfsProcHeaders].add(extract(header))
+        mergeAppend(transientSection(header), moduleSection(m, cfsProcHeaders))
     else:
       let extraVis =
         if sym.typ.callConv != ccInline and requiresExternC(m, sym):
@@ -1544,7 +1544,7 @@ proc genProcPrototype(m: BModule, sym: PSym) =
           None
       m.s[cfsProcHeaders].addDeclWithVisibility(extraVis):
         m.s[cfsProcHeaders].addDeclWithVisibility(visibility):
-          m.s[cfsProcHeaders].add(extract(header))
+          mergeAppend(transientSection(header), moduleSection(m, cfsProcHeaders))
           m.s[cfsProcHeaders].finishProcHeaderAsProto()
 
 include inliner
@@ -1760,7 +1760,7 @@ proc genPreMain(m: BModule) =
   m.s[cfsProcs].addDeclWithVisibility(Private):
     m.s[cfsProcs].addProcHeader(m.config.nimMainPrefix & "PreMainInner", CVoid, cProcParams())
     m.s[cfsProcs].finishProcHeaderWithBody():
-      m.s[cfsProcs].add(extract(m.g.otherModsInit))
+      mergeAppend(transientSection(m.g.otherModsInit), moduleSection(m, cfsProcs))
   if optNoMain notin m.config.globalOptions:
     m.s[cfsProcs].addDeclWithVisibility(Private):
       m.s[cfsProcs].addVar(name = "cmdCount", typ = CInt)
@@ -1772,11 +1772,11 @@ proc genPreMain(m: BModule) =
       if isInnerMainVolatile(m):
         m.s[cfsProcs].addProcVar(name = "inner", rettype = CVoid, params = cProcParams(), isVolatile = true)
         m.s[cfsProcs].addAssignment("inner", m.config.nimMainPrefix & "PreMainInner")
-        m.s[cfsProcs].add(extract(m.g.mainDatInit))
+        mergeAppend(transientSection(m.g.mainDatInit), moduleSection(m, cfsProcs))
         m.s[cfsProcs].addCallStmt(cDeref("inner"))
       else:
         # not volatile
-        m.s[cfsProcs].add(extract(m.g.mainDatInit))
+        mergeAppend(transientSection(m.g.mainDatInit), moduleSection(m, cfsProcs))
         m.s[cfsProcs].addCallStmt(m.config.nimMainPrefix & "PreMainInner")
 
 proc genMainProcs(m: BModule) =
@@ -1795,7 +1795,7 @@ proc genNimMainInner(m: BModule) =
   m.s[cfsProcs].addDeclWithVisibility(Private):
     m.s[cfsProcs].addProcHeader(ccCDecl, m.config.nimMainPrefix & "NimMainInner", CVoid, cProcParams())
     m.s[cfsProcs].finishProcHeaderWithBody():
-      m.s[cfsProcs].add(extract(m.g.mainModInit))
+      mergeAppend(transientSection(m.g.mainModInit), moduleSection(m, cfsProcs))
   m.s[cfsProcs].addNewline()
 
 proc initStackBottom(m: BModule): bool =
@@ -2024,7 +2024,7 @@ proc registerModuleToMain(g: BModuleList; m: BModule) =
       hcrModuleMeta.finishProcHeaderWithBody():
         hcrModuleMeta.addReturn('"' & $sigHash(m.module, m.config) & '"')
     if sfMainModule in m.module.flags:
-      g.mainModProcs.add(extract(hcrModuleMeta))
+      mergeAppend(transientSection(hcrModuleMeta), transientSection(g.mainModProcs))
       g.mainModProcs.addDeclWithVisibility(StaticProc):
         g.mainModProcs.addVar(name = "hcr_handle", typ = CPointer)
       g.mainModProcs.addDeclWithVisibility(ExportLib):
@@ -2083,7 +2083,7 @@ proc registerModuleToMain(g: BModuleList; m: BModule) =
       g.mainDatInit.addAssignment(cDeref("cmd_count"), "cmdCount")
       g.mainDatInit.addAssignment(cDeref("cmd_line"), "cmdLine")
     else:
-      m.s[cfsInitProc].add(extract(hcrModuleMeta))
+      mergeAppend(transientSection(hcrModuleMeta), moduleSection(m, cfsInitProc))
     return
 
   if m.s[cfsDatInitProc].buf.len > 0:
@@ -2131,12 +2131,12 @@ proc genDatInitCode(m: BModule) =
       for i in cfsTypeInit1..cfsDynLibInit:
         if m.s[i].buf.len != 0:
           moduleDatInitRequired = true
-          prc.add(extract(m.s[i]))
+          mergeAppend(moduleSection(m, i), transientSection(prc))
 
   prc.addNewline()
 
   if moduleDatInitRequired:
-    m.s[cfsDatInitProc].add(extract(prc))
+    mergeAppend(transientSection(prc), moduleSection(m, cfsDatInitProc))
     #rememberFlag(m.g.graph, m.module, HasDatInitProc)
 
 # Very similar to the contents of symInDynamicLib - basically only the
@@ -2200,10 +2200,10 @@ proc genInitCode(m: BModule) =
       if addHcrGuards:
         prcBody.addSingleIfStmt("nim_hcr_do_init_"):
           prcBody.addNewline()
-          prcBody.add(extract(m.thing.s(section)))
+          mergeAppend(procSection(m.thing, section), transientSection(prcBody))
           prcBody.addNewline()
       else:
-        prcBody.add(extract(m.thing.s(section)))
+        mergeAppend(procSection(m.thing, section), transientSection(prcBody))
 
   #echo "PRE INIT PROC ", m.module.name.s, " ", m.s[cfsVars].buf.len
 
@@ -2258,7 +2258,7 @@ proc genInitCode(m: BModule) =
   procs.addDeclWithVisibility(vis):
     procs.addProcHeader(ccNimCall, initname, CVoid, cProcParams())
     procs.finishProcHeaderWithBody():
-      procs.add(extract(prcBody))
+      mergeAppend(transientSection(prcBody), transientSection(procs))
 
   # we cannot simply add the init proc to ``m.s[cfsProcs]`` anymore because
   # that would lead to a *nesting* of merge sections which the merger does
@@ -2284,16 +2284,16 @@ proc genInitCode(m: BModule) =
         for curr in procsToLoad:
           hcrGetProcLoadCode(m.s[cfsInitProc], m, curr, "", "handle", "getProcAddr")
 
-  for i, el in pairs(m.extensionLoaders):
+  for i, el in mpairs(m.extensionLoaders):
     if el.buf.len != 0:
       moduleInitRequired = true
       procs.addDeclWithVisibility(ExternC):
         procs.addProcHeader(ccNimCall, "nimLoadProcs" & $(i.ord - '0'.ord), CVoid, cProcParams())
         procs.finishProcHeaderWithBody():
-          procs.add(extract(el))
+          mergeAppend(transientSection(el), transientSection(procs))
 
   if moduleInitRequired or sfMainModule in m.module.flags:
-    m.s[cfsInitProc].add(extract(procs))
+    mergeAppend(transientSection(procs), moduleSection(m, cfsInitProc))
     #rememberFlag(m.g.graph, m.module, HasModuleInitProc)
 
   genDatInitCode(m)
@@ -2302,7 +2302,7 @@ proc genInitCode(m: BModule) =
     m.s[cfsInitProc].addDeclWithVisibility(ExportLib):
       m.s[cfsInitProc].addProcHeader(ccNimCall, "HcrCreateTypeInfos", CVoid, cProcParams())
       m.s[cfsInitProc].finishProcHeaderWithBody():
-        m.s[cfsInitProc].add(extract(m.hcrCreateTypeInfosProc))
+        mergeAppend(transientSection(m.hcrCreateTypeInfosProc), moduleSection(m, cfsInitProc))
     m.s[cfsInitProc].addNewline()
 
   registerModuleToMain(m.g, m)
@@ -2348,23 +2348,23 @@ proc genModule(m: BModule, cfile: Cfile): Rope =
 
   generateThreadLocalStorage(m)
   generateHeaders(m)
-  res.add(extract(m.s[cfsHeaders]))
+  mergeAppend(moduleSection(m, cfsHeaders), transientSection(res))
   if m.config.cppCustomNamespace.len > 0:
     openNamespaceNim(m.config.cppCustomNamespace, res)
   if m.s[cfsFrameDefines].buf.len > 0:
-    res.add(extract(m.s[cfsFrameDefines]))
+    mergeAppend(moduleSection(m, cfsFrameDefines), transientSection(res))
 
   for i in cfsForwardTypes..cfsProcs:
     if m.s[i].buf.len > 0:
       moduleIsEmpty = false
-      res.add(extract(m.s[i]))
+      mergeAppend(moduleSection(m, i), transientSection(res))
 
   if m.s[cfsInitProc].buf.len > 0:
     moduleIsEmpty = false
-    res.add(extract(m.s[cfsInitProc]))
+    mergeAppend(moduleSection(m, cfsInitProc), transientSection(res))
   if m.s[cfsDatInitProc].buf.len > 0 or m.hcrOn:
     moduleIsEmpty = false
-    res.add(extract(m.s[cfsDatInitProc]))
+    mergeAppend(moduleSection(m, cfsDatInitProc), transientSection(res))
 
   if m.config.cppCustomNamespace.len > 0:
     closeNamespaceNim(res)
@@ -2452,10 +2452,10 @@ proc writeHeader(m: BModule) =
 
   generateThreadLocalStorage(m)
   for i in cfsHeaders..cfsProcs:
-    result.add(extract(m.s[i]))
+    mergeAppend(moduleSection(m, i), transientSection(result))
     if m.config.cppCustomNamespace.len > 0 and i == cfsHeaders:
       openNamespaceNim(m.config.cppCustomNamespace, result)
-  result.add(extract(m.s[cfsInitProc]))
+  mergeAppend(moduleSection(m, cfsInitProc), transientSection(result))
 
   let vis = if optGenDynLib in m.config.globalOptions: ImportLib else: None
   result.addDeclWithVisibility(vis):
@@ -2517,7 +2517,7 @@ proc handleProcGlobals(m: BModule) =
     swap stmts, m.preInitProc.s(cpsStmts)
 
     handleProcGlobals(m)
-    m.preInitProc.s(cpsStmts).add stmts.extract()
+    mergeAppend(transientSection(stmts), procSection(m.preInitProc, cpsStmts))
 
 proc genTopLevelStmt*(m: BModule; n: PNode) =
   ## Also called from `ic/cbackend.nim`.
@@ -2575,7 +2575,7 @@ proc writeModule(m: BModule) =
     if sfMainModule in m.module.flags:
       # generate main file:
       genMainProc(m)
-      m.s[cfsProcHeaders].add(extract(m.g.mainModProcs))
+      mergeAppend(transientSection(m.g.mainModProcs), moduleSection(m, cfsProcHeaders))
       generateThreadVarsSize(m)
 
   var cf = Cfile(nimname: m.module.name.s, cname: cfile,

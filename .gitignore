@@ -88,6 +88,7 @@ tweeter_test.db
 /tests/megatest.nim
 /tests/ic/*_temp.nim
 /tests/navigator/*_temp.nim
+/tests/sourcemap/build_*
 
 
 /outputExpected.txt
