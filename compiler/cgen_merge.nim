@@ -1,27 +1,26 @@
-## C source-map V3 — M2: `SectionRef` + offset-rebasing
-## `mergeAppend` / `mergePrepend` + `emitAt` / `emitRangeAt`.
+## C source-map V3 — `SectionRef` + storage-agnostic merge/emit
+## primitives.
 ##
 ## A `SectionRef` is a tiny abstraction over a section's text buffer.
 ## It carries:
 ##   - `text`: pointer to the underlying `string` buffer.
-##   - `storage`: the per-section side table of `CSourcemapAnnotation`s
-##     (`nil` for transient sections that have never recorded an
-##     annotation, which is the common case when `--sourcemap:on` is
-##     off — costs nothing).
+##   - `builder`: pointer to the owning `Builder` (for lazy storage
+##     allocation and for splicing the storage across merges).
 ##   - `config`: the `ConfigRef` needed to gate annotation recording
 ##     on `optSourcemap` without parameter churn at every call site.
 ##
-## At M1 (predecessor milestone) the only thing this module did was
-## provide the abstraction so the V2 in-band-marker design could be
-## removed in one place at M2. At M2 (this milestone):
-##   - `emitAt` / `emitRangeAt` record annotations directly into the
-##     section's side table at the byte offset *inside the section*.
-##   - `mergeAppend` rebases src's annotations by `dst.text.len` and
-##     splices them onto dst's annotation list, in the right textual
-##     order.
-##   - `mergePrepend` shifts dst's existing annotations forward by
-##     `src.text.len` (because src is being prepended) and puts src's
-##     annotations at the front.
+## At M2 the in-band-marker design was retired in favor of a side
+## table on the `Builder`. At M3 the side table comes in two flavors
+## selected at compile time via `-d:sourcemapStorage=seq|tree`:
+##
+##   - **seq** (M2 baseline): merges rebase offsets and copy
+##     annotation entries linearly.
+##   - **tree** (M3 experiment): merges are pure pointer copies; a
+##     single tree walk in `cgen.genModule` produces the same flat
+##     annotation list at the end.
+##
+## Both variants share the same public API. Only the implementation
+## modules (`c_sourcemap.nim`) carry the `when sourcemapStorage` gate.
 ##
 ## When `--sourcemap:on` is off, all annotation work is bypassed and
 ## the merge primitives degenerate to plain string append/prepend —
@@ -95,11 +94,8 @@ proc emitAt*(sec: SectionRef; content: string; info: TLineInfo) =
       info.line > 0'u16:
     let startOff = sec.text[].len
     let storage = getOrCreateStorage(sec.builder[])
-    storage.annotations.add(
-      (startOffset: startOff,
-       endOffset: startOff + content.len,
-       info: info,
-       endInfo: info))
+    storage.addRangeAnnotation(startOff, startOff + content.len,
+                               info, info)
   sec.text[].add(content)
 
 proc emitRangeAt*(sec: SectionRef; content: string;
@@ -111,11 +107,8 @@ proc emitRangeAt*(sec: SectionRef; content: string;
       startInfo.line > 0'u16:
     let startOff = sec.text[].len
     let storage = getOrCreateStorage(sec.builder[])
-    storage.annotations.add(
-      (startOffset: startOff,
-       endOffset: startOff + content.len,
-       info: startInfo,
-       endInfo: endInfo))
+    storage.addRangeAnnotation(startOff, startOff + content.len,
+                               startInfo, endInfo)
   sec.text[].add(content)
 
 proc recordAt*(sec: SectionRef; info: TLineInfo) =
@@ -128,11 +121,7 @@ proc recordAt*(sec: SectionRef; info: TLineInfo) =
   if info.fileIndex == InvalidFileIdx or info.line <= 0'u16: return
   let startOff = sec.text[].len
   let storage = getOrCreateStorage(sec.builder[])
-  storage.annotations.add(
-    (startOffset: startOff,
-     endOffset: startOff,
-     info: info,
-     endInfo: info))
+  storage.addPointAnnotation(startOff, info)
 
 proc recordRangeAt*(sec: SectionRef; startInfo, endInfo: TLineInfo) =
   ## Like `recordAt` but with a distinct end-of-range Nim position.
@@ -141,68 +130,47 @@ proc recordRangeAt*(sec: SectionRef; startInfo, endInfo: TLineInfo) =
       startInfo.line <= 0'u16: return
   let startOff = sec.text[].len
   let storage = getOrCreateStorage(sec.builder[])
-  storage.annotations.add(
-    (startOffset: startOff,
-     endOffset: startOff,
-     info: startInfo,
-     endInfo: endInfo))
+  storage.addRangeAnnotation(startOff, startOff, startInfo, endInfo)
 
 # ---------------------------------------------------------------------------
 # mergeAppend / mergePrepend — text + annotation splicing.
 
 proc mergeAppend*(src, dst: SectionRef) =
-  ## Append `src`'s text to `dst`'s text. Annotations in `src` are
-  ## rebased by `dst.text.len` (their new origin after splicing) and
-  ## appended to `dst`'s annotation seq.
+  ## Append `src`'s text to `dst`'s text. Annotations are spliced via
+  ## the storage variant's `mergeAppendStorage` primitive — pure
+  ## offset-rebased copies under the seq variant, pure pointer
+  ## transfers under the tree variant.
   ##
-  ## Annotations are pulled from `src.builder.sourcemapStorage` if
-  ## present. `src` is NOT cleared (matching the pre-M1 `extract(src)
-  ## + dst.add(...)` semantics — `extract` returned a copy of the
-  ## buffer, and the original was either GC-collected with its host
-  ## scope or simply not referenced again).
-  let baseOffset = dst.text[].len
-  let srcStorage =
-    if src.builder == nil: nil
-    else: storageOf(src.builder[])
-  if srcStorage != nil and srcStorage.annotations.len > 0:
-    let dstStorage = getOrCreateStorage(dst.builder[])
-    for ann in srcStorage.annotations:
-      dstStorage.annotations.add(
-        (startOffset: ann.startOffset + baseOffset,
-         endOffset: ann.endOffset + baseOffset,
-         info: ann.info,
-         endInfo: ann.endInfo))
+  ## `src` is NOT cleared (matching the pre-M1 `extract(src) +
+  ## dst.add(...)` semantics — `extract` returned a copy of the buffer
+  ## and the original was either GC-collected with its host scope or
+  ## simply not referenced again).
+  let dstLen = dst.text[].len
+  let srcLen = src.text[].len
+  let active =
+    (src.config != nil and optSourcemap in src.config.globalOptions) or
+    (dst.config != nil and optSourcemap in dst.config.globalOptions) or
+    (src.builder != nil and src.builder[].sourcemapStorage != nil) or
+    (dst.builder != nil and dst.builder[].sourcemapStorage != nil)
+  if active and src.builder != nil and dst.builder != nil:
+    mergeAppendStorage(src.builder[], dst.builder[], dstLen, srcLen)
   dst.text[].add(src.text[])
 
 proc mergePrepend*(src, dst: SectionRef) =
-  ## Prepend `src`'s text to `dst`'s text. Existing annotations in
-  ## `dst` are shifted forward by `src.text.len` (their byte origin
-  ## moves), then `src`'s annotations are prepended in front.
+  ## Prepend `src`'s text to `dst`'s text. Annotations are spliced via
+  ## the storage variant's `mergePrependStorage` primitive.
   ##
-  ## Currently no live caller in cgen: kept exported for symmetry
-  ## with `mergeAppend` and to document the prepend semantics for
-  ## future emit sites that need to splice a fragment at the front
-  ## of an existing section (e.g. moving a prelude into a generated
-  ## proc body without rebuilding the destination).
-  let shift = src.text[].len
-  let srcStorage =
-    if src.builder == nil: nil
-    else: storageOf(src.builder[])
-  let dstStorage =
-    if dst.builder == nil: nil
-    else: storageOf(dst.builder[])
-  if dstStorage != nil:
-    for ann in dstStorage.annotations.mitems:
-      ann.startOffset += shift
-      ann.endOffset += shift
-  if srcStorage != nil and srcStorage.annotations.len > 0:
-    let dst2 = getOrCreateStorage(dst.builder[])
-    var newAnns = newSeqOfCap[CSourcemapAnnotation](
-      srcStorage.annotations.len + dst2.annotations.len)
-    for ann in srcStorage.annotations:
-      newAnns.add ann
-    for ann in dst2.annotations:
-      newAnns.add ann
-    dst2.annotations = newAnns
+  ## Currently no live caller in cgen: kept exported for symmetry with
+  ## `mergeAppend` and to document the prepend semantics for future
+  ## emit sites that need to splice a fragment at the front of an
+  ## existing section.
+  let srcLen = src.text[].len
+  let active =
+    (src.config != nil and optSourcemap in src.config.globalOptions) or
+    (dst.config != nil and optSourcemap in dst.config.globalOptions) or
+    (src.builder != nil and src.builder[].sourcemapStorage != nil) or
+    (dst.builder != nil and dst.builder[].sourcemapStorage != nil)
+  if active and src.builder != nil and dst.builder != nil:
+    mergePrependStorage(src.builder[], dst.builder[], srcLen)
   let srcText = src.text[]
   dst.text[] = srcText & dst.text[]

@@ -2329,17 +2329,14 @@ proc genModule(m: BModule, cfile: Cfile): Rope =
   if m.config.cppCustomNamespace.len > 0:
     closeNamespaceNim(res)
 
-  # V3 (M2): pull the merged annotation list off the transient `res`
-  # builder. Offsets in `res.sourcemapStorage.annotations` are already
-  # absolute (within `res.buf`) — exactly the absolute offsets we need
-  # in the final pre-postprocess C text. Captured before `extract`
-  # copies the buffer out, so we never leak the storage seq elsewhere.
+  # V3 (M3): flatten the section storage into the absolute-offset
+  # annotation list expected by `resolveAnnotations`. Under the seq
+  # storage variant this is a direct copy; under the tree variant it
+  # is a single recursive walk over the chunk tree. Either way, the
+  # resulting `seq[CSourcemapAnnotation]` is byte-identical and is
+  # captured before `extract` copies the buffer out.
   if optSourcemap in m.config.globalOptions:
-    let st = storageOf(res)
-    if st != nil:
-      m.sourcemapAnnotations = st.annotations
-    else:
-      m.sourcemapAnnotations = @[]
+    m.sourcemapAnnotations = flattenAnnotations(storageOf(res))
 
   result = extract(res)
   # V3: the `#define FX_<n> "path"` block that V1 emitted at the top
