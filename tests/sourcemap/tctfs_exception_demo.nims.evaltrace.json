@@ -1,0 +1,135 @@
+{
+  "metadata": {
+    "program": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+    "args": [],
+    "workdir": "<workdir>",
+    "recorder": ""
+  },
+  "paths": [
+    "<workdir>/tests/sourcemap/tctfs_exception_demo.nims"
+  ],
+  "functions": [],
+  "varnames": [
+    "nimvm",
+    "result",
+    "num`gensym3",
+    "tmp",
+    "num",
+    "next",
+    "originNum",
+    "index",
+    "i`gensym1",
+    "i",
+    "programResult",
+    "mode",
+    "packageName",
+    "version",
+    "author",
+    "description",
+    "license",
+    "srcDir",
+    "binDir",
+    "backend",
+    "skipDirs",
+    "skipFiles",
+    "skipExt",
+    "installDirs",
+    "installFiles",
+    "installExt",
+    "bin",
+    "requiresData"
+  ],
+  "types": [
+    "int",
+    "node",
+    "uint",
+    "IndexDefect"
+  ],
+  "counts": {
+    "paths": 1,
+    "functions": 0,
+    "varnames": 28,
+    "types": 4,
+    "steps": 8,
+    "calls": 0,
+    "values": 8,
+    "io_events": 0
+  },
+  "events": [
+    {
+      "kind": "step",
+      "step_index": 0,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 1,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 2,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 3,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekRaise",
+      "exception_type_id": 3,
+      "exception_message": "",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 4,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 5,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekCatch",
+      "catch_exception_type_id": 3,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 6,
+      "path_id": 0,
+      "line": 17,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 7,
+      "path_id": 0,
+      "line": 1,
+      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    }
+  ]
+}

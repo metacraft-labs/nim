@@ -297,7 +297,16 @@ type
     ExceptionGotoUnhandled
 
 proc findExceptionHandler(c: PCtx, f: PStackFrame, exc: PNode):
-    tuple[why: ExceptionGoto, where: int] =
+    tuple[why: ExceptionGoto, where: int, handlerInfo: TLineInfo] =
+  ## CTFS-M3: `handlerInfo` returns the source position of the matched
+  ## `except` clause header (the line of the `except` keyword) so the
+  ## tracer can emit a `sekCatch` event at the right line. `vmgen.nim`
+  ## tags every `opcExcept` instruction it emits with the
+  ## `nkExceptBranch`'s own TLineInfo (via `c.xjmp(it, opcExcept, ...)`
+  ## and `c.gABx(it, opcExcept, ...)`), so `c.debug[branchStartPc]`
+  ## resolves to the right user-source line. For `ExceptionGotoFinally`
+  ## and `ExceptionGotoUnhandled` the field is the default
+  ## (`unknownLineInfo`) — callers must not consult it in those cases.
   let raisedType = exc.typ.skipTypes(abstractPtrs)
 
   while f.safePoints.len > 0:
@@ -305,6 +314,7 @@ proc findExceptionHandler(c: PCtx, f: PStackFrame, exc: PNode):
 
     var matched = false
     var pcEndExcept = pc
+    var branchHeaderPc = pc
 
     # Scan the chain of exceptions starting at pc.
     # The structure is the following:
@@ -322,6 +332,11 @@ proc findExceptionHandler(c: PCtx, f: PStackFrame, exc: PNode):
     # should continue.
     # Also note that opcFinally blocks are the last in the chain.
     while c.code[pc].opcode == opcExcept:
+      # Remember the PC of this branch's outer opcExcept — its `c.debug`
+      # entry carries the `nkExceptBranch`'s source line, which is what
+      # `traceCatch` needs to anchor the `sekCatch` event on the
+      # `except` keyword (not on the first opcode of the handler body).
+      branchHeaderPc = pc
       # Where this Except block ends
       pcEndExcept = pc + c.code[pc].regBx - wordExcess
       inc pc
@@ -359,13 +374,13 @@ proc findExceptionHandler(c: PCtx, f: PStackFrame, exc: PNode):
     let pcBody = pc
 
     if matched:
-      return (ExceptionGotoHandler, pcBody)
+      return (ExceptionGotoHandler, pcBody, c.debug[branchHeaderPc])
     elif c.code[pc].opcode == opcFinally:
       # The +1 here is here because we don't want to execute it since we've
       # already pop'd this statepoint from the stack.
-      return (ExceptionGotoFinally, pc + 1)
+      return (ExceptionGotoFinally, pc + 1, unknownLineInfo)
 
-  return (ExceptionGotoUnhandled, 0)
+  return (ExceptionGotoUnhandled, 0, unknownLineInfo)
 
 proc cleanUpOnReturn(c: PCtx; f: PStackFrame): int =
   # Walk up the chain of safepoints and return the PC of the first `finally`
@@ -1728,6 +1743,20 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         c.currentExceptionA[2] = exceptionNameNode
       c.exceptionInstr = pc
 
+      # CTFS-M3: emit a `sekRaise` event at the raise statement's source
+      # line BEFORE the control-flow jump. The dispatch loop's `traceStep`
+      # call at the top of this iteration has already updated the line
+      # cursor to `c.debug[pc]` (the raise statement), so the marker
+      # inherits the right GLI from the preceding step.
+      if c.vmTracer != nil:
+        let excTypeName =
+          if raised.typ != nil and raised.typ.sym != nil:
+            raised.typ.sym.name.s
+          else:
+            ""
+        traceRaise(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc],
+                   excTypeName)
+
       var frame = tos
       var jumpTo = findExceptionHandler(c, frame, raised)
       while jumpTo.why == ExceptionGotoUnhandled and not frame.next.isNil:
@@ -1742,6 +1771,25 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         if tos != frame:
           tos = frame
           updateRegsAlias
+        # CTFS-M3: emit a `sekCatch` event at the matched `except`
+        # clause's source line. `handlerInfo` is the line of the
+        # `except` keyword (e.g. line 16 in the canonical try/raise
+        # /except/echo example) — extracted from the `c.debug` entry
+        # of the branch's outer `opcExcept` instruction by
+        # `findExceptionHandler`. Calling traceCatch here drives the
+        # tracer's line cursor up to the handler header BEFORE the
+        # dispatch loop's next `traceStep` lands us on the handler's
+        # body (which carries the body's own source line — line 17
+        # in the canonical example), producing an execution-order
+        # event sequence: raise(15) -> catch(16) -> body(17).
+        if c.vmTracer != nil:
+          let excTypeName =
+            if raised.typ != nil and raised.typ.sym != nil:
+              raised.typ.sym.name.s
+            else:
+              ""
+          traceCatch(cast[ptr VmTracer](c.vmTracer)[], jumpTo.handlerInfo,
+                     excTypeName)
       of ExceptionGotoFinally:
         # Jump to the `finally` block first then re-jump here to continue the
         # traversal of the exception chain

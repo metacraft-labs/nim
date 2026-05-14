@@ -830,6 +830,97 @@ proc traceReturn*(tracer: var VmTracer, prc: PSym) =
   if res.isErr:
     discard
 
+proc traceRaise*(tracer: var VmTracer, info: TLineInfo,
+                 exceptionTypeName: string, message: string = "") =
+  ## CTFS-M3: emit a `sekRaise` event in the execution stream at the raise
+  ## site.
+  ##
+  ## Called from `opcRaise` at runtime, AFTER the dispatch-loop's
+  ## `traceStep` has emitted a step for the raise statement's source line.
+  ## The sekRaise event itself carries no GLI delta; its source-line
+  ## context is inherited from the preceding step (which the materializer
+  ## resolves via `stepAbsoluteGlobalLineIndex`). The marker exists so
+  ## post-trace tooling can distinguish a control-flow raise transition
+  ## from an ordinary line step.
+  ##
+  ## Any buffered `pendingValues` accumulated since the last step are
+  ## flushed onto the preceding traced step before the marker is emitted
+  ## — the raise itself is not a value-bearing site, and dropping the
+  ## values here would lose state that was produced by traced user code.
+  ##
+  ## TF-M4 filter gate: if the raise occurs in code whose path was
+  ## classified `skip`, we don't have a useful pathId to anchor the
+  ## marker to; we still emit the marker (no path is required) but the
+  ## preceding `traceStep` call would have early-returned, so no GLI
+  ## context is available. Treat this as a tracer-internal short-circuit:
+  ## skip the marker too rather than write an event with stale GLI.
+  let fileIdx = int32(info.fileIndex)
+  if fileIdx < 0 or info.line == 0:
+    return
+  var skip = false
+  discard tracer.ensurePath(fileIdx, skip)
+  if skip:
+    return
+
+  flushPendingValuesAsStep(tracer)
+
+  let typeId =
+    if exceptionTypeName.len > 0: tracer.ensureTypeName(exceptionTypeName)
+    else: 0'u64
+  let msgBytes = cast[seq[byte]](message)
+  let res = tracer.writer.registerRaise(typeId, msgBytes)
+  if res.isErr:
+    discard
+
+proc traceCatch*(tracer: var VmTracer, info: TLineInfo,
+                 exceptionTypeName: string) =
+  ## CTFS-M3: emit a `sekCatch` event at the handler-entry site.
+  ##
+  ## Called from `opcRaise` after the matching handler has been found and
+  ## just before `pc` is advanced into the handler body. The `info`
+  ## argument is the source position of the matched `except` clause
+  ## header (i.e. the line of the `except` keyword) — extracted from the
+  ## TLineInfo recorded against the first `opcExcept` of that branch
+  ## during codegen.
+  ##
+  ## Unlike the raise site, the handler-entry line is NOT visited by any
+  ## opcode at execution time (`opcExcept` is "never executed", and the
+  ## first opcode of the handler body sits on the body's own source line
+  ## — line 17 in the canonical try/except/echo example). So we first
+  ## emit a normal `traceStep` at the handler's line to update GLI to
+  ## the right value, then the sekCatch marker, then control returns to
+  ## the dispatch loop which picks up the body's first opcode.
+  ##
+  ## A stepping debugger walking the execution-order event sequence
+  ## therefore sees: …raise(15) → catch(16) → body(17)… , in increasing
+  ## source order, with no backwards jumps.
+  let fileIdx = int32(info.fileIndex)
+  if fileIdx < 0 or info.line == 0:
+    return
+
+  # Drive the line cursor to the handler-entry line so the sekCatch
+  # marker (which carries no GLI itself) materialises at line 16. The
+  # underlying `traceStep` honours the same filter / dedup rules as a
+  # normal line transition, so an except-handler in filtered code is
+  # silently skipped, matching the behaviour at the raise site above.
+  traceStep(tracer, info)
+
+  # `traceStep` may have early-returned (filtered path). In that case
+  # `lastFileIndex` was still updated above the filter gate, but no
+  # `registerStep` ran — the writer has no GLI context for this catch.
+  # Re-derive the skip decision and bail without emitting the marker.
+  var skip = false
+  discard tracer.ensurePath(fileIdx, skip)
+  if skip:
+    return
+
+  let typeId =
+    if exceptionTypeName.len > 0: tracer.ensureTypeName(exceptionTypeName)
+    else: 0'u64
+  let res = tracer.writer.registerCatch(typeId)
+  if res.isErr:
+    discard
+
 proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
                       typ: PType = nil) =
   ## Buffer a Value event for a register-writing opcode.

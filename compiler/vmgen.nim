@@ -581,18 +581,45 @@ proc genTry(c: PCtx; n: PNode; dest: var TDest) =
         c.gen(body, dest)
       c.clearDest(n, dest)
       if i < n.len:
-        endings.add(c.xjmp(it, opcJmp, 0))
+        # CTFS-M3: tag the trailing jump-past-handlers with the handler
+        # body's last-statement source position rather than `it.info`
+        # (the `except` keyword). The legacy `it`-tagged jmp triggered
+        # a phantom backwards step (line 17 -> line 16 in the canonical
+        # try/raise/except/echo example) when the dispatch loop's
+        # `traceStep` saw the jmp's line info change after the body
+        # finished executing. The jmp is conceptually a continuation
+        # of the body, so we use the body's source position; the
+        # `sekCatch` marker emitted from vm.nim's opcRaise site still
+        # carries the handler-header line for stepping-debugger
+        # purposes.
+        endings.add(c.xjmp(body, opcJmp, 0))
       c.patch(endExcept)
   let fin = lastSon(n)
   # we always generate an 'opcFinally' as that pops the safepoint
   # from the stack if no exception is raised in the body.
   c.patch(jumpToFinally)
-  c.gABx(fin, opcFinally, 0, 0)
+  # CTFS-M3: when there is no user-written `finally` clause, the
+  # synthetic `opcFinally` / `opcFinallyEnd` that pop the safepoint
+  # would otherwise inherit the last except branch's source line
+  # (`fin.info`, e.g. line 16 in the canonical try/raise/except/echo
+  # example), producing a backwards step event AFTER the handler body
+  # ran at line 17. Anchor the synthetic pop on the body's last
+  # statement instead — that's the user-source position the safepoint
+  # cleanup conceptually belongs to. When the user DID write a
+  # `finally` block, `fin` is the `nkFinally` node and we keep using
+  # its own info (the `finally` keyword line).
+  let finOpcodeInfo =
+    if fin.kind == nkFinally: fin
+    else:
+      let lastBranchBody = fin.lastSon
+      if lastBranchBody == nil: fin
+      else: lastBranchBody
+  c.gABx(finOpcodeInfo, opcFinally, 0, 0)
   for endPos in endings: c.patch(endPos)
   if fin.kind == nkFinally:
     c.gen(fin[0])
     c.clearDest(n, dest)
-  c.gABx(fin, opcFinallyEnd, 0, 0)
+  c.gABx(finOpcodeInfo, opcFinallyEnd, 0, 0)
 
 proc genRaise(c: PCtx; n: PNode) =
   let dest = genx(c, n[0])
