@@ -168,7 +168,12 @@ type
     lastPathId*: uint64                 ## last pathId actually emitted
     lastEmittedLine*: uint64            ## last line actually emitted
     haveLastEmitted*: bool              ## true after the first registerStep
-    pathCache*: seq[PathCacheEntry]     ## TF-M4: dense FileIndex-keyed cache
+    pathByFileIdx*: seq[PathCacheEntry] ## TF-M4 primary cache: FileIndex-keyed
+    pathByCanonical*: Table[string, PathCacheEntry]
+      ## TF-M4a secondary cache: canonical path → entry. Two FileIndexes
+      ## that resolve to the same physical file share one entry, so the
+      ## `paths[]` interning table contains each canonical path exactly
+      ## once.
     functions*: Table[string, uint64]   ## name → functionId
     typeNames*: Table[string, uint64]   ## type name → typeId
     nextVariableIndex*: uint64          ## counter for synthetic r<N> varnames
@@ -177,23 +182,60 @@ type
     config*: ConfigRef
     filter*: Classifier                 ## TF-M4: cross-language trace filter
 
+proc canonicalizePath(p: string): string =
+  ## TF-M4a: produce a stable canonical form for path deduplication.
+  ##
+  ## Two FileIndexes that point at the same physical file (e.g. one
+  ## resolved relative to the cwd, another resolved against an absolute
+  ## include path) should produce equal strings here. For files that
+  ## exist on disk we use `expandFilename` (calls `realpath(3)` /
+  ## `GetFullPathName`, which resolves symlinks and case). For
+  ## pseudo-paths or files the compiler synthesised that don't actually
+  ## exist (the OSError fallback inside the compiler's own
+  ## `fileInfoIdx`), we fall back to a syntactic
+  ## `absolutePath` + `normalizedPath`. Either way the result is used
+  ## consistently as both the classify input and the writer's path
+  ## interning key.
+  if p.len == 0:
+    return p
+  try:
+    return expandFilename(p)
+  except OSError:
+    discard
+  try:
+    result = absolutePath(p).normalizedPath()
+  except OSError, ValueError:
+    # Fall back to the input; classify/register will still treat it as
+    # a single (uncanonicalized) entry rather than crash.
+    result = p
+
 proc ensurePath(tracer: var VmTracer, fileIndex: int32,
                 skip: var bool): uint64 =
-  ## TF-M4: classify-once-per-FileIndex, cached in a dense seq.
+  ## TF-M4a: two-level path cache.
   ##
-  ## Sets `skip = true` if the classifier decided to skip this path or if
-  ## the index is invalid; in that case the returned pathId is meaningless.
-  ## Otherwise returns the registered pathId (which may legitimately be 0
-  ## since the interning table is 0-indexed). Per spec § 6 the hot path is
-  ## a single array deref after the first access — no hashes or repeated
-  ## classification.
+  ## Primary cache (`pathByFileIdx`): a dense seq indexed by
+  ## `FileIndex.int32`, identical to TF-M4. Per spec § 6 the hot path is
+  ## one array deref — no hashes, no repeated classification.
+  ##
+  ## Secondary cache (`pathByCanonical`): keyed by the canonicalized
+  ## absolute+normalized path. On a primary miss we canonicalize and
+  ## consult the secondary cache; if the same physical file was already
+  ## seen under a different FileIndex, we reuse its entry (decision and
+  ## pathId) and propagate it into the primary cache so subsequent hits
+  ## for that FileIndex are O(1) and so the writer's `paths[]` table
+  ## contains each canonical path exactly once.
+  ##
+  ## Sets `skip = true` if the classifier decided to skip this path or
+  ## if the index is invalid; in that case the returned pathId is
+  ## meaningless. Otherwise returns the registered pathId (which may
+  ## legitimately be 0 since the interning table is 0-indexed).
   skip = false
   if fileIndex < 0:
     skip = true
     return 0
   let idx = int(fileIndex)
-  if idx < tracer.pathCache.len:
-    let entry = tracer.pathCache[idx]
+  if idx < tracer.pathByFileIdx.len:
+    let entry = tracer.pathByFileIdx[idx]
     case entry.kind
     of pcSkip:
       skip = true
@@ -202,24 +244,44 @@ proc ensurePath(tracer: var VmTracer, fileIndex: int32,
       return entry.pathId
     of pcUnclassified: discard  # fall through to classify
   else:
-    tracer.pathCache.setLen(idx + 1)
+    tracer.pathByFileIdx.setLen(idx + 1)
 
-  let fullPath = toFullPath(tracer.config, FileIndex(fileIndex))
-  let decision = classify(tracer.filter, fullPath)
+  # First encounter for this FileIndex: canonicalize and consult the
+  # secondary cache before doing any classify/register work.
+  let rawPath = toFullPath(tracer.config, FileIndex(fileIndex))
+  let canonical = canonicalizePath(rawPath)
+
+  if canonical in tracer.pathByCanonical:
+    let cached = tracer.pathByCanonical[canonical]
+    tracer.pathByFileIdx[idx] = cached
+    if cached.kind == pcSkip:
+      skip = true
+      return 0
+    return cached.pathId
+
+  # Genuinely new canonical path — classify and (if traced) register it.
+  let decision = classify(tracer.filter, canonical)
   if decision.exec == eaSkip:
-    tracer.pathCache[idx] = PathCacheEntry(kind: pcSkip, pathId: 0)
+    let entry = PathCacheEntry(kind: pcSkip, pathId: 0)
+    tracer.pathByFileIdx[idx] = entry
+    tracer.pathByCanonical[canonical] = entry
     skip = true
     return 0
 
-  let res = tracer.writer.registerPath(fullPath)
+  let res = tracer.writer.registerPath(canonical)
   if res.isErr:
-    # Path registration failed; cache as skip to avoid retrying and continue.
-    tracer.pathCache[idx] = PathCacheEntry(kind: pcSkip, pathId: 0)
+    # Path registration failed; cache as skip in both tables to avoid
+    # retrying.
+    let entry = PathCacheEntry(kind: pcSkip, pathId: 0)
+    tracer.pathByFileIdx[idx] = entry
+    tracer.pathByCanonical[canonical] = entry
     skip = true
     return 0
 
   let pathId = res.get()
-  tracer.pathCache[idx] = PathCacheEntry(kind: pcTrace, pathId: pathId)
+  let entry = PathCacheEntry(kind: pcTrace, pathId: pathId)
+  tracer.pathByFileIdx[idx] = entry
+  tracer.pathByCanonical[canonical] = entry
   return pathId
 
 proc ensureFunction(tracer: var VmTracer, name: string): uint64 =
@@ -434,7 +496,8 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     lastPathId: 0,
     lastEmittedLine: 0,
     haveLastEmitted: false,
-    pathCache: @[],
+    pathByFileIdx: @[],
+    pathByCanonical: initTable[string, PathCacheEntry](),
     functions: initTable[string, uint64](),
     typeNames: initTable[string, uint64](),
     nextVariableIndex: 0,
@@ -443,6 +506,22 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     config: config,
     filter: filterRes.get(),
   )
+
+  # TF-M4a: populate `metadata.workdir` so the materializer's
+  # `FullOpts(stripPaths: true)` can substitute `<workdir>` into paths
+  # rooted in the user's project directory. `initMultiStreamWriter`
+  # leaves `workdir` empty, which silently turned `--strip-paths` into
+  # a no-op. The current working directory at tracer-init time is the
+  # most reliable cross-platform signal for "where the user's code
+  # lives" — `nim e --trace:<path>` is conventionally invoked from a
+  # project root.
+  try:
+    tracer.writer.metadata.workdir = getCurrentDir()
+  except OSError:
+    # Leave workdir empty; the materializer will simply not strip paths
+    # rather than crash. This is the same observable behaviour as
+    # pre-TF-M4a.
+    discard
   ok(tracer)
 
 proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
