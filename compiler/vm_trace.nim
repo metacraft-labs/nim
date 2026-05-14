@@ -195,6 +195,14 @@ type
       ## that resolve to the same physical file share one entry, so the
       ## `paths[]` interning table contains each canonical path exactly
       ## once.
+    pathByBasename*: Table[string, seq[string]]
+      ## TF-M4d: lazily-built workdir basename → full path index.
+      ## Populated on the first canonicalization that needs the
+      ## basename probe (i.e. `expandFilename` failed and the input is a
+      ## bare basename). The index is built once per tracer lifetime by
+      ## walking `metadata.workdir`.
+    basenameIndexBuilt*: bool
+      ## TF-M4d: gate so the workdir walk runs at most once.
     funcByItemId*: Table[ItemId, FuncCacheEntry]
       ## TF-M4b function-identity cache. Keyed by `PSym.itemId`
       ## (a (module, item) pair, see compiler/astdef.nim). A `Table`
@@ -211,7 +219,60 @@ type
     config*: ConfigRef
     filter*: Classifier                 ## TF-M4: cross-language trace filter
 
-proc canonicalizePath(p: string): string =
+proc isBareBasename(p: string): bool {.inline.} =
+  ## True when `p` has no path separators — i.e. it's a bare basename
+  ## like `tscriptcompiletime.nims` rather than `tests/vm/...nims`.
+  for ch in p:
+    if ch == DirSep or ch == AltSep:
+      return false
+  true
+
+proc buildBasenameIndex(tracer: var VmTracer) =
+  ## TF-M4d: walk the workdir once and build a basename → seq[fullPath]
+  ## index used by `canonicalizePath` to resolve a bare basename to a
+  ## real on-disk file. We skip directories that are unlikely to contain
+  ## user-relevant Nim source (build caches, VCS metadata, vendored
+  ## submodule trees) so the walk cost stays bounded even on
+  ## monorepo-scale workdirs.
+  ##
+  ## The index is only consulted from the OSError fallback in
+  ## `canonicalizePath` — the normal `expandFilename` hot path never
+  ## touches it.
+  tracer.basenameIndexBuilt = true
+  let workdir = tracer.writer.metadata.workdir
+  if workdir.len == 0 or not dirExists(workdir):
+    return
+  const skipDirs = [
+    "nimcache", ".git", ".hg", ".svn", ".repo", "build", "dist", "bin",
+    "node_modules", ".cargo", "target", ".direnv", "result"]
+  for entry in walkDirRec(workdir, yieldFilter = {pcFile}, followFilter = {pcDir},
+                          relative = false):
+    # `walkDirRec` doesn't expose per-directory pruning, so we filter
+    # post-hoc: if any path segment matches a known build-artifact dir,
+    # skip the entry. This is best-effort — the index is a probe, not a
+    # source of truth.
+    let rel = entry.relativePath(workdir)
+    var skip = false
+    for seg in rel.split({DirSep, AltSep}):
+      if seg in skipDirs:
+        skip = true
+        break
+    if skip:
+      continue
+    let ext = entry.splitFile.ext
+    # Only index source-like files. The basename probe exists for the
+    # compiler's pseudo-path fallback where the basename refers to a
+    # Nim source — broadening to all files would blow up the index on
+    # binary-heavy workdirs without buying anything.
+    if ext != ".nim" and ext != ".nims" and ext != ".cfg":
+      continue
+    let base = entry.extractFilename
+    if base notin tracer.pathByBasename:
+      tracer.pathByBasename[base] = @[entry]
+    else:
+      tracer.pathByBasename[base].add(entry)
+
+proc canonicalizePath(tracer: var VmTracer, p: string): string =
   ## TF-M4a: produce a stable canonical form for path deduplication.
   ##
   ## Two FileIndexes that point at the same physical file (e.g. one
@@ -225,12 +286,52 @@ proc canonicalizePath(p: string): string =
   ## `absolutePath` + `normalizedPath`. Either way the result is used
   ## consistently as both the classify input and the writer's path
   ## interning key.
+  ##
+  ## TF-M4d: when `expandFilename` fails and `p` is a bare basename
+  ## (e.g. `tscriptcompiletime.nims`), the syntactic fallback resolves
+  ## against cwd and yields `<cwd>/<basename>` — which differs from the
+  ## workdir-relative form `<cwd>/<subdir>/<basename>` when the file
+  ## actually lives in a subdirectory. Both forms then collide as two
+  ## distinct `paths[]` entries pointing at the same physical file.
+  ## We close the gap with two probes before falling through:
+  ##
+  ##   1. Scan already-registered canonical paths for a unique
+  ##      basename match. Cheap (table walk) and catches the common
+  ##      case where the workdir-relative form was registered first.
+  ##   2. Walk the workdir tree once (lazy + cached) for a basename
+  ##      match. Used when the basename arrives before any of its
+  ##      sibling forms.
+  ##
+  ## Either probe yields a result only if exactly one match is found;
+  ## ambiguous matches fall through to the cwd-absolute behaviour to
+  ## avoid silently picking the wrong file.
   if p.len == 0:
     return p
   try:
     return expandFilename(p)
   except OSError:
     discard
+  # `expandFilename` failed (file not on disk under that name). Before
+  # giving up to the cwd-absolute syntactic form, see if `p` is a bare
+  # basename we can map to a real file inside the workdir.
+  if isBareBasename(p):
+    # Probe (1): already-known canonical paths.
+    var matches: seq[string] = @[]
+    for canon in tracer.pathByCanonical.keys:
+      if canon.extractFilename == p:
+        matches.add(canon)
+    if matches.len == 1:
+      return matches[0]
+    if matches.len == 0:
+      # Probe (2): workdir basename index (lazy build).
+      if not tracer.basenameIndexBuilt:
+        tracer.buildBasenameIndex()
+      if p in tracer.pathByBasename:
+        let hits = tracer.pathByBasename[p]
+        if hits.len == 1:
+          return hits[0]
+        # Multiple matches → ambiguous; fall through to the cwd
+        # fallback rather than silently picking one.
   try:
     result = absolutePath(p).normalizedPath()
   except OSError, ValueError:
@@ -278,7 +379,7 @@ proc ensurePath(tracer: var VmTracer, fileIndex: int32,
   # First encounter for this FileIndex: canonicalize and consult the
   # secondary cache before doing any classify/register work.
   let rawPath = toFullPath(tracer.config, FileIndex(fileIndex))
-  let canonical = canonicalizePath(rawPath)
+  let canonical = canonicalizePath(tracer, rawPath)
 
   if canonical in tracer.pathByCanonical:
     let cached = tracer.pathByCanonical[canonical]
@@ -380,7 +481,7 @@ proc ensureFunctionForSym(tracer: var VmTracer, prc: PSym,
     return 0
 
   let rawPath = toFullPath(tracer.config, fileIdx)
-  let canonical = canonicalizePath(rawPath)
+  let canonical = canonicalizePath(tracer, rawPath)
   let decision = classify(tracer.filter, canonical)
   if decision.exec == eaSkip:
     let entry = FuncCacheEntry(kind: fcSkip, functionId: 0)
@@ -598,6 +699,8 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     haveLastEmitted: false,
     pathByFileIdx: @[],
     pathByCanonical: initTable[string, PathCacheEntry](),
+    pathByBasename: initTable[string, seq[string]](),
+    basenameIndexBuilt: false,
     funcByItemId: initTable[ItemId, FuncCacheEntry](),
     functions: initTable[string, uint64](),
     typeNames: initTable[string, uint64](),

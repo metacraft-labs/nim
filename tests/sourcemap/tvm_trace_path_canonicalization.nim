@@ -36,12 +36,18 @@ discard """
 ## See: `codetracer-specs/Recording-Backends/Trace-Filters.milestones.md`
 ##      § TF-M4a, and `codetracer-trace-format-spec/Trace-Filters.md` § 6.
 
-import std/[os, osproc, assertions, strutils, sequtils]
+import std/[os, osproc, assertions, strutils, sequtils, json]
 import results
 
 {.passL: "-lzstd".}
 
 import codetracer_trace_writer/new_trace_reader
+# `codetracer_ct_print_lib` exposes `buildFullDocument` and `FullOpts`,
+# the same materializer the `ct-print` CLI uses. Routing through it
+# (rather than shelling out to a built binary) keeps the test
+# self-contained while still exercising the `--strip-paths` rewrite
+# path that produces user-facing JSON.
+import codetracer_ct_print_lib
 
 const
   testsDir = currentSourcePath().parentDir
@@ -161,7 +167,89 @@ proc main() =
       ", got: " & scriptHits[0]
     echo "PASS case 3: canonical stable across cwd — path=", scriptHits[0]
 
+  # ----- Case 4: TF-M4d basename canonicalization dedup -----------------
+  # Reproduces the TF-M5 audit finding for `tscriptcompiletime.nims`:
+  # macros that touch line-info via `opcNSetLineInfoFile` cause the
+  # compiler's `fileInfoIdx` OSError fallback to register a *bare
+  # basename* as the file's `fullPath`. Before TF-M4d, the canonicalizer
+  # then resolved that basename against cwd, producing
+  # `<cwd>/<basename>` — a string distinct from the real
+  # `<cwd>/<subdir>/<basename>` form, so the same physical file ended
+  # up under two `paths[]` entries.
+  #
+  # Mirroring `tests/vm/tscriptcompiletime.nims`, this script defines a
+  # macro that performs a `doAssert` against a compile-time symbol; the
+  # macro lowering exercises the line-info pseudo-path path. We run
+  # from a *parent* directory so the basename form really resolves
+  # against a wrong cwd.
+  block:
+    const macroScript = """
+import mhelper_const
+macro chkBar =
+  doAssert constBar == 2
+chkBar()
+"""
+    const macroHelper = """
+const constBar* = 2
+"""
+    let nestedDir = buildDir / "nested"
+    createDir(nestedDir)
+    let macroScriptFile = nestedDir / "mmacro_script.nims"
+    let macroHelperFile = nestedDir / "mhelper_const.nim"
+    writeFile(macroScriptFile, macroScript)
+    writeFile(macroHelperFile, macroHelper)
+    let traceFile = buildDir / "case4_basename.ct"
+    # Run from `buildDir` (the parent of where the script lives) so the
+    # script path is workdir-relative (`nested/mmacro_script.nims`) and
+    # any basename pseudo-path the compiler synthesises resolves to
+    # `<buildDir>/mmacro_script.nims` — which does NOT exist — under
+    # the pre-TF-M4d behaviour.
+    discard runNimE(nim, buildDir,
+                    "nested" / "mmacro_script.nims", traceFile)
+    let paths = readPaths(traceFile)
+    let scriptHits = paths.filterIt(it.basename == "mmacro_script.nims")
+    doAssert scriptHits.len == 1,
+      "case4: expected exactly 1 path entry for mmacro_script.nims, got " &
+      $scriptHits.len & " (full paths: " & paths.join(", ") & ")"
+    # And the surviving entry must point at the REAL file location,
+    # not a phantom `<workdir>/<basename>` sibling.
+    let absScript = expandFilename(macroScriptFile)
+    doAssert scriptHits[0] == absScript,
+      "case4: surviving path should be the real on-disk file " &
+      absScript & ", got: " & scriptHits[0]
+    echo "PASS case 4: TF-M4d basename canonicalization — path=", scriptHits[0]
+
+  # ----- Case 5: TF-M4d `metadata.program` workdir stripping ------------
+  # Reuses the trace from case 1. Drives `buildFullDocument` with
+  # `stripPaths = true` (the same opts the `ct-print --full
+  # --strip-paths` CLI uses) and asserts the resulting
+  # `metadata.program` is workdir-relative — not an absolute
+  # `/home/<user>/...` form. Before TF-M4d the program field bypassed
+  # `normalizePath`, so snapshots leaked the developer's path layout
+  # via this one scalar even when every other path was stripped.
+  block:
+    let traceFile = buildDir / "case5_program_strip.ct"
+    discard runNimE(nim, getCurrentDir(),
+                    quoteShell(scriptFile), traceFile)
+    let openRes = openNewTrace(traceFile)
+    doAssert openRes.isOk,
+      "case5: openNewTrace failed: " & openRes.error
+    var rdr = openRes.get()
+    let doc = buildFullDocument(rdr, FullOpts(stripPaths: true))
+    let program = doc["metadata"]["program"].getStr
+    doAssert program.len > 0,
+      "case5: metadata.program should be non-empty"
+    doAssert not program.startsWith("/home/") and
+             not program.startsWith("/Users/") and
+             not program.startsWith("C:\\") and
+             not program.startsWith("C:/"),
+      "case5: metadata.program leaked an absolute home path: " & program
+    doAssert program.startsWith("<workdir>/") or program == "<workdir>",
+      "case5: expected metadata.program to be workdir-relative, got: " &
+      program
+    echo "PASS case 5: program workdir-stripped — program=", program
+
   removeDir(buildDir)
-  echo "PASS: tvm_trace_path_canonicalization (TF-M4a)"
+  echo "PASS: tvm_trace_path_canonicalization (TF-M4a + TF-M4d)"
 
 main()
