@@ -596,7 +596,10 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
     of opcEof: return regs[ra]
     of opcRet:
       if c.vmTracer != nil:
-        traceReturn(cast[ptr VmTracer](c.vmTracer)[])
+        # TF-M4b: pass the returning function's symbol so the tracer
+        # can re-consult the function-side filter cache and suppress
+        # the Return event symmetrically with a suppressed Call entry.
+        traceReturn(cast[ptr VmTracer](c.vmTracer)[], tos.prc)
       let newPc = c.cleanUpOnReturn(tos)
       # Perform any cleanup action before returning
       if newPc < 0:
@@ -1464,7 +1467,11 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         if procInfo.pc < pc: handleJmpBack()
         #echo "new pc ", newPc, " calling: ", prc.name.s
         if c.vmTracer != nil:
-          traceCall(cast[ptr VmTracer](c.vmTracer)[], prc.name.s, c.debug[pc])
+          # TF-M4b: pass the callee `PSym` (not just its name) so the
+          # tracer can classify by the function's defining-file path
+          # and suppress Call/Return events for stdlib-defined helpers
+          # (`addInt`, `addChars`, `$`, ...).
+          traceCall(cast[ptr VmTracer](c.vmTracer)[], prc, c.debug[pc])
         var newFrame = PStackFrame(prc: prc, comesFrom: pc, next: tos)
         newSeq(newFrame.slots, procInfo.usedRegisters+ord(isClosure))
         # setup slot for proc result:

@@ -160,6 +160,27 @@ type
     kind*: PathCacheKind
     pathId*: uint64
 
+  ## TF-M4b sentinel for the function-identity classification cache.
+  ##
+  ## Same shape and intent as `PathCacheEntry` but keyed by `PSym.itemId`
+  ## (the compiler's stable (module, item) symbol identity). Decision is
+  ## derived from the function's defining-file path via the same
+  ## classifier instance used for paths — no new selector kinds.
+  ##
+  ## Per spec § 3 a "scope" is any recorder-identifiable unit of code:
+  ## a Nim file index AND a function. TF-M4 wired the path-half;
+  ## this enum/struct wires the function-half so that call_entry /
+  ## call_exit events for stdlib helpers (`addInt`, `addChars`, `$`, ...)
+  ## are suppressed in addition to their per-line step events.
+  FuncCacheKind* = enum
+    fcUnclassified
+    fcSkip
+    fcTrace
+
+  FuncCacheEntry* = object
+    kind*: FuncCacheKind
+    functionId*: uint64
+
   VmTracer* = object
     writer*: MultiStreamTraceWriter
     outputPath*: string                 ## destination .ct path
@@ -174,7 +195,15 @@ type
       ## that resolve to the same physical file share one entry, so the
       ## `paths[]` interning table contains each canonical path exactly
       ## once.
-    functions*: Table[string, uint64]   ## name → functionId
+    funcByItemId*: Table[ItemId, FuncCacheEntry]
+      ## TF-M4b function-identity cache. Keyed by `PSym.itemId`
+      ## (a (module, item) pair, see compiler/astdef.nim). A `Table`
+      ## rather than a dense seq because `PSym.id`'s int form is
+      ## `(module shl 24) + item`, which is too sparse for a seq
+      ## (stdlib pulls in ~100 modules and the high bits push the id
+      ## space into the billions). The per-call hot path is therefore
+      ## a single hash lookup — still O(1), still single-read.
+    functions*: Table[string, uint64]   ## name → functionId (TF-M4-era fallback)
     typeNames*: Table[string, uint64]   ## type name → typeId
     nextVariableIndex*: uint64          ## counter for synthetic r<N> varnames
     pendingValues*: seq[VariableValue]  ## values buffered between steps
@@ -296,6 +325,77 @@ proc ensureFunction(tracer: var VmTracer, name: string): uint64 =
 
   let funcId = res.get()
   tracer.functions[name] = funcId
+  return funcId
+
+proc ensureFunctionForSym(tracer: var VmTracer, prc: PSym,
+                          skip: var bool): uint64 =
+  ## TF-M4b: function-side counterpart of `ensurePath`.
+  ##
+  ## Classifies the function by its defining-file path (the file where
+  ## the function's source resides, i.e. `prc.info.fileIndex`) using the
+  ## same `Classifier` instance that `ensurePath` consults. Functions
+  ## whose defining file is filtered (e.g. `lib/system/arithmetics.nim`)
+  ## get `skip = true`; their call_entry / call_exit events must not be
+  ## emitted.
+  ##
+  ## The classification is cached in `funcByItemId`, keyed by
+  ## `PSym.itemId`. Subsequent lookups for the same function symbol are
+  ## a single Table read — no canonicalization, no classify call, no
+  ## function registration.
+  ##
+  ## On `skip = true` the returned uint64 is meaningless (callers must
+  ## not register a Call/Return event using it).
+  skip = false
+  if prc == nil:
+    # Defensive: a nil prc means we have no symbol to classify. Treat
+    # as skip — the caller can't legitimately emit an entry/exit for a
+    # nameless function.
+    skip = true
+    return 0
+
+  let key = prc.itemId
+  tracer.funcByItemId.withValue(key, entryPtr):
+    case entryPtr[].kind
+    of fcSkip:
+      skip = true
+      return 0
+    of fcTrace:
+      return entryPtr[].functionId
+    of fcUnclassified:
+      # Cache shouldn't contain Unclassified entries — they're transient
+      # placeholders, never written. Fall through and (re)classify.
+      discard
+
+  # First encounter for this PSym: derive the defining-file path,
+  # classify against the shared filter, and register the function name
+  # only if the decision is `trace`.
+  let fileIdx = prc.info.fileIndex
+  if int32(fileIdx) < 0:
+    # No defining file (synthesised symbol, compiler-internal). Be
+    # conservative: skip — symbol's provenance is unknown, can't claim
+    # it's user code.
+    let entry = FuncCacheEntry(kind: fcSkip, functionId: 0)
+    tracer.funcByItemId[key] = entry
+    skip = true
+    return 0
+
+  let rawPath = toFullPath(tracer.config, fileIdx)
+  let canonical = canonicalizePath(rawPath)
+  let decision = classify(tracer.filter, canonical)
+  if decision.exec == eaSkip:
+    let entry = FuncCacheEntry(kind: fcSkip, functionId: 0)
+    tracer.funcByItemId[key] = entry
+    skip = true
+    return 0
+
+  # Decision is `trace`: register the function name in the writer's
+  # interning table. We reuse `ensureFunction(name)` so that overloads
+  # sharing a name collapse into one functionId (same as pre-M4b
+  # behaviour); the M4b distinction is purely the *filter gate*, not
+  # the interning policy.
+  let funcId = tracer.ensureFunction(prc.name.s)
+  let entry = FuncCacheEntry(kind: fcTrace, functionId: funcId)
+  tracer.funcByItemId[key] = entry
   return funcId
 
 proc ensureTypeName(tracer: var VmTracer, name: string): uint64 =
@@ -498,6 +598,7 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     haveLastEmitted: false,
     pathByFileIdx: @[],
     pathByCanonical: initTable[string, PathCacheEntry](),
+    funcByItemId: initTable[ItemId, FuncCacheEntry](),
     functions: initTable[string, uint64](),
     typeNames: initTable[string, uint64](),
     nextVariableIndex: 0,
@@ -559,18 +660,42 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   tracer.lastEmittedLine = uint64(line)
   tracer.haveLastEmitted = true
 
-proc traceCall*(tracer: var VmTracer, name: string, info: TLineInfo) =
+proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo) =
   ## Emit a Call event.
+  ##
+  ## TF-M4b: gated on the function-side trace filter. If the callee's
+  ## defining-file path is filtered (e.g. it lives in `lib/system/**`),
+  ## no Call event is recorded and `tracer.depth` is left unchanged.
+  ## The matching `traceReturn` at the return site re-classifies the
+  ## same `PSym` (single Table lookup, populated by this call) and
+  ## also no-ops, preserving symmetry between entry and exit.
+  ##
+  ## We still flush any pending values via a synthetic step BEFORE the
+  ## filter decision: those values were assigned in code we *did* trace
+  ## and would otherwise be silently dropped at the unobservable
+  ## entry-to-filtered-frame transition.
   flushPendingValuesAsStep(tracer)
-  let funcId = tracer.ensureFunction(name)
+  var skip = false
+  let funcId = tracer.ensureFunctionForSym(prc, skip)
+  if skip:
+    return
   let res = tracer.writer.registerCall(funcId, [])
   if res.isErr:
     discard
   tracer.depth += 1
 
-proc traceReturn*(tracer: var VmTracer) =
+proc traceReturn*(tracer: var VmTracer, prc: PSym) =
   ## Emit a Return event.
+  ##
+  ## TF-M4b: symmetric with `traceCall`. We re-classify the returning
+  ## function via the same `ensureFunctionForSym` cache; on a filter
+  ## skip we emit nothing and leave `tracer.depth` unchanged so it
+  ## stays balanced with the suppressed entry.
   flushPendingValuesAsStep(tracer)
+  var skip = false
+  discard tracer.ensureFunctionForSym(prc, skip)
+  if skip:
+    return
   if tracer.depth > 0:
     tracer.depth -= 1
   # Use the default void-return marker (empty seq → VoidReturnMarker).
