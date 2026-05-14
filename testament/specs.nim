@@ -63,6 +63,8 @@ type
     targetCpp = "cpp"
     targetObjC = "objc"
     targetJS = "js"
+    targetVM = "e"  ## CTFS-M1: VM target (matches `nim e <file>`)
+                    ## See CodeTracer specs § "CTFS / VM Tracing Coverage"
 
   InlineError* = object
     kind*: string
@@ -104,6 +106,14 @@ type
     inlineErrors*: seq[InlineError] # line information to error message
     debugInfo*: string # debug info to give more context
     retries*: int # number of retry attempts after the test fails
+    evalTrace*: string
+      ## CTFS-M1: golden-snapshot control for target `e` (targetVM).
+      ## Tristate semantics:
+      ##   - empty (default): when target is `e`, attempt snapshot diffing
+      ##     against `<testfile>.evaltrace.json` (sibling file).
+      ##   - `"skip"`: opt out of snapshot diffing for this test.
+      ##   - any other value: explicit path override for the golden snapshot.
+      ## The field has no effect when the running target is not `e`.
 
 proc getCmd*(s: TSpec): string =
   if s.cmd.len == 0:
@@ -112,14 +122,20 @@ proc getCmd*(s: TSpec): string =
     result = s.cmd
 
 const
-  targetToExt*: array[TTarget, string] = ["nim.c", "nim.cpp", "nim.m", "js"]
-  targetToCmd*: array[TTarget, string] = ["c", "cpp", "objc", "js"]
+  # CTFS-M1: targetVM has no native build extension (the VM runs the script
+  # directly). We use "ct" so generated names referencing the target's "build
+  # output" point at the .ct trace file when relevant.
+  targetToExt*: array[TTarget, string] = ["nim.c", "nim.cpp", "nim.m", "js", "ct"]
+  targetToCmd*: array[TTarget, string] = ["c", "cpp", "objc", "js", "e"]
 
 proc defaultOptions*(a: TTarget): string =
   case a
   of targetJS: "-d:nodejs"
     # once we start testing for `nim js -d:nimbrowser` (eg selenium or similar),
     # we can adapt this logic; or a given js test can override with `-u:nodejs`.
+  of targetVM: ""
+    # CTFS-M1: target `e` runs scripts through the VM via `nim e`. No special
+    # default options; the harness injects --trace:<path> separately.
   else: ""
 
 when not declared(parseCfgBool):
@@ -306,6 +322,7 @@ proc parseTargets*(value: string): set[TTarget] =
     of "cpp", "c++": result.incl(targetCpp)
     of "objc": result.incl(targetObjC)
     of "js": result.incl(targetJS)
+    of "e": result.incl(targetVM)  # CTFS-M1: VM target
     else: raise newException(ValueError, "invalid target: '$#'" % v)
 
 proc initSpec*(filename: string): TSpec =
@@ -489,6 +506,10 @@ proc parseSpec*(filename: string): TSpec =
       of "matrix":
         for v in e.value.split(';'):
           result.matrix.add(v.strip)
+      of "evaltrace":
+        # CTFS-M1: tristate — "skip", absent (default-on for target e),
+        # or an explicit golden-snapshot path.
+        result.evalTrace = e.value.strip
       else:
         result.parseErrors.addLine "invalid key for test spec: ", e.key
 

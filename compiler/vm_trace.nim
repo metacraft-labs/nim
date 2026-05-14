@@ -12,11 +12,11 @@
 ## This module handles all tracing operations, isolated from the main VM code.
 ## It writes .ct trace files using the CodeTracer trace format (CTFS).
 ##
-## Gated behind `-d:codetracerTracing` — never compiled into the standard
-## Nim compiler.
-
-when not defined(codetracerTracing):
-  {.error: "vm_trace.nim requires -d:codetracerTracing".}
+## CTFS-M1 update: vm_trace is now compiled unconditionally into `bin/nim`.
+## Per-run emission is gated solely by the runtime flag `--trace:<path>`
+## (i.e. `optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0`);
+## when the flag is absent, the call sites in vm.nim see `c.vmTracer == nil`
+## and short-circuit, so the dormant cost is one nil-check per relevant op.
 
 import std/tables
 import msgs, options, lineinfos

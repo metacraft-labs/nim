@@ -14,7 +14,7 @@ import
     parseopt, browsers, terminal, exitprocs,
     algorithm, times, intsets, macros]
 
-import backend, specs, azure, htmlgen
+import backend, specs, azure, htmlgen, ctfs_snapshot
 
 from std/sugar import dup
 import compiler/nodejs
@@ -486,6 +486,81 @@ proc equalModuloLastNewline(a, b: string): bool =
   # allow lazy output spec that omits last newline, but really those should be fixed instead
   result = a == b or b.endsWith("\n") and a == b[0 ..< ^1]
 
+proc runVmTraceTest(r: var TResults, test: var TTest, expected: TSpec,
+                    target: TTarget, extraOptions, nimcache: string) =
+  ## CTFS-M1: execution path for target `targetVM` (`e`). Runs the script
+  ## through `nim e --trace:<ctFile> <file>`, captures stdout via the
+  ## compiler-output stream, validates output/exit per spec, and then runs
+  ## the snapshot diff via `ctfs_snapshot.runSnapshotCheck`.
+  ##
+  ## CTFS-M1 correction: vm_trace is compiled unconditionally into `bin/nim`,
+  ## so there is no separate `nim_trace` binary. We use the regular
+  ## `compilerPrefix` and rely on the runtime `--trace:<path>` flag for
+  ## per-run gating.
+
+  # Per-test scratch directory under nimcache so concurrent tests don't
+  # collide. nimcacheDir already gives a per-test+target unique path.
+  createDir(nimcache)
+  let ctFile = nimcache / (test.name.extractFilename & ".ct")
+
+  # Build the command. CTFS-M1 convention: target `e` always runs via
+  # `nim e --trace:<path> <options> <file>`. We ignore the spec's `cmd:`
+  # field for targetVM (it is normally `nim e $file`, which has no
+  # `$options` slot for injecting `--trace:`); instead we synthesize a
+  # template here so the trace flag is always present.
+  # `ctFile` lives under nimcache (md5-hashed, no spaces) so we skip
+  # quoteShell on it. The path winds up in `$options`, which `prepareTestCmd`
+  # interpolates without re-quoting, so a trailing space-free path is safe.
+  let cmdTemplate = "$nim e --trace:" & ctFile & " $options $file"
+
+  var given = callNimCompiler(cmdTemplate, test.name, test.options, nimcache,
+                              target, extraOptions)
+
+  # `nim e` runs the script as part of compilation. Stdout shows up in
+  # `given.nimout`. Treat exit code 0 as success; non-zero as the
+  # equivalent of a compiler/runtime failure.
+  if given.exitCode != expected.exitCode:
+    discard r.finishTestRetryable(test, target, extraOptions,
+      "exitcode: " & $expected.exitCode,
+      "exitcode: " & $given.exitCode & "\n\nOutput:\n" & given.nimout,
+      reExitcodesDiffer, givenSpec = given.addr)
+    return
+
+  # If the test author specified expected.output, verify it appears in the
+  # captured nimout (substring match keeps it tolerant of the Hint: prefix
+  # noise `nim e` emits before the script runs).
+  if expected.output.len > 0:
+    case expected.outputCheck
+    of ocEqual, ocSubstr:
+      if expected.output notin given.nimout:
+        discard r.finishTestRetryable(test, target, extraOptions,
+          expected.output, given.nimout, reOutputsDiffer,
+          givenSpec = given.addr)
+        return
+    of ocIgnore:
+      discard
+
+  # Snapshot diffing (the CTFS-M1 deliverable). `expected.file` is the test
+  # source path with extension preserved (`.nim` or `.nims`).
+  let snap = runSnapshotCheck(expected.file,
+                              expected.evalTrace, ctFile)
+  case snap.outcome
+  of snapPass, snapSkipped:
+    inc(r.passed)
+    discard r.finishTestRetryable(test, target, extraOptions, "", "",
+                                  reSuccess, givenSpec = given.addr)
+  of snapBootstrap:
+    discard r.finishTestRetryable(test, target, extraOptions,
+      "<existing golden snapshot at " & snap.goldenPath & ">",
+      snap.detail, reOutputsDiffer, givenSpec = given.addr)
+  of snapMismatch:
+    discard r.finishTestRetryable(test, target, extraOptions,
+      "<contents of " & snap.goldenPath & ">",
+      snap.detail, reOutputsDiffer, givenSpec = given.addr)
+  of snapError:
+    discard r.finishTestRetryable(test, target, extraOptions, "",
+      snap.detail, reCodeNotFound, givenSpec = given.addr)
+
 proc testSpecHelper(r: var TResults, test: var TTest, expected: TSpec,
                     target: TTarget, extraOptions: string, nimcache: string) =
   template maybeRetry(x: bool) =
@@ -504,6 +579,14 @@ proc testSpecHelper(r: var TResults, test: var TTest, expected: TSpec,
     r.finishTest(test, target, extraOptions, "", "", test.spec.err)
     inc(r.skipped)
     return
+
+  # CTFS-M1: target `e` (targetVM) goes through a dedicated harness that runs
+  # the script under `nim e --trace:<path>` and performs golden-snapshot
+  # diffing. See `runVmTraceTest` and `testament/ctfs_snapshot.nim`.
+  if target == targetVM:
+    runVmTraceTest(r, test, expected, target, extraOptions, nimcache)
+    return
+
   var given = callNimCompiler(expected.getCmd, test.name, test.options, nimcache, target, extraOptions)
   case expected.action
   of actionCompile:

@@ -16,8 +16,9 @@ import
   wordrecg, modulegraphs,
   pathutils, pipelines
 
-when defined(codetracerTracing):
-  import vm_trace, msgs, lineinfos
+import vm_trace, msgs, lineinfos
+  # CTFS-M1: vm_trace is compiled unconditionally; per-run emission is gated
+  # by `optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0`.
 
 when defined(nimPreviewSlimSystem):
   import std/[syncio, assertions]
@@ -223,26 +224,26 @@ proc runNimScript*(cache: IdentCache; scriptName: AbsoluteFile;
   var vm = setupVM(m, cache, scriptName.string, graph, idgen)
   graph.vm = vm
 
-  when defined(codetracerTracing):
-    # Only trace for `nim e` (cmdNimscript), not config file processing
-    if optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0 and
-       conf.cmd == cmdNimscript:
-      let tracerRes = initVmTracer(conf.traceOutputPath, scriptName.string, conf)
-      if tracerRes.isOk:
-        vm.vmTracer = tracerRes.get()
-      else:
-        rawMessage(conf, warnUser, "failed to initialize VM tracer: " & tracerRes.error)
+  # CTFS-M1: only trace for `nim e` (cmdNimscript), not config file processing.
+  # Gating is fully runtime (--trace:<path>); the compiler always carries
+  # the emission code.
+  if optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0 and
+     conf.cmd == cmdNimscript:
+    let tracerRes = initVmTracer(conf.traceOutputPath, scriptName.string, conf)
+    if tracerRes.isOk:
+      vm.vmTracer = tracerRes.get()
+    else:
+      rawMessage(conf, warnUser, "failed to initialize VM tracer: " & tracerRes.error)
 
   graph.setPipeLinePass(EvalPass)
   graph.compilePipelineSystemModule()
   discard graph.processPipelineModule(m, vm.idgen, stream)
 
-  when defined(codetracerTracing):
-    if vm.vmTracer != nil:
-      let closeRes = closeVmTracer(cast[ptr VmTracer](vm.vmTracer))
-      if closeRes.isErr:
-        rawMessage(conf, warnUser, "failed to close VM tracer: " & closeRes.error)
-      vm.vmTracer = nil
+  if vm.vmTracer != nil:
+    let closeRes = closeVmTracer(cast[ptr VmTracer](vm.vmTracer))
+    if closeRes.isErr:
+      rawMessage(conf, warnUser, "failed to close VM tracer: " & closeRes.error)
+    vm.vmTracer = nil
 
   # watch out, "newruntime" can be set within NimScript itself and then we need
   # to remember this:

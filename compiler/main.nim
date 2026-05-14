@@ -37,8 +37,9 @@ when not defined(nimKochBootstrap):
 when not defined(leanCompiler):
   import docgen
 
-when defined(codetracerTracing):
-  import vm_trace, vmdef
+# CTFS-M1: vm_trace is always compiled into bin/nim; runtime --trace:<path>
+# gates emission per-run.
+import vm_trace, vmdef
 
 proc writeDepsFile(g: ModuleGraph) =
   let fname = g.config.nimcacheDir / RelativeFile(g.config.projectName & ".deps")
@@ -202,9 +203,9 @@ proc commandInteractive(graph: ModuleGraph) =
   setPipeLinePass(graph, InterpreterPass)
   compilePipelineSystemModule(graph)
 
-  when defined(codetracerTracing):
-    # Attach VM tracer after the system module has been compiled
-    # (which is when graph.vm gets created via setupEvalGen).
+  # CTFS-M1: attach VM tracer after the system module has been compiled
+  # (which is when graph.vm gets created via setupEvalGen).
+  block:
     let conf = graph.config
     if optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0:
       if graph.vm != nil:
@@ -224,16 +225,15 @@ proc commandInteractive(graph: ModuleGraph) =
     let s = llStreamOpenStdIn(onPrompt = proc() = flushDot(graph.config))
     discard processPipelineModule(graph, m, idgen, s)
 
-  when defined(codetracerTracing):
-    # Close the tracer on REPL exit
-    if graph.vm != nil:
-      let vm = PCtx(graph.vm)
-      if vm.vmTracer != nil:
-        let closeRes = closeVmTracer(cast[ptr VmTracer](vm.vmTracer))
-        if closeRes.isErr:
-          rawMessage(graph.config, warnUser,
-            "failed to close VM tracer: " & closeRes.error)
-        vm.vmTracer = nil
+  # CTFS-M1: close the tracer on REPL exit
+  if graph.vm != nil:
+    let vm = PCtx(graph.vm)
+    if vm.vmTracer != nil:
+      let closeRes = closeVmTracer(cast[ptr VmTracer](vm.vmTracer))
+      if closeRes.isErr:
+        rawMessage(graph.config, warnUser,
+          "failed to close VM tracer: " & closeRes.error)
+      vm.vmTracer = nil
 
 proc commandScan(cache: IdentCache, config: ConfigRef) =
   var f = addFileExt(AbsoluteFile mainCommandArg(config), NimExt)

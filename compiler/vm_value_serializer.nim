@@ -10,10 +10,8 @@
 ## VM register value serialization for CodeTracer.
 ##
 ## Converts `TFullReg` values into `ValueRecord` objects suitable for
-## emission via the trace writer. Gated behind `-d:codetracerTracing`.
-
-when not defined(codetracerTracing):
-  {.error: "vm_value_serializer.nim requires -d:codetracerTracing".}
+## emission via the trace writer. CTFS-M1 update: compiles unconditionally
+## into `bin/nim`; runtime emission is gated by `--trace:<path>`.
 
 import vmdef, ast, renderer
 import codetracer_trace_types

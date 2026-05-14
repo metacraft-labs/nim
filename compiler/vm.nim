@@ -25,8 +25,9 @@ from semfold import leValueConv, ordinalValToString
 from evaltempl import evalTemplate
 from magicsys import getSysType
 
-when defined(codetracerTracing):
-  import vm_trace
+# CTFS-M1: vm_trace is always compiled in; per-run emission is gated by
+# the runtime --trace:<path> flag (and `c.vmTracer != nil` at each site).
+import vm_trace
 
 const
   traceCode = defined(nimVMDebug)
@@ -588,16 +589,14 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       let info = c.debug[pc]
       # other useful variables: c.loopIterations
       echo "$# [$#] $#" % [c.config$info, $instr.opcode, c.config.sourceLine(info)]
-    when defined(codetracerTracing):
-      if c.vmTracer != nil:
-        traceStep(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc])
+    if c.vmTracer != nil:
+      traceStep(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc])
     c.profiler.enter(c, tos)
     case instr.opcode
     of opcEof: return regs[ra]
     of opcRet:
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceReturn(cast[ptr VmTracer](c.vmTracer)[])
+      if c.vmTracer != nil:
+        traceReturn(cast[ptr VmTracer](c.vmTracer)[])
       let newPc = c.cleanUpOnReturn(tos)
       # Perform any cleanup action before returning
       if newPc < 0:
@@ -625,15 +624,13 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         regs[ra].intVal = regs[rb].intVal
       else:
         stackTrace(c, tos, pc, "opcAsgnInt: got " & $regs[rb].kind)
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+      if c.vmTracer != nil:
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcAsgnFloat:
       decodeB(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+      if c.vmTracer != nil:
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcCastFloatToInt32:
       let rb = instr.regB
       ensureKind(rkInt)
@@ -686,14 +683,12 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       regs[ra].node = node2
     of opcAsgnComplex:
       asgnComplex(regs[ra], regs[instr.regB])
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+      if c.vmTracer != nil:
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcFastAsgnComplex:
       fastAsgnComplex(regs[ra], regs[instr.regB])
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+      if c.vmTracer != nil:
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcAsgnRef:
       asgnRef(regs[ra], regs[instr.regB])
     of opcNodeToReg:
@@ -907,9 +902,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         else:
           let n = src[rc]
           regs[ra].node = n
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+      if c.vmTracer != nil:
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
     of opcLdObjAddr:
       # a = addr(b.c)
       decodeBC(rkNodeAddr)
@@ -939,9 +933,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       else:
         writeField(dest[shiftedRb], regs[rc])
         dest[shiftedRb].flags.incl nfSkipFieldChecking
-      when defined(codetracerTracing):
-        if c.vmTracer != nil:
-          traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[rc])
+      if c.vmTracer != nil:
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[rc])
     of opcWrStrIdx:
       decodeBC(rkNode)
       let idx = regs[rb].intVal.int
@@ -1470,9 +1463,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # logic as for loops:
         if procInfo.pc < pc: handleJmpBack()
         #echo "new pc ", newPc, " calling: ", prc.name.s
-        when defined(codetracerTracing):
-          if c.vmTracer != nil:
-            traceCall(cast[ptr VmTracer](c.vmTracer)[], prc.name.s, c.debug[pc])
+        if c.vmTracer != nil:
+          traceCall(cast[ptr VmTracer](c.vmTracer)[], prc.name.s, c.debug[pc])
         var newFrame = PStackFrame(prc: prc, comesFrom: pc, next: tos)
         newSeq(newFrame.slots, procInfo.usedRegisters+ord(isClosure))
         # setup slot for proc result:
@@ -2617,34 +2609,34 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
   # temporary storage:
   #for i in L..<maxSlots: tos.slots[i] = newNode(nkEmpty)
 
-  when defined(codetracerTracing):
-    # Set up per-call VM tracing for ideTraceExpand when cursor matches this macro call
-    var traceExpandActive = false
-    var savedVmTracer: pointer = nil
-    if g.config.ideCmd == ideTraceExpand and c.vmTracer == nil:
-      let callInfo = nOrig.info
-      let trackPos = g.config.traceExpandPosition
-      if callInfo.fileIndex == trackPos.fileIndex and
-         callInfo.line == trackPos.line:
-        let nimcache = getNimcacheDir(g.config)
-        createDir(nimcache)
-        let tracePath = string(nimcache / RelativeFile("macro_trace_" & sym.name.s & ".ct"))
-        let tracerRes = initVmTracer(tracePath, sym.name.s, g.config)
-        if tracerRes.isOk:
-          savedVmTracer = c.vmTracer
-          c.vmTracer = tracerRes.get()
-          traceExpandActive = true
-          g.config.traceExpandResult = tracePath
+  # CTFS-M1: per-call VM tracing for ideTraceExpand when cursor matches this
+  # macro call. Always compiled; the `ideCmd == ideTraceExpand` check makes it
+  # dormant unless the request is active.
+  var traceExpandActive = false
+  var savedVmTracer: pointer = nil
+  if g.config.ideCmd == ideTraceExpand and c.vmTracer == nil:
+    let callInfo = nOrig.info
+    let trackPos = g.config.traceExpandPosition
+    if callInfo.fileIndex == trackPos.fileIndex and
+       callInfo.line == trackPos.line:
+      let nimcache = getNimcacheDir(g.config)
+      createDir(nimcache)
+      let tracePath = string(nimcache / RelativeFile("macro_trace_" & sym.name.s & ".ct"))
+      let tracerRes = initVmTracer(tracePath, sym.name.s, g.config)
+      if tracerRes.isOk:
+        savedVmTracer = c.vmTracer
+        c.vmTracer = tracerRes.get()
+        traceExpandActive = true
+        g.config.traceExpandResult = tracePath
 
   result = rawExecute(c, start.pc, tos).regToNode
 
-  when defined(codetracerTracing):
-    # Tear down per-call tracing if we set it up
-    if traceExpandActive:
-      let tracer = cast[ptr VmTracer](c.vmTracer)
-      syncVmTracer(tracer)
-      discard closeVmTracer(tracer)
-      c.vmTracer = savedVmTracer
+  # Tear down per-call tracing if we set it up.
+  if traceExpandActive:
+    let tracer = cast[ptr VmTracer](c.vmTracer)
+    syncVmTracer(tracer)
+    discard closeVmTracer(tracer)
+    c.vmTracer = savedVmTracer
 
   if result.info.line < 0: result.info = nOrig.info
   if cyclicTree(result): globalError(c.config, n.info, "macro produced a cyclic tree")
