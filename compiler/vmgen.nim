@@ -1595,6 +1595,22 @@ proc procIdForRegSymTable(c: PCtx): ItemId {.inline.} =
   else:
     ItemId(module: 0, item: 0)
 
+proc registerGlobalWriteSym(c: PCtx; s: PSym) {.inline.} =
+  ## CTFS-M-TraceSites: record that the just-emitted final instruction
+  ## (which must be `opcWrDeref`) writes to the global binding `s`. The
+  ## runtime tracer looks up `globalSymByPc[pc]` when `opcWrDeref` fires
+  ## so it can surface the user-source binding name behind the
+  ## indirection through `c.globals`.
+  ##
+  ## Slot-based registration is not viable for globals because the
+  ## destination of the write is a *temp* node-address register loaded
+  ## by `opcLdGlobalAddr`; that temp is reused across globals. Keying on
+  ## the unique PC of the emitted `opcWrDeref` instruction avoids
+  ## aliasing.
+  if c.code.len == 0:
+    return
+  c.globalSymByPc[c.code.high] = s
+
 proc setSlot(c: PCtx; v: PSym) =
   # XXX generate type initialization here?
   if v.position == 0:
@@ -1725,6 +1741,10 @@ proc genAsgn(c: PCtx; le, ri: PNode; requiresCopy: bool) =
         c.gen(le, tmp, {gfNodeAddr})
         let val = c.genx(ri)
         c.preventFalseAlias(le, opcWrDeref, tmp, 0, val, isLdConst)
+        # CTFS-M-TraceSites: the last instruction emitted by
+        # preventFalseAlias is the `opcWrDeref` itself, so record the
+        # global PSym at that PC for the runtime tracer.
+        c.registerGlobalWriteSym(s)
         c.freeTemp(val)
     else:
       if s.kind == skForVar: c.setSlot s
@@ -1796,6 +1816,8 @@ proc genGlobalInit(c: PCtx; n: PNode; s: PSym) =
   if s.astdef != nil:
     let tmp = c.genx(s.astdef)
     c.genAdditionalCopy(n, opcWrDeref, dest, 0, tmp)
+    # CTFS-M-TraceSites: tag this global-init write with its PSym.
+    c.registerGlobalWriteSym(s)
     c.freeTemp(dest)
     c.freeTemp(tmp)
 
@@ -2068,6 +2090,8 @@ proc genVarSection(c: PCtx; n: PNode) =
           let tmp = c.genx(a[0], {gfNodeAddr})
           let val = c.genx(a[2])
           c.genAdditionalCopy(a[2], opcWrDeref, tmp, 0, val)
+          # CTFS-M-TraceSites: tag the explicit `var/let g = expr` write.
+          c.registerGlobalWriteSym(s)
           c.freeTemp(val)
           c.freeTemp(tmp)
         elif not importcCondVar(s) and not (s.typ.kind == tyProc and s.typ.callConv == ccClosure) and
@@ -2081,6 +2105,8 @@ proc genVarSection(c: PCtx; n: PNode) =
           let sa = getNullValue(c, s.typ, a.info, c.config)
           let val = c.genx(sa)
           c.genAdditionalCopy(sa, opcWrDeref, tmp, 0, val)
+          # CTFS-M-TraceSites: tag the implicit `var g: T` null-init write.
+          c.registerGlobalWriteSym(s)
           c.freeTemp(val)
           c.freeTemp(tmp)
       else:

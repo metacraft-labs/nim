@@ -768,11 +768,15 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
 
   var skip = false
   let pathId = tracer.ensurePath(fileIdx, skip)
-  # TF-M4: if the classifier said skip (or registration failed), drop any
-  # pending values along with the step so we don't accumulate phantom
-  # assignments anchored to no real source line.
+  # TF-M4: if the classifier said skip (or registration failed), drop the
+  # step itself so we don't anchor phantom events on filtered code.
+  # CTFS-M-TraceSites: but FLUSH any pending values onto the previous
+  # user-traced step before dropping — they were produced by traced
+  # user code and would otherwise be silently lost at the
+  # traced->filtered transition (cf. the symmetric flush in `traceCall`
+  # and `traceReturn`).
   if skip:
-    tracer.pendingValues.setLen(0)
+    flushPendingValuesAsStep(tracer)
     return
   let res = tracer.writer.registerStep(pathId, uint64(line),
                                        tracer.pendingValues)

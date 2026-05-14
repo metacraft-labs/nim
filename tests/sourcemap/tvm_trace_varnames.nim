@@ -104,8 +104,15 @@ proc main() =
   # --- (1, 2, 4) varname pool checks ----------------------------------------
   let varnameCount = rdr.varnameCount
   doAssert varnameCount > 0, "expected at least one varname (the values flushed)"
-  doAssert varnameCount < 20,
-    "expected < 20 varnames for this trivial program (pre-CTFS-M-Varnames " &
+  # CTFS-M-TraceSites broadened the set of opcodes that call traceAssignment
+  # (opcLdImmInt, opcAddImmInt, opcWrDeref, ...). This naturally registers
+  # additional source-level bindings the program defines (e.g. `typedLocal`
+  # via opcAddImmInt, the top-level `r` via opcWrDeref). The pool is still
+  # bounded by user-binding count + nimscript-prologue leakage — far below
+  # the 1.4k-3k pre-CTFS-M-Varnames synthetic count this assertion guards
+  # against.
+  doAssert varnameCount < 50,
+    "expected < 50 varnames for this trivial program (pre-CTFS-M-Varnames " &
     "this would be 1.4k-3k), got " & $varnameCount
 
   var names: seq[string] = @[]

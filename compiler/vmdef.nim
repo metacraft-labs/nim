@@ -302,6 +302,22 @@ type
     # the per-instruction emit hot path. The lookup is performed only when
     # tracing is active.
     regSymTable*: Table[(ItemId, int), PSym]
+    # CTFS-M-TraceSites: side table mapping a PC (offset into c.code) of a
+    # write-through-pointer instruction (`opcWrDeref`) to the user-source
+    # global binding whose `c.globals[s.position-1]` is being mutated.
+    #
+    # Slot-based registration (regSymTable above) does not work for globals
+    # because the destination of `opcWrDeref` is a temp slot loaded with an
+    # `rkNodeAddr` by a preceding `opcLdGlobalAddr` — the temp slot is
+    # reused across globals and is not associated with any single PSym.
+    # By keying on the PC of the actual write we side-step slot reuse.
+    #
+    # vmgen populates this exactly once per emitted global-write opcWrDeref;
+    # `opcWrDeref` for non-global indirect writes (e.g. `var^.b = ...`)
+    # leaves no entry and the runtime tracer skips them. The table size is
+    # bounded by the number of static module-level/global writes in the
+    # program.
+    globalSymByPc*: Table[int, PSym]
 
   PStackFrame* = ref TStackFrame
   TStackFrame* {.acyclic.} = object
