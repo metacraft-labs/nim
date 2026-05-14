@@ -1143,10 +1143,17 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
     let siteInfo = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].site
 
     # (toMsgFilename(g.config, n.info), n.info.line.int)
-    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(siteInfo: siteInfo, expansionId: g.config.macroSourcemap.expansionId, entryExpandedLine: -1)
-    if siteInfo[0].endsWith("/expanded.nim"): # eventually? TODO g.config.macroSourcemap.expandedFileId:
+    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(
+      siteInfo: siteInfo,
+      expansionId: g.config.macroSourcemap.expansionId,
+      entryExpandedLine: -1,
+      entryExpandedCol: -1)
+    # §2-M1: replaced hard-coded `endsWith("/expanded.nim")` with a
+    # comparison against the recorded expansion artifact filename.
+    if siteInfo[0] == g.config.macroSourcemap.expandedFilename:
       if g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine == -1:
         g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine = info.line.int
+        g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedCol = 0
 
     # TODO is it ok to not do it? for now don't do it here
     # it overwrites more precise locations
@@ -1521,6 +1528,13 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
   # echo "gsub ", n.kind, " ", n.info
   var
     a: TContext = default(TContext)
+  # §2-M1: capture the renderer's running column counter and line
+  # number *before* this node is emitted. After the `case n.kind`
+  # block below runs, `g.col` has advanced past the just-rendered
+  # tokens, so we'd record the position *after* the expression rather
+  # than at its start. Snapshot here for the populate site at the end.
+  let startCol = g.col
+  let startLine = g.line
   if shouldRenderComment(g, n): pushCom(g, n)
   case n.kind                 # atoms:
   of nkTripleStrLit: put(g, tkTripleStrLit, atom(g, n))
@@ -2265,10 +2279,37 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
     # echo "node ", n, " ", g.fileIndex.int, " ", info.line, " ", n.info.line
     let siteInfo = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].site
     let fromMacro = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].fromMacro
-    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(siteInfo: siteInfo, expansionId: g.config.macroSourcemap.expansionId, entryExpandedLine: -1)
-    if siteInfo[0].endsWith("/expanded.nim"): # eventually? TODO g.config.macroSourcemap.expandedFileId:
+    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(
+      siteInfo: siteInfo,
+      expansionId: g.config.macroSourcemap.expansionId,
+      entryExpandedLine: -1,
+      entryExpandedCol: -1)
+    # §2-M1: also record an entry in the column-aware `expressionLocations`
+    # table at the position where this sub-expression *starts*. `g.col`
+    # was advanced past the just-emitted tokens by the `case` above; we
+    # use the `startCol`/`startLine` snapshot captured at gsub entry.
+    let exprKey = (startLine.int, startCol)
+    if not g.config.macroSourcemap.expressionLocations.hasKey(exprKey):
+      g.config.macroSourcemap.expressionLocations[exprKey] = ExpansionInfo(
+        siteInfo: siteInfo,
+        expansionId: g.config.macroSourcemap.expansionId,
+        entryExpandedLine: -1,
+        entryExpandedCol: -1)
+    # §2-M1: previously a hard-coded `siteInfo[0].endsWith("/expanded.nim")`
+    # check. Replaced with a comparison against the recorded
+    # expansion artifact filename, which is the canonical path the
+    # renderer treats as the `expanded.nim` file index.
+    if siteInfo[0] == g.config.macroSourcemap.expandedFilename:
       if g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine == -1:
         g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine = info.line.int
+        g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedCol = startCol
+      # also chain at the expression-level table when the parent layer
+      # has an entry there
+      let parentKey = (siteInfo[1], siteInfo[2])
+      if g.config.macroSourcemap.expressionLocations.hasKey(parentKey) and
+         g.config.macroSourcemap.expressionLocations[parentKey].entryExpandedLine == -1:
+        g.config.macroSourcemap.expressionLocations[parentKey].entryExpandedLine = info.line.int
+        g.config.macroSourcemap.expressionLocations[parentKey].entryExpandedCol = startCol
 
     let nodePath = toMsgFilename(g.config, n.info)
     let isNodeInfoFromDefinition = g.config.macroSourcemap.definitionLocations.hasKey(nodePath) and n.info.line.int in g.config.macroSourcemap.definitionLocations[nodePath]

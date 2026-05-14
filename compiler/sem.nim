@@ -516,8 +516,9 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
         path: $filename,
         firstLine: c.config.macroSourcemap.startLine.int - 1,
         lastLine: -1,
-        site: (toMsgFilename(c.config, call.info), call.info.line.int),
-        definition: (toMsgFilename(c.config, s.info), s.info.line.int),
+        # §2-M1: site/definition are now (file, line, col) triples.
+        site: (toMsgFilename(c.config, call.info), call.info.line.int, call.info.col.int),
+        definition: (toMsgFilename(c.config, s.info), s.info.line.int, s.info.col.int),
         name: s.name.s,
         fromMacro: s.ast.kind == nkMacroDef))
 

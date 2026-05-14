@@ -350,6 +350,14 @@ type
     expandedFileId*: int
     expandedFilename*: string
     locations*: OrderedTable[int, ExpansionInfo]
+    # §2-M1 (CT-MacroSourcemap): parallel column-aware index keyed by
+    # `(line, col)` of the position inside `expanded.nim`. The
+    # statement-level `locations` table above is kept intact for the
+    # existing layer-bridging logic and the M5 `bridgeExpansionInfo`
+    # consumer; this new table records sub-expression positions so the
+    # GUI can highlight the specific sub-expression a program counter
+    # currently points at.
+    expressionLocations*: OrderedTable[(int, int), ExpansionInfo]
     # {path: {line top level: line in expanded.nim}}
     expandedEntries*: Table[string, Table[int, int]]
     topLevelLines*: Table[int, (string, int)]
@@ -372,16 +380,23 @@ type
     path*: string
     firstLine*: int
     lastLine*: int
-    site*: (string, int) #TLineInfo
-    definition*: (string, int) #TLineInfo
+    # §2-M1: site/definition are file/line/col triples. Column is
+    # 0-based, consistent with the `TLineInfo.col` convention.
+    site*: (string, int, int) #TLineInfo
+    definition*: (string, int, int) #TLineInfo
     # topLevel*: (string, int)
     name*: string # empty if not definition
     fromMacro*: bool
 
   ExpansionInfo* = object
-    siteInfo*: (string, int)
+    # §2-M1: siteInfo carries (file, line, col). `entryExpandedCol`
+    # accompanies `entryExpandedLine` to enable expression-level
+    # chaining between expansion layers. Both default to -1 meaning
+    # "no chain link".
+    siteInfo*: (string, int, int)
     expansionId*: int
     entryExpandedLine*: int
+    entryExpandedCol*: int
 
 
   ConfigRef* {.acyclic.} = ref object ## every global configuration

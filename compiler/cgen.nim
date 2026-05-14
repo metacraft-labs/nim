@@ -2751,13 +2751,57 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
       config.macroSourcemap.expandedEntries[location[0]] = initTable[int, int]()
     config.macroSourcemap.expandedEntries[location[0]][location[1]] = expandedLine
 
-  let finalJsonNode = %* {
-    "expansions": %config.macroSourcemap.expansions,
-    "locations": %config.macroSourcemap.locations,
-    "expandedEntries": %config.macroSourcemap.expandedEntries,
-    "expandedFilename": %config.macroSourcemap.expandedFilename,
-    "topLevelLines": %config.macroSourcemap.topLevelLines
-  }
+  # §2-M1: emit the macro sourcemap with explicit `{file, line, col}`
+  # objects for site/definition, `siteCol`/`entryExpandedCol` fields
+  # on each location entry, and a new `expressionLocations` map keyed
+  # by `"<line>:<col>"` carrying the column-aware sub-expression
+  # positions the renderer captured. A top-level `"schema": 2` field
+  # marks the new schema for downstream consumers.
+  proc posObj(file: string; line, col: int): JsonNode =
+    result = newJObject()
+    result["file"] = %file
+    result["line"] = %line
+    result["col"] = %col
+
+  proc expansionObj(e: Expansion): JsonNode =
+    result = newJObject()
+    result["path"] = %e.path
+    result["firstLine"] = %e.firstLine
+    result["lastLine"] = %e.lastLine
+    result["site"] = posObj(e.site[0], e.site[1], e.site[2])
+    result["definition"] = posObj(e.definition[0], e.definition[1], e.definition[2])
+    result["name"] = %e.name
+    result["fromMacro"] = %e.fromMacro
+
+  proc expansionInfoObj(ei: ExpansionInfo): JsonNode =
+    result = newJObject()
+    result["siteFile"] = %ei.siteInfo[0]
+    result["siteLine"] = %ei.siteInfo[1]
+    result["siteCol"] = %ei.siteInfo[2]
+    result["expansionId"] = %ei.expansionId
+    result["entryExpandedLine"] = %ei.entryExpandedLine
+    result["entryExpandedCol"] = %ei.entryExpandedCol
+
+  let expansionsJ = newJArray()
+  for e in config.macroSourcemap.expansions:
+    expansionsJ.add expansionObj(e)
+
+  let locationsJ = newJObject()
+  for line, ei in config.macroSourcemap.locations:
+    locationsJ[$line] = expansionInfoObj(ei)
+
+  let expressionLocationsJ = newJObject()
+  for key, ei in config.macroSourcemap.expressionLocations:
+    expressionLocationsJ[$key[0] & ":" & $key[1]] = expansionInfoObj(ei)
+
+  let finalJsonNode = newJObject()
+  finalJsonNode["schema"] = %2
+  finalJsonNode["expansions"] = expansionsJ
+  finalJsonNode["locations"] = locationsJ
+  finalJsonNode["expressionLocations"] = expressionLocationsJ
+  finalJsonNode["expandedEntries"] = %config.macroSourcemap.expandedEntries
+  finalJsonNode["expandedFilename"] = %config.macroSourcemap.expandedFilename
+  finalJsonNode["topLevelLines"] = %config.macroSourcemap.topLevelLines
   writeFile(outDir / RelativeFile("macro_sourcemap_" & name.string & ".json"), pretty(finalJsonNode))
 
   if config.macroSourcemap.expandedFilename.len > 0:
