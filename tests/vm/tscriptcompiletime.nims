@@ -1,5 +1,6 @@
 discard """
   cmd: "nim e $file"
+  targets: "e"
 """
 
 import mscriptcompiletime

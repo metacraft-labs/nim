@@ -2704,7 +2704,16 @@ proc evalConstExprAux(module: PSym; idgen: IdGenerator;
   var tos = PStackFrame(prc: prc, comesFrom: 0, next: nil)
   newSeq(tos.slots, c.prc.regInfo.len)
   #for i in 0..<c.prc.regInfo.len: tos.slots[i] = newNode(nkEmpty)
+  # CTFS-M-CompileTimeFilter: gate the trace tracer during compile-time
+  # evaluation. Calls to this proc dispatch `static:` blocks,
+  # `{.compileTime.}` initializers, `const` expressions, and `emOptimize`
+  # folding — none of which are runtime under `nim e`. The matching
+  # `leaveCompileTime` after `rawExecute` keeps the depth balanced.
+  if c.vmTracer != nil:
+    enterCompileTime(cast[ptr VmTracer](c.vmTracer)[])
   result = rawExecute(c, start, tos).regToNode
+  if c.vmTracer != nil:
+    leaveCompileTime(cast[ptr VmTracer](c.vmTracer)[])
   if result.info.col < 0: result.info = n.info
   c.mode = oldMode
 
@@ -2826,6 +2835,16 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
   # temporary storage:
   #for i in L..<maxSlots: tos.slots[i] = newNode(nkEmpty)
 
+  # CTFS-M-CompileTimeFilter: mark the user's runtime tracer (if any) as
+  # in-compile-time *before* the ideTraceExpand swap below. The
+  # ideTraceExpand path installs a fresh per-macro-expansion tracer that
+  # SHOULD record the macro body (that's its whole purpose), so we
+  # deliberately leave its `compileTimeDepth` at 0 — the swap-out
+  # restores the original tracer after rawExecute, and the matching
+  # `leaveCompileTime` brings the runtime tracer's depth back to zero.
+  if c.vmTracer != nil:
+    enterCompileTime(cast[ptr VmTracer](c.vmTracer)[])
+
   # CTFS-M1: per-call VM tracing for ideTraceExpand when cursor matches this
   # macro call. Always compiled; the `ideCmd == ideTraceExpand` check makes it
   # dormant unless the request is active.
@@ -2854,6 +2873,12 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
     syncVmTracer(tracer)
     discard closeVmTracer(tracer)
     c.vmTracer = savedVmTracer
+
+  # CTFS-M-CompileTimeFilter: balance the enterCompileTime above. We use
+  # the post-swap `c.vmTracer` because the ideTraceExpand swap restored
+  # the original pointer — i.e. it's the same tracer we incremented.
+  if c.vmTracer != nil:
+    leaveCompileTime(cast[ptr VmTracer](c.vmTracer)[])
 
   if result.info.line < 0: result.info = nOrig.info
   if cyclicTree(result): globalError(c.config, n.info, "macro produced a cyclic tree")

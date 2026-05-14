@@ -3,53 +3,29 @@
     "program": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
     "args": [],
     "workdir": "<workdir>",
-    "recorder": ""
+    "recorder": "",
+    "trace_filter": {
+      "filters": [
+        {
+          "path": "<inline:builtin-default>",
+          "sha256": "85fe0bdb13b50c5b8dc28e02aefca13b635e1f084bf747e193374c001104624f"
+        }
+      ]
+    }
   },
   "paths": [
     "<workdir>/tests/sourcemap/tctfs_exception_demo.nims"
   ],
   "functions": [],
-  "varnames": [
-    "nimvm",
-    "result",
-    "num`gensym3",
-    "tmp",
-    "num",
-    "next",
-    "originNum",
-    "index",
-    "i`gensym1",
-    "i",
-    "programResult",
-    "mode",
-    "packageName",
-    "version",
-    "author",
-    "description",
-    "license",
-    "srcDir",
-    "binDir",
-    "backend",
-    "skipDirs",
-    "skipFiles",
-    "skipExt",
-    "installDirs",
-    "installFiles",
-    "installExt",
-    "bin",
-    "requiresData"
-  ],
+  "varnames": [],
   "types": [
-    "int",
-    "node",
-    "uint",
     "IndexDefect"
   ],
   "counts": {
     "paths": 1,
     "functions": 0,
-    "varnames": 28,
-    "types": 4,
+    "varnames": 0,
+    "types": 1,
     "steps": 8,
     "calls": 0,
     "values": 8,
@@ -90,7 +66,7 @@
       "line": 15,
       "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
       "step_kind": "sekRaise",
-      "exception_type_id": 3,
+      "exception_type_id": 0,
       "exception_message": "",
       "vars": []
     },
@@ -110,7 +86,7 @@
       "line": 16,
       "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
       "step_kind": "sekCatch",
-      "catch_exception_type_id": 3,
+      "catch_exception_type_id": 0,
       "vars": []
     },
     {

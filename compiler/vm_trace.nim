@@ -239,6 +239,44 @@ type
     depth*: int
     config*: ConfigRef
     filter*: Classifier                 ## TF-M4: cross-language trace filter
+    compileTimeDepth*: int
+      ## CTFS-M-CompileTimeFilter: number of nested compile-time-evaluation
+      ## scopes currently active. The Nim VM is reused for both runtime
+      ## script execution (`nim e` script body, mode `emRepl`) and
+      ## compile-time evaluation (`static:` blocks, `{.compileTime.}` proc
+      ## bodies, macro/template expansion — modes `emStaticStmt`,
+      ## `emStaticExpr`, `emConst`, `emOptimize`). The trace is meant to
+      ## describe runtime behaviour only, so emission must be suppressed
+      ## while this counter is positive. The counter is incremented by
+      ## `enterCompileTime` (called from vm.nim immediately before
+      ## `rawExecute` for compile-time eval) and decremented by
+      ## `leaveCompileTime` immediately after. Using a counter rather than
+      ## a bool defends against any future nesting of compile-time scopes
+      ## without changing the hook-side check.
+
+proc enterCompileTime*(tracer: var VmTracer) {.inline.} =
+  ## CTFS-M-CompileTimeFilter: mark the tracer as currently executing a
+  ## compile-time evaluation scope. Called from vm.nim immediately before
+  ## any `rawExecute` invocation whose `c.mode` is not `emRepl`
+  ## (i.e. evalConstExprAux for static:/const/{.compileTime.} init, and
+  ## evalMacroCall for macro bodies). Paired one-for-one with
+  ## `leaveCompileTime`.
+  inc tracer.compileTimeDepth
+
+proc leaveCompileTime*(tracer: var VmTracer) {.inline.} =
+  ## CTFS-M-CompileTimeFilter: pop the compile-time scope. Defends
+  ## against caller-side imbalance by clamping at zero rather than
+  ## decrementing below it — silent underflow would falsely re-enable
+  ## trace emission in a subsequent compile-time scope.
+  if tracer.compileTimeDepth > 0:
+    dec tracer.compileTimeDepth
+
+proc inCompileTimeContext*(tracer: VmTracer): bool {.inline.} =
+  ## CTFS-M-CompileTimeFilter: true when the VM is currently executing
+  ## code that runs at compile time. Each trace hook calls this first and
+  ## short-circuits when the answer is true, so the trace contains only
+  ## the runtime behaviour of the program under trace.
+  tracer.compileTimeDepth > 0
 
 proc isBareBasename(p: string): bool {.inline.} =
   ## True when `p` has no path separators — i.e. it's a bare basename
@@ -856,6 +894,7 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     depth: 0,
     config: config,
     filter: composed.classifier,
+    compileTimeDepth: 0,
   )
 
   # TF-M5-Prep-2 (Blocker 2): hand the composed provenance chain to
@@ -891,6 +930,12 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   ## Emit a Step event if the source line changed since last step.
   ## This avoids flooding on instructions that map to the same line.
   ## Any pending values accumulated since the last step are attached.
+  # CTFS-M-CompileTimeFilter: drop all step emission while the VM is
+  # inside a compile-time evaluation scope (static:, {.compileTime.}
+  # proc bodies, macro/template body execution). The trace records
+  # runtime behaviour only.
+  if inCompileTimeContext(tracer):
+    return
   let fileIdx = int32(info.fileIndex)
   let line = info.line
 
@@ -940,6 +985,11 @@ proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo) =
   ## filter decision: those values were assigned in code we *did* trace
   ## and would otherwise be silently dropped at the unobservable
   ## entry-to-filtered-frame transition.
+  # CTFS-M-CompileTimeFilter: suppress Call events emitted from
+  # compile-time evaluation. Symmetrically suppressed in traceReturn so
+  # tracer.depth stays balanced.
+  if inCompileTimeContext(tracer):
+    return
   flushPendingValuesAsStep(tracer)
   var skip = false
   let funcId = tracer.ensureFunctionForSym(prc, skip)
@@ -957,6 +1007,10 @@ proc traceReturn*(tracer: var VmTracer, prc: PSym) =
   ## function via the same `ensureFunctionForSym` cache; on a filter
   ## skip we emit nothing and leave `tracer.depth` unchanged so it
   ## stays balanced with the suppressed entry.
+  # CTFS-M-CompileTimeFilter: suppress Return events that match a
+  # suppressed Call. Same gate as traceCall — same effect on depth.
+  if inCompileTimeContext(tracer):
+    return
   flushPendingValuesAsStep(tracer)
   var skip = false
   discard tracer.ensureFunctionForSym(prc, skip)
@@ -993,6 +1047,12 @@ proc traceRaise*(tracer: var VmTracer, info: TLineInfo,
   ## preceding `traceStep` call would have early-returned, so no GLI
   ## context is available. Treat this as a tracer-internal short-circuit:
   ## skip the marker too rather than write an event with stale GLI.
+  # CTFS-M-CompileTimeFilter: a raise inside compile-time code
+  # (e.g. a doAssert in a macro body that fires during expansion) is
+  # not a runtime event. The matching traceStep was suppressed, so
+  # emitting sekRaise would leave a marker with no anchoring step.
+  if inCompileTimeContext(tracer):
+    return
   let fileIdx = int32(info.fileIndex)
   if fileIdx < 0 or info.line == 0:
     return
@@ -1033,6 +1093,10 @@ proc traceCatch*(tracer: var VmTracer, info: TLineInfo,
   ## A stepping debugger walking the execution-order event sequence
   ## therefore sees: …raise(15) → catch(16) → body(17)… , in increasing
   ## source order, with no backwards jumps.
+  # CTFS-M-CompileTimeFilter: same rationale as traceRaise — a catch
+  # inside compile-time code has no runtime story to tell.
+  if inCompileTimeContext(tracer):
+    return
   let fileIdx = int32(info.fileIndex)
   if fileIdx < 0 or info.line == 0:
     return
@@ -1074,6 +1138,13 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
   ## assignments + one CBOR encode + one append to `pendingValues`. The
   ## first assignment to each binding additionally pays a single
   ## `registerVarname` call against the writer's interning table.
+  # CTFS-M-CompileTimeFilter: drop assignment emission during
+  # compile-time evaluation. Without this, register writes inside
+  # `static:` blocks / macro bodies / {.compileTime.} initializers
+  # would queue up in `pendingValues` and then leak onto the next
+  # runtime step via the deferred flush path in `traceStep`.
+  if inCompileTimeContext(tracer):
+    return
   if sym == nil:
     return
 

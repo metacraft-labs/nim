@@ -1,9 +1,11 @@
 discard """
 cmd: "nim e $file"
+targets: "e"
 output: '''
 foobar
 nothing
 hallo
+'''
 """
 
 # this test ensures that the mode is resetted correctly to repr

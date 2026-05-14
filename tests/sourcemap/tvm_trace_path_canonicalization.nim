@@ -183,11 +183,24 @@ proc main() =
   # from a *parent* directory so the basename form really resolves
   # against a wrong cwd.
   block:
+    # CTFS-M-CompileTimeFilter (2026-05-15): the script now also issues
+    # a runtime `echo`. Pre-CTFS-M-CompileTimeFilter the compile-time
+    # macro body itself was traced — that emitted at least one step
+    # against the script path, which is what populated `paths[]` and
+    # gave us the basename-canonicalization probe to test. After the
+    # compile-time filter, macro bodies are silently skipped, so a
+    # script consisting only of `chkBar()` produces an empty trace
+    # (the trace records runtime behaviour only). Adding a runtime
+    # echo gives the path classifier one real user-traceable step,
+    # which is enough to drive the TF-M4d code path on the script's
+    # basename while leaving the macro's pseudo-path provenance
+    # behaviour observable through the basename probe.
     const macroScript = """
 import mhelper_const
 macro chkBar =
   doAssert constBar == 2
 chkBar()
+echo "case4-runtime"
 """
     const macroHelper = """
 const constBar* = 2
