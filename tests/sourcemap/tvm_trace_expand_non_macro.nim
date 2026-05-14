@@ -28,17 +28,10 @@ proc main() =
   let sourceFile = buildDir / "test_non_macro.nim"
   writeFile(sourceFile, testSource)
 
-  # Prefer nimsuggest_trace (built with -d:codetracerTracing), fall back to nimsuggest
-  let nimsuggestTrace = nim.parentDir / "nimsuggest_trace"
-  let nimsuggestPlain = nim.parentDir / "nimsuggest"
-  let nimsuggestExe =
-    if fileExists(nimsuggestTrace): nimsuggestTrace
-    elif fileExists(nimsuggestPlain): nimsuggestPlain
-    else:
-      removeDir(buildDir)
-      echo "SKIP: no nimsuggest binary found at ", nimsuggestTrace, " or ", nimsuggestPlain
-      quit(0)
-      ""
+  # CTFS-M1: ideTraceExpand is available in the regular `nimsuggest` binary —
+  # no separate `nimsuggest_trace` build is needed.
+  let nimsuggestExe = nim.parentDir / "nimsuggest"
+  doAssert fileExists(nimsuggestExe), "nimsuggest binary not found at: " & nimsuggestExe
 
   # Point traceExpand at line 1: `let x = 42` — not a macro call
   let stdinInput = "traceExpand " & sourceFile & ":1:0\nquit\n"
@@ -55,11 +48,6 @@ proc main() =
     if "macro_trace_" in line and ".ct" in line:
       foundTrace = true
       break
-
-  if "unknown command" in output.toLowerAscii():
-    echo "SKIP: traceExpand not recognized (needs -d:codetracerTracing)"
-    removeDir(buildDir)
-    quit(0)
 
   doAssert not foundTrace,
     "expected no trace file for non-macro position, but got a .ct path in output:\n" & output

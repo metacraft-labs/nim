@@ -43,19 +43,12 @@ proc runTraceTest(nim, scriptContent, testName: string): tuple[output: string, e
   let traceExists = fileExists(traceFile)
   (output, exitCode, traceExists)
 
-proc findNimTrace(): string =
-  ## Find the trace-enabled compiler (nim_trace) next to the current compiler.
-  ## Returns empty string if not found.
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1: the VM trace emitter is unconditional in `bin/nim`; no
+  # separate `nim_trace` binary exists. Drive `--trace:` via the same
+  # compiler used to build this test.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
   createDir(buildDir)
 
   # ---- Test 1: Script with syntax error ----

@@ -7,7 +7,7 @@ discard """
 ## CTFS structure, verifying internal file entries, event data presence,
 ## and expected program output.
 
-import std/[os, osproc, assertions, strutils]
+import std/[os, osproc, assertions, strutils, tables]
 
 const
   testsDir = currentSourcePath().parentDir
@@ -46,19 +46,13 @@ proc base40Decode(val: uint64): string =
   for i in 0 .. lastNonZero:
     result.add(chars[i])
 
-proc findNimTrace(): string =
-  ## Find the trace-enabled compiler (nim_trace) next to the current compiler.
-  ## Returns empty string if not found.
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1 made the VM trace emitter unconditional in `bin/nim` — the
+  # standalone `nim_trace` binary no longer exists. The compiler used to
+  # compile this test (`getCurrentCompilerExe()`) is the same binary we
+  # invoke with `--trace:` at runtime.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
   createDir(buildDir)
   let scriptFile = buildDir / "test_script.nims"
   let traceFile = buildDir / "test_trace.ct"
@@ -79,9 +73,9 @@ proc main() =
   doAssert data[0] == '\xC0' and data[1] == '\xDE' and data[2] == '\x72' and
            data[3] == '\xAC' and data[4] == '\xE2', "not a valid CTFS file"
 
-  # 2. Verify version
+  # 2. Verify version (CTFS v2..v4 all accepted)
   let version = uint8(data[5])
-  doAssert version == 3 or version == 2, "unexpected CTFS version: " & $version
+  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
 
   # 3. Verify block size and max entries
   let blockSize = readLE32(data, 8)
@@ -89,8 +83,14 @@ proc main() =
   doAssert blockSize >= 64, "invalid block size: " & $blockSize
   doAssert maxRootEntries > 0, "zero max root entries"
 
-  # 4. Verify file entries exist and have expected names
+  # 4. Verify file entries exist and have expected names.
+  #    The CTFS container carries different internal-file layouts depending
+  #    on which writer the compiler links: the v3 single-stream layout (one
+  #    big `events.log` + sidecar `events.fmt` + JSON meta) or the v4
+  #    multi-stream layout (per-event-kind `.dat`/`.off` pairs + `meta.dat`).
+  #    Accept either.
   var fileNames: seq[string]
+  var sizeByName: Table[string, uint64]
   for i in 0 ..< int(maxRootEntries):
     let off = 16 + i * 24
     if off + 24 > data.len:
@@ -100,20 +100,32 @@ proc main() =
     let nameEnc = readLE64(data, off + 16)
     if nameEnc == 0 and size == 0 and mapBlock == 0:
       break
-    fileNames.add(base40Decode(nameEnc))
+    let nm = base40Decode(nameEnc)
+    fileNames.add(nm)
+    sizeByName[nm] = size
 
-  doAssert fileNames.len >= 4, "expected at least 4 internal files, got " &
+  doAssert fileNames.len >= 3, "expected at least 3 internal files, got " &
     $fileNames.len & " (" & fileNames.join(", ") & ")"
-  doAssert "events.log" in fileNames, "events.log missing"
-  doAssert "events.fmt" in fileNames, "events.fmt missing"
-  doAssert "meta.json" in fileNames, "meta.json missing"
-  doAssert "paths.json" in fileNames, "paths.json missing"
 
-  # 5. Verify events.log has non-zero size
-  let eventsLogSize = readLE64(data, 16)
-  doAssert eventsLogSize > 0, "events.log has zero size"
+  if "events.log" in fileNames:
+    # v3 single-stream layout
+    doAssert "meta.json" in fileNames,
+      "v3 layout missing meta.json: " & fileNames.join(", ")
+    doAssert "paths.json" in fileNames,
+      "v3 layout missing paths.json: " & fileNames.join(", ")
+    doAssert sizeByName.getOrDefault("events.log", 0'u64) > 0,
+      "events.log is empty — no events emitted"
+  else:
+    # v4 multi-stream layout: require the core streams
+    for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat"]:
+      doAssert required in fileNames,
+        "v4 layout missing stream '" & required & "': " & fileNames.join(", ")
+    doAssert sizeByName.getOrDefault("steps.dat", 0'u64) > 0,
+      "steps.dat is empty — no Step events emitted"
+    doAssert sizeByName.getOrDefault("calls.dat", 0'u64) > 0,
+      "calls.dat is empty — no Call events emitted for add()"
 
-  # 6. Verify trace file is non-trivial for a function call + echo
+  # 5. Verify trace file is non-trivial for a function call + echo
   doAssert data.len > 128, "trace file suspiciously small: " & $data.len
 
   removeDir(buildDir)

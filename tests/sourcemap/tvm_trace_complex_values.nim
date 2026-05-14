@@ -33,17 +33,12 @@ let arr = @[10, 20, 30]
 let nested = @[@[1, 2], @[3, 4]]
 """
 
-proc findNimTrace(): string =
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1: the VM trace emitter is unconditional in `bin/nim`; no
+  # separate `nim_trace` binary exists. Drive `--trace:` via the same
+  # compiler used to build this test.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
 
   createDir(buildDir)
   let scriptFile = buildDir / "test_complex_values.nims"

@@ -1109,10 +1109,11 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
       conf.m.trackPosAttached = false
     else:
       conf.m.trackPos = default(TLineInfo)
-      when defined(codetracerTracing):
-        if cmd == ideTraceExpand:
-          conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
-          conf.traceExpandResult = ""
+      # CTFS-M1: the VM trace emitter is unconditional in the compiler;
+      # ideTraceExpand is therefore always available — no compile-time gate.
+      if cmd == ideTraceExpand:
+        conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
+        conf.traceExpandResult = ""
       graph.recompilePartially(fileIndex)
 
   case cmd
@@ -1288,33 +1289,32 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.markDirty fileIndex
     graph.markClientsDirty fileIndex
   of ideTraceExpand:
-    when defined(codetracerTracing):
-      if conf.traceExpandResult == "":
-        # traceExpandPosition was not set during the partial recompile above
-        # (e.g. the file was already compiled). Set it now and recompile.
-        conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
-        conf.traceExpandResult = ""
-
-        graph.markDirty fileIndex
-        graph.markClientsDirty fileIndex
-        graph.recompilePartially()
-
-      var suggest = Suggest()
-      suggest.section = ideTraceExpand
-      suggest.version = 3
-      suggest.line = line
-      suggest.column = col
-      suggest.doc = conf.traceExpandResult
-      suggestResult(graph.config, suggest)
-
-      # Reset for next call
-      conf.traceExpandPosition = default(TLineInfo)
+    # CTFS-M1: ideTraceExpand is always available (no `-d:codetracerTracing`
+    # gate) — the VM trace emitter is unconditional in the compiler.
+    if conf.traceExpandResult == "":
+      # traceExpandPosition was not set during the partial recompile above
+      # (e.g. the file was already compiled). Set it now and recompile.
+      conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
       conf.traceExpandResult = ""
 
       graph.markDirty fileIndex
       graph.markClientsDirty fileIndex
-    else:
-      discard
+      graph.recompilePartially()
+
+    var suggest = Suggest()
+    suggest.section = ideTraceExpand
+    suggest.version = 3
+    suggest.line = line
+    suggest.column = col
+    suggest.doc = conf.traceExpandResult
+    suggestResult(graph.config, suggest)
+
+    # Reset for next call
+    conf.traceExpandPosition = default(TLineInfo)
+    conf.traceExpandResult = ""
+
+    graph.markDirty fileIndex
+    graph.markClientsDirty fileIndex
   of ideInlayHints:
     myLog fmt "Executing inlayHints"
     var endLine = 0

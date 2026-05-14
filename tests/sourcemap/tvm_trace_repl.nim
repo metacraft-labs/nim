@@ -44,19 +44,12 @@ proc base40Decode(val: uint64): string =
   for i in 0 .. lastNonZero:
     result.add(chars[i])
 
-proc findNimTrace(): string =
-  ## Find the trace-enabled compiler (nim_trace) next to the current compiler.
-  ## Returns empty string if not found.
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1: the VM trace emitter is unconditional in `bin/nim`; no
+  # separate `nim_trace` binary exists. Drive `--trace:` via the same
+  # compiler used to build this test.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
   createDir(buildDir)
   let traceFile = buildDir / "repl_trace.ct"
 
@@ -98,18 +91,20 @@ proc main() =
 
   # 2. Verify version
   let version = uint8(data[5])
-  doAssert version == 3 or version == 2, "unexpected CTFS version: " & $version
+  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
 
   # 3. Verify block size is reasonable
   let blockSize = readLE32(data, 8)
   doAssert blockSize >= 64 and blockSize <= 65536,
     "unreasonable block size: " & $blockSize
 
-  # 4. Verify events.log (first file entry) has non-zero size
-  let eventsLogSize = readLE64(data, 16)
-  doAssert eventsLogSize > 0, "events.log has zero size — no trace events recorded"
+  # 4. Verify the first file entry has non-zero size — some events must have
+  #    been recorded by the REPL (`let x = 1+2; echo x`).
+  let firstEntrySize = readLE64(data, 16)
+  doAssert firstEntrySize > 0,
+    "first stream entry has zero size — no trace events recorded"
 
-  # 5. Verify file entries exist (at minimum events.log must be present)
+  # 5. Verify file entries exist.
   let maxRootEntries = readLE32(data, 12)
   var fileCount = 0
   var foundNames: seq[string]
@@ -125,15 +120,15 @@ proc main() =
     fileCount += 1
     foundNames.add(base40Decode(nameEnc))
 
-  doAssert fileCount >= 1, "expected at least 1 internal file (events.log), got " &
+  doAssert fileCount >= 1, "expected at least 1 internal file, got " &
     $fileCount & " (" & foundNames.join(", ") & ")"
 
-  # 6. Verify events.log is present
-  doAssert "events.log" in foundNames, "events.log missing from CTFS entries"
-
-  # Note: In REPL mode, metadata files (events.fmt, meta.json, paths.json)
-  # may not be written due to a known issue with TraceWriter.close() in
-  # the interactive code path. We only require events.log here.
+  # 6. Verify either the v3 single-stream events.log or the v4 multi-stream
+  #    steps.dat is present — these are the per-format markers for "events
+  #    were emitted".
+  doAssert "events.log" in foundNames or "steps.dat" in foundNames,
+    "neither v3 'events.log' nor v4 'steps.dat' present in CTFS entries: " &
+    foundNames.join(", ")
 
   removeDir(buildDir)
   echo "PASS: tvm_trace_repl - full content verification"

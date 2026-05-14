@@ -4,22 +4,15 @@ discard """
 """
 
 ## Comprehensive NimScript trace test exercising many language features.
-## Verifies CTFS structure, decompresses event data using libzstd,
-## and checks for expected event tags and function names in the trace.
+## Verifies CTFS structure and that the per-stream `.dat` files of the v4
+## multi-stream layout contain substantive content (steps + calls + values),
+## with key function names interned in funcs.dat.
+##
+## CTFS-M-Fix moved the VM tracer to the v4 multi-stream layout, so the
+## v3 zstd-chunked `events.log` decompression path is no longer applicable —
+## each event kind has its own raw stream now.
 
-import std/[os, osproc, assertions, strutils, json, sequtils]
-
-{.passL: "-lzstd".}
-
-proc ZSTD_getFrameContentSize(src: pointer, srcSize: csize_t): culonglong
-  {.importc, header: "<zstd.h>".}
-
-proc ZSTD_decompress(dst: pointer, dstCapacity: csize_t,
-                     src: pointer, compressedSize: csize_t): csize_t
-  {.importc, header: "<zstd.h>".}
-
-proc ZSTD_isError(code: csize_t): cuint
-  {.importc, header: "<zstd.h>".}
+import std/[os, osproc, assertions, strutils, sequtils, tables]
 
 const
   testsDir = currentSourcePath().parentDir
@@ -150,14 +143,6 @@ const expectedOutputLines = [
   "hello",
 ]
 
-# Event tag constants (split-binary format)
-const
-  TagStep = 0x00'u8
-  TagPath = 0x01'u8
-  TagFunction = 0x06'u8
-  TagCall = 0x07'u8
-  TagReturn = 0x08'u8
-
 proc base40Decode(val: uint64): string =
   const Base40Chars = "\x000123456789abcdefghijklmnopqrstuvwxyz./-"
   var remaining = val
@@ -200,7 +185,7 @@ proc parseCtfsHeader(data: string): tuple[blockSize: uint32, maxRootEntries: uin
 
   # Version
   let version = uint8(data[5])
-  doAssert version == 3 or version == 2, "unexpected CTFS version: " & $version
+  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
 
   # Extended header
   let blockSize = readLE32(data, 8)
@@ -263,85 +248,16 @@ proc readFileContent(data: string, entry: CtfsFileEntry, blockSize: uint32): str
 
   resultStr
 
-proc findNimTrace(): string =
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
-proc decompressZstd(compressed: string): string =
-  ## Decompress a zstd frame, returning the decompressed bytes as a string.
-  let frameSize = ZSTD_getFrameContentSize(
-    unsafeAddr compressed[0], csize_t(compressed.len))
-  # ZSTD_CONTENTSIZE_UNKNOWN = uint64.high, ZSTD_CONTENTSIZE_ERROR = uint64.high - 1
-  doAssert frameSize < uint64(100_000_000), "zstd frame too large or error: " & $frameSize
-
-  result = newString(int(frameSize))
-  let decompSize = ZSTD_decompress(
-    addr result[0], csize_t(frameSize),
-    unsafeAddr compressed[0], csize_t(compressed.len))
-  doAssert ZSTD_isError(decompSize) == 0, "zstd decompression failed"
-  doAssert int(decompSize) == int(frameSize), "zstd size mismatch"
-
-proc countTagOccurrences(data: string, tag: uint8): int =
-  ## Count how many times a byte value appears at event-start positions.
-  ## In split-binary, each event starts with a tag byte. We scan all bytes
-  ## since we don't know exact event boundaries, but tag bytes at position 0
-  ## of events will contribute. This is a lower bound since the tag value
-  ## could appear inside event payloads too.
-  ## For a more accurate count, we just count all occurrences of the tag byte
-  ## at the start of the data stream - this gives us a rough measure.
-  result = 0
-  # Simple heuristic: count occurrences of the tag byte.
-  # This overcounts but gives us a floor for verification.
-  for i in 0 ..< data.len:
-    if uint8(data[i]) == tag:
-      result += 1
-
 proc findString(data: string, needle: string): bool =
   ## Check if a string appears as a substring in raw binary data.
   needle in data
 
-type
-  ChunkInfo = object
-    compressedSize: uint32
-    eventCount: uint32
-    firstGeid: uint64
-    compressedData: string
-
-proc parseChunks(eventsData: string): seq[ChunkInfo] =
-  ## Parse all chunks from events.log data.
-  var offset = 0
-  while offset + 16 <= eventsData.len:
-    let compSize = readLE32(eventsData, offset)
-    let eventCount = readLE32(eventsData, offset + 4)
-    let firstGeid = readLE64(eventsData, offset + 8)
-
-    if compSize == 0:
-      break
-
-    let dataStart = offset + 16
-    if dataStart + int(compSize) > eventsData.len:
-      break
-
-    var compressed = newString(int(compSize))
-    for i in 0 ..< int(compSize):
-      compressed[i] = eventsData[dataStart + i]
-
-    result.add(ChunkInfo(
-      compressedSize: compSize,
-      eventCount: eventCount,
-      firstGeid: firstGeid,
-      compressedData: compressed,
-    ))
-
-    offset = dataStart + int(compSize)
-
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1: the VM trace emitter is unconditional in `bin/nim`; no
+  # separate `nim_trace` binary exists. Drive `--trace:` via the same
+  # compiler used to build this test.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
 
   createDir(buildDir)
 
@@ -363,141 +279,85 @@ proc main() =
   let data = readFile(traceFile)
 
   let (blockSize, _, entries) = parseCtfsHeader(data)
-  doAssert entries.len >= 4, "expected at least 4 internal files, got " & $entries.len
+  doAssert entries.len >= 3, "expected at least 3 internal files, got " & $entries.len
 
-  # Find internal files
-  var eventsLogEntry, eventsFmtEntry, metaJsonEntry, pathsJsonEntry: CtfsFileEntry
-  var foundEventsLog, foundEventsFmt, foundMetaJson, foundPathsJson: bool
-
+  # Index entries by name; choose v3 or v4 verification path.
+  var byName: Table[string, CtfsFileEntry]
   for entry in entries:
-    case entry.name
-    of "events.log":
-      foundEventsLog = true
-      eventsLogEntry = entry
-    of "events.fmt":
-      foundEventsFmt = true
-      eventsFmtEntry = entry
-    of "meta.json":
-      foundMetaJson = true
-      metaJsonEntry = entry
-    of "paths.json":
-      foundPathsJson = true
-      pathsJsonEntry = entry
-    else:
-      discard
+    byName[entry.name] = entry
 
-  doAssert foundEventsLog, "events.log not found in CTFS entries (found: " &
-    entries.mapIt(it.name).join(", ") & ")"
-  doAssert foundEventsFmt, "events.fmt not found"
-  doAssert foundMetaJson, "meta.json not found"
-  doAssert foundPathsJson, "paths.json not found"
-
-  # --- Verify events.fmt ---
-  let fmtContent = readFileContent(data, eventsFmtEntry, blockSize)
-  doAssert fmtContent == "split-binary", "events.fmt should be 'split-binary', got: '" & fmtContent & "'"
-
-  # --- Verify meta.json ---
-  let metaContent = readFileContent(data, metaJsonEntry, blockSize)
-  doAssert metaContent.len > 0, "meta.json is empty"
-  let metaJson = parseJson(metaContent)
-  doAssert metaJson.hasKey("program"), "meta.json missing 'program' field"
-  let program = metaJson["program"].getStr()
-  doAssert "test_lang_features" in program, "meta.json program should reference test_lang_features, got: " & program
-
-  # --- Verify paths.json ---
-  let pathsContent = readFileContent(data, pathsJsonEntry, blockSize)
-  doAssert pathsContent.len > 0, "paths.json is empty"
-  let pathsJson = parseJson(pathsContent)
-  doAssert pathsJson.kind == JArray, "paths.json should be a JSON array"
-  doAssert pathsJson.len >= 1, "paths.json should have at least one path"
-  var foundScriptPath = false
-  for elem in pathsJson:
-    if "test_lang_features" in elem.getStr():
-      foundScriptPath = true
-      break
-  doAssert foundScriptPath, "paths.json should contain the script file path"
-
-  # --- Parse events.log chunks ---
-  let eventsData = readFileContent(data, eventsLogEntry, blockSize)
-  doAssert eventsData.len >= 16, "events.log too small"
-
-  let chunks = parseChunks(eventsData)
-  doAssert chunks.len >= 1, "no chunks found in events.log"
-
-  # First chunk should start at geid 0
-  doAssert chunks[0].firstGeid == 0, "first chunk firstGeid should be 0, got: " & $chunks[0].firstGeid
-
-  # Sum total events across all chunks
-  var totalEvents: int = 0
-  for chunk in chunks:
-    totalEvents += int(chunk.eventCount)
-
-  doAssert totalEvents > 100, "expected >100 total events for comprehensive script, got: " & $totalEvents
-
-  # --- Decompress and analyze event data ---
-  var allDecompressed = ""
-  for chunk in chunks:
-    # Verify zstd magic
-    doAssert chunk.compressedData.len >= 4, "compressed chunk too small"
-    let magic = readLE32(chunk.compressedData, 0)
-    doAssert magic == 0xFD2FB528'u32,
-      "compressed chunk doesn't have Zstd magic (got 0x" & toHex(magic) & ")"
-
-    let decompressed = decompressZstd(chunk.compressedData)
-    doAssert decompressed.len > 0, "decompressed chunk is empty"
-    allDecompressed.add(decompressed)
-
-  doAssert allDecompressed.len > 0, "no decompressed data"
-
-  # --- Verify event tags are present ---
-  # Note: counting raw byte occurrences overcounts (tag values appear in payloads too),
-  # but it guarantees the tag byte exists at least in some events.
-  let stepCount = countTagOccurrences(allDecompressed, TagStep)
-  let pathCount = countTagOccurrences(allDecompressed, TagPath)
-  let functionCount = countTagOccurrences(allDecompressed, TagFunction)
-  let callCount = countTagOccurrences(allDecompressed, TagCall)
-  let returnCount = countTagOccurrences(allDecompressed, TagReturn)
-
-  # Step events: many lines of code executed
-  doAssert stepCount > 0, "no Step tag bytes (0x00) found in decompressed data"
-
-  # Path events: at least the script file
-  doAssert pathCount >= 1, "expected at least 1 Path tag byte (0x01), got: " & $pathCount
-
-  # Function events: classify, sumRange, countDown, colorName, makePoint, etc.
-  doAssert functionCount >= 1, "expected Function tag bytes (0x06), got: " & $functionCount
-
-  # Call events: one per function invocation
-  doAssert callCount >= 1, "expected Call tag bytes (0x07), got: " & $callCount
-
-  # Return events: matching calls
-  doAssert returnCount >= 1, "expected Return tag bytes (0x08), got: " & $returnCount
-
-  # --- Verify function names in decompressed data ---
-  # Function names should appear as UTF-8 strings in the event stream
   let expectedFunctions = ["classify", "sumRange", "countDown", "colorName",
                            "makePoint", "makeSeq", "divmod", "greet", "fib",
                            "safeDivide", "identity"]
 
-  var foundFunctions: seq[string] = @[]
-  for fname in expectedFunctions:
-    if findString(allDecompressed, fname):
-      foundFunctions.add(fname)
+  if "events.log" in byName:
+    # v3 single-stream layout
+    for required in ["events.log", "meta.json", "paths.json"]:
+      doAssert required in byName,
+        "v3 layout missing '" & required & "': " & entries.mapIt(it.name).join(", ")
 
-  # We expect most function names to be present (some may be inlined or optimized)
-  doAssert foundFunctions.len >= 5,
-    "expected at least 5 function names in event data, found " &
-    $foundFunctions.len & ": " & foundFunctions.join(", ") &
-    " (missing: " & expectedFunctions.filterIt(it notin foundFunctions).join(", ") & ")"
+    let metaContent = readFileContent(data, byName["meta.json"], blockSize)
+    doAssert metaContent.len > 0, "meta.json is empty"
+    doAssert "test_lang_features" in metaContent,
+      "meta.json should reference the program path 'test_lang_features'"
 
-  # --- Summary ---
-  echo "PASS: tvm_trace_language_features"
-  echo "  Chunks: " & $chunks.len
-  echo "  Total events: " & $totalEvents
-  echo "  Decompressed size: " & $allDecompressed.len & " bytes"
-  echo "  Functions found: " & foundFunctions.join(", ")
-  echo "  Tag counts (raw byte): Step=" & $stepCount & " Path=" & $pathCount &
-       " Function=" & $functionCount & " Call=" & $callCount & " Return=" & $returnCount
+    let pathsContent = readFileContent(data, byName["paths.json"], blockSize)
+    doAssert pathsContent.len > 0, "paths.json is empty"
+    doAssert "test_lang_features" in pathsContent,
+      "paths.json should contain the script file path"
+
+    # events.log carries the (zstd-compressed) split-binary stream.
+    # We can't decompress without linking zstd, so just check substantial size.
+    doAssert byName["events.log"].size > 1024,
+      "events.log too small for comprehensive script: " & $byName["events.log"].size & " bytes"
+
+    echo "PASS: tvm_trace_language_features (v3 single-stream)"
+    echo "  events.log=" & $byName["events.log"].size & "B  meta.json=" & $metaContent.len &
+         "B  paths.json=" & $pathsContent.len & "B"
+  else:
+    # v4 multi-stream layout
+    for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat",
+                     "values.dat", "varnames.dat"]:
+      doAssert required in byName,
+        "v4 layout missing stream '" & required & "': " &
+        entries.mapIt(it.name).join(", ")
+
+    let metaContent  = readFileContent(data, byName["meta.dat"], blockSize)
+    let pathsContent = readFileContent(data, byName["paths.dat"], blockSize)
+    let funcsContent = readFileContent(data, byName["funcs.dat"], blockSize)
+    let stepsContent = readFileContent(data, byName["steps.dat"], blockSize)
+    let callsContent = readFileContent(data, byName["calls.dat"], blockSize)
+    let valuesContent = readFileContent(data, byName["values.dat"], blockSize)
+
+    doAssert metaContent.len > 0, "meta.dat is empty"
+    doAssert "test_lang_features" in metaContent,
+      "meta.dat should reference the program path 'test_lang_features'"
+
+    doAssert pathsContent.len > 0, "paths.dat is empty"
+    doAssert "test_lang_features" in pathsContent,
+      "paths.dat should contain the script file path"
+
+    doAssert stepsContent.len > 256,
+      "steps.dat too small for comprehensive script: " & $stepsContent.len & " bytes"
+    doAssert callsContent.len > 0, "calls.dat is empty — no Call events emitted"
+    doAssert valuesContent.len > 0, "values.dat is empty — no Value events emitted"
+
+    # funcs.dat embeds function name records — verify intern hits.
+    var foundFunctions: seq[string] = @[]
+    for fname in expectedFunctions:
+      if findString(funcsContent, fname):
+        foundFunctions.add(fname)
+
+    doAssert foundFunctions.len >= 5,
+      "expected at least 5 function names interned in funcs.dat, found " &
+      $foundFunctions.len & ": " & foundFunctions.join(", ") &
+      " (missing: " & expectedFunctions.filterIt(it notin foundFunctions).join(", ") & ")"
+
+    echo "PASS: tvm_trace_language_features (v4 multi-stream)"
+    echo "  meta.dat=" & $metaContent.len & "B  paths.dat=" & $pathsContent.len & "B"
+    echo "  funcs.dat=" & $funcsContent.len & "B  steps.dat=" & $stepsContent.len & "B"
+    echo "  calls.dat=" & $callsContent.len & "B  values.dat=" & $valuesContent.len & "B"
+    echo "  Functions found in funcs.dat: " & foundFunctions.join(", ")
 
   removeDir(buildDir)
 

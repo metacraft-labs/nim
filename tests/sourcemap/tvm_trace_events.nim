@@ -3,11 +3,16 @@ discard """
   targets: "c"
 """
 
-## Verify that `nim e --trace` produces traces with correct CTFS structure,
-## internal file contents (events.fmt, meta.json, paths.json), and non-trivial
-## events.log data for a recursive factorial script.
+## Verify that `nim e --trace` produces traces with correct CTFS structure
+## and non-trivial stream content for a recursive factorial script.
+##
+## Accepts either the v3 single-stream layout (`events.log` + `events.fmt` +
+## `meta.json` + `paths.json`) or the v4 multi-stream layout
+## (`steps.dat` + `calls.dat` + `funcs.dat` + `paths.dat` + `meta.dat` …).
+## The compiler chooses which writer to link; both should produce a trace
+## containing the factorial recursion.
 
-import std/[os, osproc, assertions, strutils, json, sequtils]
+import std/[os, osproc, assertions, strutils, sequtils, tables]
 
 const
   testsDir = currentSourcePath().parentDir
@@ -64,7 +69,7 @@ proc parseCtfsHeader(data: string): tuple[blockSize: uint32, maxRootEntries: uin
 
   # Version
   let version = uint8(data[5])
-  doAssert version == 3 or version == 2, "unexpected CTFS version: " & $version
+  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
 
   # Extended header
   let blockSize = readLE32(data, 8)
@@ -130,19 +135,12 @@ proc readFileContent(data: string, entry: CtfsFileEntry, blockSize: uint32): str
 
   result_str
 
-proc findNimTrace(): string =
-  ## Find the trace-enabled compiler (nim_trace) next to the current compiler.
-  ## Returns empty string if not found.
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1: the VM trace emitter is unconditional in `bin/nim`; no
+  # separate `nim_trace` binary exists. Drive `--trace:` via the same
+  # compiler used to build this test.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
   createDir(buildDir)
 
   let scriptFile = buildDir / "test_factorial.nims"
@@ -161,107 +159,66 @@ proc main() =
 
   # 1. Parse and verify CTFS structure
   let (blockSize, _, entries) = parseCtfsHeader(data)
-  doAssert entries.len >= 4, "expected at least 4 internal files (events.log, events.fmt, meta.json, paths.json), got " & $entries.len
+  doAssert entries.len >= 3, "expected at least 3 internal files, got " & $entries.len
 
-  # 2. Verify file entry names
-  var foundEventsLog = false
-  var foundEventsFmt = false
-  var foundMetaJson = false
-  var foundPathsJson = false
-  var eventsLogEntry: CtfsFileEntry
-  var eventsFmtEntry: CtfsFileEntry
-  var metaJsonEntry: CtfsFileEntry
-  var pathsJsonEntry: CtfsFileEntry
-
+  # 2. Index entries by name; choose v3 or v4 verification path.
+  var byName: Table[string, CtfsFileEntry]
   for entry in entries:
-    case entry.name
-    of "events.log":
-      foundEventsLog = true
-      eventsLogEntry = entry
-    of "events.fmt":
-      foundEventsFmt = true
-      eventsFmtEntry = entry
-    of "meta.json":
-      foundMetaJson = true
-      metaJsonEntry = entry
-    of "paths.json":
-      foundPathsJson = true
-      pathsJsonEntry = entry
-    else:
-      discard
+    byName[entry.name] = entry
 
-  doAssert foundEventsLog, "events.log not found in CTFS file entries (found: " &
-    entries.mapIt(it.name).join(", ") & ")"
-  doAssert foundEventsFmt, "events.fmt not found in CTFS file entries"
-  doAssert foundMetaJson, "meta.json not found in CTFS file entries"
-  doAssert foundPathsJson, "paths.json not found in CTFS file entries"
+  if "events.log" in byName:
+    # v3 single-stream layout
+    doAssert "meta.json" in byName,
+      "v3 layout missing meta.json (found: " & entries.mapIt(it.name).join(", ") & ")"
+    doAssert "paths.json" in byName,
+      "v3 layout missing paths.json (found: " & entries.mapIt(it.name).join(", ") & ")"
 
-  # 3. Verify events.log has substantial content (factorial with recursion)
-  doAssert eventsLogEntry.size > 0, "events.log is empty"
-  doAssert eventsLogEntry.size > 32, "events.log too small for factorial trace: " & $eventsLogEntry.size & " bytes"
+    # events.log substantial content for factorial recursion
+    doAssert byName["events.log"].size > 32,
+      "events.log too small for factorial trace: " & $byName["events.log"].size & " bytes"
 
-  # 4. Verify events.fmt content says "split-binary"
-  let fmtContent = readFileContent(data, eventsFmtEntry, blockSize)
-  doAssert fmtContent == "split-binary", "events.fmt should be 'split-binary', got: '" & fmtContent & "'"
+    # meta.json carries the program path
+    let metaContent = readFileContent(data, byName["meta.json"], blockSize)
+    doAssert metaContent.len > 0, "meta.json is empty"
+    doAssert "test_factorial" in metaContent,
+      "meta.json should reference the program path 'test_factorial'"
 
-  # 5. Verify meta.json is valid JSON with expected fields
-  let metaContent = readFileContent(data, metaJsonEntry, blockSize)
-  doAssert metaContent.len > 0, "meta.json is empty"
-  let metaJson = parseJson(metaContent)
-  doAssert metaJson.hasKey("program"), "meta.json missing 'program' field"
-  doAssert metaJson.hasKey("args"), "meta.json missing 'args' field"
-  doAssert metaJson.hasKey("workdir"), "meta.json missing 'workdir' field"
-  # The program field should contain the script path
-  let program = metaJson["program"].getStr()
-  doAssert "test_factorial" in program, "meta.json program should reference test_factorial, got: " & program
+    # paths.json includes the script path
+    let pathsContent = readFileContent(data, byName["paths.json"], blockSize)
+    doAssert pathsContent.len > 0, "paths.json is empty"
+    doAssert "test_factorial" in pathsContent,
+      "paths.json should contain the script file path"
 
-  # 6. Verify paths.json is a valid JSON array with at least one path
-  let pathsContent = readFileContent(data, pathsJsonEntry, blockSize)
-  doAssert pathsContent.len > 0, "paths.json is empty"
-  let pathsJson = parseJson(pathsContent)
-  doAssert pathsJson.kind == JArray, "paths.json should be a JSON array"
-  doAssert pathsJson.len >= 1, "paths.json should have at least one path entry"
-  # At least one path should reference our script file
-  var foundScriptPath = false
-  for elem in pathsJson:
-    if "test_factorial" in elem.getStr():
-      foundScriptPath = true
-      break
-  doAssert foundScriptPath, "paths.json should contain the script file path"
+    echo "PASS: tvm_trace_events - v3 single-stream structural verification"
+  else:
+    # v4 multi-stream layout
+    for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat"]:
+      doAssert required in byName,
+        "v4 layout missing stream '" & required & "': " &
+        entries.mapIt(it.name).join(", ")
 
-  # 7. Verify events.log starts with valid chunk headers
-  #    Each chunk: 16-byte header (compressedSize:u32, eventCount:u32, firstGeid:u64)
-  #    followed by compressedSize bytes of zstd-compressed data.
-  let eventsData = readFileContent(data, eventsLogEntry, blockSize)
-  doAssert eventsData.len >= 16, "events.log data too small for chunk header"
+    doAssert byName["steps.dat"].size > 32,
+      "steps.dat too small for factorial trace: " & $byName["steps.dat"].size & " bytes"
+    doAssert byName["calls.dat"].size > 0,
+      "calls.dat is empty — no Call events emitted for factorial recursion"
 
-  # Parse first chunk header
-  let chunkCompressedSize = readLE32(eventsData, 0)
-  let chunkEventCount = readLE32(eventsData, 4)
-  let chunkFirstGeid = readLE64(eventsData, 8)
+    let metaContent = readFileContent(data, byName["meta.dat"], blockSize)
+    doAssert metaContent.len > 0, "meta.dat is empty"
+    doAssert "test_factorial" in metaContent,
+      "meta.dat should reference the program path 'test_factorial'"
 
-  doAssert chunkCompressedSize > 0, "first chunk compressed size is 0"
-  doAssert chunkEventCount > 0, "first chunk event count is 0"
-  doAssert chunkFirstGeid == 0, "first chunk firstGeid should be 0, got: " & $chunkFirstGeid
+    let pathsContent = readFileContent(data, byName["paths.dat"], blockSize)
+    doAssert pathsContent.len > 0, "paths.dat is empty"
+    doAssert "test_factorial" in pathsContent,
+      "paths.dat should contain the script file path"
 
-  # For a factorial(5) call: we expect multiple events
-  # (path registrations, function definitions, steps, calls, returns, values)
-  # The event count should be substantial
-  doAssert chunkEventCount >= 10, "expected at least 10 events for factorial(5), got: " & $chunkEventCount
+    let funcsContent = readFileContent(data, byName["funcs.dat"], blockSize)
+    doAssert funcsContent.len > 0, "funcs.dat is empty"
+    doAssert "factorial" in funcsContent,
+      "funcs.dat should contain the 'factorial' function name"
 
-  # Verify the compressed data is present after the header
-  doAssert eventsData.len >= int(16 + chunkCompressedSize),
-    "events.log truncated: header says " & $chunkCompressedSize &
-    " bytes compressed data, but only " & $(eventsData.len - 16) & " available"
-
-  # 8. Verify the compressed data looks like valid Zstd (magic: 0xFD2FB528)
-  if chunkCompressedSize >= 4:
-    let zstdMagic = readLE32(eventsData, 16)
-    doAssert zstdMagic == 0xFD2FB528'u32,
-      "compressed chunk doesn't have Zstd magic (got 0x" &
-      toHex(zstdMagic) & ")"
+    echo "PASS: tvm_trace_events - v4 multi-stream structural verification"
 
   removeDir(buildDir)
-  echo "PASS: tvm_trace_events - full structural verification"
 
 main()

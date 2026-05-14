@@ -13,7 +13,7 @@ when not defined(nimcore):
   {.error: "nimcore MUST be defined for Nim's core tooling".}
 
 import
-  std/[strutils, os, times, tables, with, json],
+  std/[strutils, os, times, tables, with, json, exitprocs],
   llstream, ast, lexer, syntaxes, options, msgs,
   condsyms,
   idents, extccomp,
@@ -205,6 +205,10 @@ proc commandInteractive(graph: ModuleGraph) =
 
   # CTFS-M1: attach VM tracer after the system module has been compiled
   # (which is when graph.vm gets created via setupEvalGen).
+  # CTFS-M1.5: register an exit hook so that REPL termination via EOF
+  # (`llReadFromStdin` calls `quit()` on Ctrl-D) still closes the tracer
+  # and flushes the trace file. Without this, the v4 multi-stream container
+  # — which only materialises on `closeVmTracer` — never reaches disk.
   block:
     let conf = graph.config
     if optTraceVM in conf.globalOptions and conf.traceOutputPath.len > 0:
@@ -212,6 +216,18 @@ proc commandInteractive(graph: ModuleGraph) =
         let tracerRes = initVmTracer(conf.traceOutputPath, "nim-repl", conf)
         if tracerRes.isOk:
           PCtx(graph.vm).vmTracer = tracerRes.get()
+          let tracerForExit = PCtx(graph.vm).vmTracer
+          let graphRef = graph
+          addExitProc(proc() {.closure.} =
+            if graphRef.vm != nil:
+              let vm = PCtx(graphRef.vm)
+              if vm.vmTracer != nil and vm.vmTracer == tracerForExit:
+                let closeRes = closeVmTracer(cast[ptr VmTracer](vm.vmTracer))
+                if closeRes.isErr:
+                  rawMessage(graphRef.config, warnUser,
+                    "failed to close VM tracer at exit: " & closeRes.error)
+                vm.vmTracer = nil
+          )
         else:
           rawMessage(conf, warnUser,
             "failed to initialize VM tracer: " & tracerRes.error)
@@ -225,7 +241,8 @@ proc commandInteractive(graph: ModuleGraph) =
     let s = llStreamOpenStdIn(onPrompt = proc() = flushDot(graph.config))
     discard processPipelineModule(graph, m, idgen, s)
 
-  # CTFS-M1: close the tracer on REPL exit
+  # CTFS-M1: close the tracer on REPL exit. The addExitProc hook above
+  # handles EOF-via-quit() shutdown; this branch covers normal-return paths.
   if graph.vm != nil:
     let vm = PCtx(graph.vm)
     if vm.vmTracer != nil:

@@ -59,12 +59,6 @@ proc main() =
 main()
 """
 
-proc findNimTrace(): string =
-  let nimDir = getCurrentCompilerExe().parentDir
-  result = nimDir / "nim_trace"
-  if not fileExists(result):
-    result = ""
-
 proc measure(nim, scriptFile: string, extraArgs: string = ""): float =
   ## Run the script and return elapsed wall-clock seconds.
   let cmd = nim & " e " & extraArgs & " " & scriptFile
@@ -75,10 +69,11 @@ proc measure(nim, scriptFile: string, extraArgs: string = ""): float =
   return elapsed
 
 proc main() =
-  let nim = findNimTrace()
-  if nim == "":
-    echo "SKIP: nim_trace binary not found (build with -d:codetracerTracing)"
-    quit(0)
+  # CTFS-M1: the VM trace emitter is unconditional in `bin/nim`; no
+  # separate `nim_trace` binary exists. Drive `--trace:` via the same
+  # compiler used to build this test.
+  let nim = getCurrentCompilerExe()
+  doAssert fileExists(nim), "compiler binary not found at: " & nim
 
   createDir(buildDir)
 
