@@ -382,8 +382,13 @@ type
     lastLine*: int
     # §2-M1: site/definition are file/line/col triples. Column is
     # 0-based, consistent with the `TLineInfo.col` convention.
-    site*: (string, int, int) #TLineInfo
-    definition*: (string, int, int) #TLineInfo
+    # §2-M3: extended with the `FileIndex` of the call/definition
+    # position so the renderer can identify "this position is inside
+    # the expanded.nim artifact" without depending on
+    # `--filenames:` normalization of the string path. The JSON
+    # emit continues to use only the string form.
+    site*: (string, int, int, FileIndex) #TLineInfo
+    definition*: (string, int, int, FileIndex) #TLineInfo
     # topLevel*: (string, int)
     name*: string # empty if not definition
     fromMacro*: bool
@@ -393,7 +398,10 @@ type
     # accompanies `entryExpandedLine` to enable expression-level
     # chaining between expansion layers. Both default to -1 meaning
     # "no chain link".
-    siteInfo*: (string, int, int)
+    # §2-M3: 4th element is the original `FileIndex` of the site,
+    # used by the renderer to detect "position is in expanded.nim"
+    # without relying on `--filenames:` path normalization.
+    siteInfo*: (string, int, int, FileIndex)
     expansionId*: int
     entryExpandedLine*: int
     entryExpandedCol*: int

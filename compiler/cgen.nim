@@ -2730,9 +2730,14 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
 
     # TODO function in sem.nim:
 
-    let expandedString = config.macroSourcemap.expandedFilename
+    # §2-M3: identify "site is inside expanded.nim" by `FileIndex`
+    # (`siteInfo[3]`) rather than by string equality on the
+    # rendered path. The string equality silently failed under
+    # `--filenames:foCanonical`/`foName`/`foRelProject` because
+    # `toMsgFilename` formats the path differently from
+    # `expandedFilename` in those modes.
+    let expandedFileIdx = config.macroSourcemap.fileIndex
     for line, expansionInfo in config.macroSourcemap.locations:
-      # if expansionInfo.siteInfo[0] != expandedString:
       var entryExpandedLine = line
       var currentExpansionInfo = expansionInfo
       while true:
@@ -2743,7 +2748,7 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
       if not config.macroSourcemap.expandedEntries.hasKey(expansionInfo.siteInfo[0]):
         config.macroSourcemap.expandedEntries[expansionInfo.siteInfo[0]] = initTable[int, int]()
       if not config.macroSourcemap.expandedEntries[expansionInfo.siteInfo[0]].hasKey(expansionInfo.siteInfo[1]):
-        if expansionInfo.siteInfo[0] != expandedString or expansionInfo.siteInfo[1] != entryExpandedLine:
+        if expansionInfo.siteInfo[3] != expandedFileIdx or expansionInfo.siteInfo[1] != entryExpandedLine:
           config.macroSourcemap.expandedEntries[expansionInfo.siteInfo[0]][expansionInfo.siteInfo[1]] = entryExpandedLine
 
   for expandedLine, location in config.macroSourcemap.topLevelLines:

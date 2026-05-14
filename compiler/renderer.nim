@@ -1150,7 +1150,14 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
       entryExpandedCol: -1)
     # §2-M1: replaced hard-coded `endsWith("/expanded.nim")` with a
     # comparison against the recorded expansion artifact filename.
-    if siteInfo[0] == g.config.macroSourcemap.expandedFilename:
+    # §2-M3: switched the equality check from the string path to
+    # the original `FileIndex` so the check works regardless of
+    # `--filenames:` (foAbs / foCanonical / foName / foRelProject).
+    # `siteInfo[3]` is the raw `FileIndex` populated by
+    # `rememberExpansion`; comparing it to
+    # `macroSourcemap.fileIndex` is the canonical, normalization-
+    # independent way to ask "is the site inside expanded.nim?".
+    if siteInfo[3] == g.config.macroSourcemap.fileIndex:
       if g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine == -1:
         g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine = info.line.int
         g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedCol = 0
@@ -2299,7 +2306,10 @@ proc gsub(g: var TSrcGen, n: PNode, c: TContext, fromStmtList = false) =
     # check. Replaced with a comparison against the recorded
     # expansion artifact filename, which is the canonical path the
     # renderer treats as the `expanded.nim` file index.
-    if siteInfo[0] == g.config.macroSourcemap.expandedFilename:
+    # §2-M3: switched the equality check from the string path to
+    # the original `FileIndex` so the check works regardless of
+    # `--filenames:` (foAbs / foCanonical / foName / foRelProject).
+    if siteInfo[3] == g.config.macroSourcemap.fileIndex:
       if g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine == -1:
         g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedLine = info.line.int
         g.config.macroSourcemap.locations[siteInfo[1]].entryExpandedCol = startCol

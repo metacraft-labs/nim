@@ -517,8 +517,11 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
         firstLine: c.config.macroSourcemap.startLine.int - 1,
         lastLine: -1,
         # §2-M1: site/definition are now (file, line, col) triples.
-        site: (toMsgFilename(c.config, call.info), call.info.line.int, call.info.col.int),
-        definition: (toMsgFilename(c.config, s.info), s.info.line.int, s.info.col.int),
+        # §2-M3: also carry the raw `FileIndex` so the renderer can
+        # detect "site is inside expanded.nim" without depending on
+        # how `toMsgFilename` formatted the path.
+        site: (toMsgFilename(c.config, call.info), call.info.line.int, call.info.col.int, call.info.fileIndex),
+        definition: (toMsgFilename(c.config, s.info), s.info.line.int, s.info.col.int, s.info.fileIndex),
         name: s.name.s,
         fromMacro: s.ast.kind == nkMacroDef))
 
