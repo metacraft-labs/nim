@@ -518,6 +518,8 @@ type
     vmProfileData*: ProfileData
     macroSourcemap*: MacroSourcemap
     traceOutputPath*: string  # output path for --trace (VM execution tracing)
+    traceFilterPaths*: seq[string]  # --trace-filter:<path>, repeatable (TF-M4)
+    noAutoFilter*: bool             # --no-auto-filter disables .codetracer/trace-filter.toml lookup (TF-M4)
 
     expandProgress*: bool
     expandLevels*: int

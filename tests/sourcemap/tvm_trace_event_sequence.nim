@@ -109,16 +109,21 @@ proc main() =
   doAssert foundReturnAfterCall,
     "no Return event found after Call at index " & $foundCallIdx
 
-  # Verify that Step events appear before Call (we step through top-level code
-  # before calling foo)
+  # Verify that at least one Step event was emitted. Pre-TF-M4 we asserted
+  # the first Step appeared before the first Call, but that ordering relied
+  # on the un-filtered tracer recording stdlib steps during system module
+  # bootstrap. With TF-M4 the builtin filter skips the stdlib, so the first
+  # Step is now the user-code Step at the `foo()` top-level call line, which
+  # in the v4 multi-stream layout can be emitted after the Call's own
+  # bookkeeping event. The pre-M4 ordering invariant was incidental, not
+  # load-bearing — the call/return well-formedness check above is the real
+  # ordering guarantee that matters.
   var firstStepIdx = -1
   for i, event in reader.events:
     if event.kind == tleStep:
       firstStepIdx = i
       break
   doAssert firstStepIdx >= 0, "no Step event found"
-  doAssert firstStepIdx < foundCallIdx,
-    "expected Step (idx=" & $firstStepIdx & ") before Call (idx=" & $foundCallIdx & ")"
 
   removeDir(buildDir)
   echo "PASS: tvm_trace_event_sequence - decoded " & $reader.events.len &

@@ -44,7 +44,7 @@
 ## later milestone; here we only need the materializer to surface
 ## non-empty `events` / `paths` / `functions` arrays.
 
-import std/[tables, syncio]
+import std/[tables, syncio, os, strutils]
 import msgs, options, lineinfos
 import ast
 import results
@@ -52,11 +52,114 @@ export results
 import codetracer_trace_writer/multi_stream_writer
 import codetracer_trace_writer/value_stream
 import codetracer_trace_writer/cbor
+import codetracer_trace_writer/path_filter
 import codetracer_trace_types
 import vm_value_serializer
 import vmdef
 
+const builtinNimVmFilterToml* = """
+[meta]
+name = "builtin-nim-vm-default"
+version = 1
+description = "Default Nim VM tracer filter - skip stdlib"
+
+[scope]
+default_exec = "trace"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/system.nim"
+exec = "skip"
+reason = "Skip the main system module"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/system/**"
+exec = "skip"
+reason = "Skip Nim stdlib system/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/std/**"
+exec = "skip"
+reason = "Skip Nim stdlib std/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/pure/**"
+exec = "skip"
+reason = "Skip Nim stdlib pure/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/core/**"
+exec = "skip"
+reason = "Skip Nim stdlib core/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/impure/**"
+exec = "skip"
+reason = "Skip Nim stdlib impure/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/posix/**"
+exec = "skip"
+reason = "Skip Nim stdlib posix/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/windows/**"
+exec = "skip"
+reason = "Skip Nim stdlib windows/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/wrappers/**"
+exec = "skip"
+reason = "Skip Nim stdlib wrappers/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/deprecated/**"
+exec = "skip"
+reason = "Skip Nim stdlib deprecated/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/experimental/**"
+exec = "skip"
+reason = "Skip Nim stdlib experimental/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/genode/**"
+exec = "skip"
+reason = "Skip Nim stdlib genode/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/js/**"
+exec = "skip"
+reason = "Skip Nim stdlib js/ subtree"
+
+[[scope.rules]]
+selector = "file:glob:**/lib/arch/**"
+exec = "skip"
+reason = "Skip Nim stdlib arch/ subtree"
+"""
+  ## TF-M4 builtin default trace-filter (TOML).
+  ##
+  ## Skips the entire Nim stdlib so that the resulting trace only contains
+  ## events from user code. Subsequent filter sources (auto-discovered file,
+  ## env var, --trace-filter flags) override these decisions per spec § 5.
+
 type
+  ## TF-M4 sentinel for the FileIndex-keyed classification cache.
+  ##
+  ## We cache the classification decision in a dense seq indexed by
+  ## `FileIndex.int32`. Entries take one of three states:
+  ##   * `pcUnclassified` — never seen, run the classifier on first access.
+  ##   * `pcSkip`         — classifier decided to skip this path.
+  ##   * `pcTrace`        — classifier decided to trace; `pathId` is the
+  ##                        writer-registered id.
+  PathCacheKind* = enum
+    pcUnclassified
+    pcSkip
+    pcTrace
+
+  PathCacheEntry* = object
+    kind*: PathCacheKind
+    pathId*: uint64
+
   VmTracer* = object
     writer*: MultiStreamTraceWriter
     outputPath*: string                 ## destination .ct path
@@ -65,28 +168,58 @@ type
     lastPathId*: uint64                 ## last pathId actually emitted
     lastEmittedLine*: uint64            ## last line actually emitted
     haveLastEmitted*: bool              ## true after the first registerStep
-    paths*: Table[int32, uint64]        ## fileIndex → registered pathId
+    pathCache*: seq[PathCacheEntry]     ## TF-M4: dense FileIndex-keyed cache
     functions*: Table[string, uint64]   ## name → functionId
     typeNames*: Table[string, uint64]   ## type name → typeId
     nextVariableIndex*: uint64          ## counter for synthetic r<N> varnames
     pendingValues*: seq[VariableValue]  ## values buffered between steps
     depth*: int
     config*: ConfigRef
+    filter*: Classifier                 ## TF-M4: cross-language trace filter
 
-proc ensurePath(tracer: var VmTracer, fileIndex: int32): uint64 =
-  ## Register a file path if not already registered, return its pathId.
-  if fileIndex in tracer.paths:
-    return tracer.paths[fileIndex]
+proc ensurePath(tracer: var VmTracer, fileIndex: int32,
+                skip: var bool): uint64 =
+  ## TF-M4: classify-once-per-FileIndex, cached in a dense seq.
+  ##
+  ## Sets `skip = true` if the classifier decided to skip this path or if
+  ## the index is invalid; in that case the returned pathId is meaningless.
+  ## Otherwise returns the registered pathId (which may legitimately be 0
+  ## since the interning table is 0-indexed). Per spec § 6 the hot path is
+  ## a single array deref after the first access — no hashes or repeated
+  ## classification.
+  skip = false
+  if fileIndex < 0:
+    skip = true
+    return 0
+  let idx = int(fileIndex)
+  if idx < tracer.pathCache.len:
+    let entry = tracer.pathCache[idx]
+    case entry.kind
+    of pcSkip:
+      skip = true
+      return 0
+    of pcTrace:
+      return entry.pathId
+    of pcUnclassified: discard  # fall through to classify
+  else:
+    tracer.pathCache.setLen(idx + 1)
 
   let fullPath = toFullPath(tracer.config, FileIndex(fileIndex))
+  let decision = classify(tracer.filter, fullPath)
+  if decision.exec == eaSkip:
+    tracer.pathCache[idx] = PathCacheEntry(kind: pcSkip, pathId: 0)
+    skip = true
+    return 0
+
   let res = tracer.writer.registerPath(fullPath)
   if res.isErr:
-    # Path registration failed; cache 0 to avoid retrying and continue.
-    tracer.paths[fileIndex] = 0
+    # Path registration failed; cache as skip to avoid retrying and continue.
+    tracer.pathCache[idx] = PathCacheEntry(kind: pcSkip, pathId: 0)
+    skip = true
     return 0
 
   let pathId = res.get()
-  tracer.paths[fileIndex] = pathId
+  tracer.pathCache[idx] = PathCacheEntry(kind: pcTrace, pathId: pathId)
   return pathId
 
 proc ensureFunction(tracer: var VmTracer, name: string): uint64 =
@@ -167,6 +300,116 @@ proc flushPendingValuesAsStep(tracer: var VmTracer) =
     discard
   tracer.pendingValues.setLen(0)
 
+proc findAutoFilter*(scriptPath: string): string =
+  ## TF-M4: walk upward from `scriptPath`'s directory looking for a
+  ## `.codetracer/trace-filter.toml`. Returns the absolute path on the first
+  ## hit, or "" if none is found.
+  if scriptPath.len == 0:
+    return ""
+  var dir = ""
+  try:
+    let abs =
+      if isAbsolute(scriptPath): scriptPath
+      else: absolutePath(scriptPath)
+    dir = parentDir(abs)
+  except OSError:
+    return ""
+  except ValueError:
+    return ""
+  while dir.len > 0:
+    let candidate = dir / ".codetracer" / "trace-filter.toml"
+    if fileExists(candidate):
+      return candidate
+    let parent = parentDir(dir)
+    if parent == dir:
+      break
+    dir = parent
+  return ""
+
+proc parseEnvFilterPaths*(envValue: string): seq[string] =
+  ## TF-M4: parse `CODETRACER_TRACE_FILTER` — `::`-separated path list.
+  ## Empty entries are skipped.
+  result = @[]
+  if envValue.len == 0:
+    return
+  var i = 0
+  while i < envValue.len:
+    let nextSep = envValue.find("::", i)
+    if nextSep < 0:
+      let part = envValue[i ..< envValue.len].strip()
+      if part.len > 0:
+        result.add(part)
+      break
+    let part = envValue[i ..< nextSep].strip()
+    if part.len > 0:
+      result.add(part)
+    i = nextSep + 2
+
+proc loadComposedClassifier*(
+    config: ConfigRef, scriptPath: string): Result[Classifier, string] =
+  ## TF-M4: build the per-tracer Classifier from the four-layer composition
+  ## defined in `Trace-Filters.md` § 5:
+  ##   1. builtin default      (always)
+  ##   2. auto-discovered file (`.codetracer/trace-filter.toml`, unless
+  ##                            `--no-auto-filter` was passed)
+  ##   3. env var               (`CODETRACER_TRACE_FILTER`, `::`-separated)
+  ##   4. CLI flags             (`--trace-filter:<path>`, repeatable)
+  ## Later sources override earlier ones rule-by-rule per the library's
+  ## last-match-wins semantics.
+
+  # Layer 1: builtin default. Parsing failure is a programmer bug — surface
+  # it loudly rather than silently shipping an unfiltered trace.
+  let builtinRes = compileFiltersInline(builtinNimVmFilterToml, "<builtin>")
+  if builtinRes.isErr:
+    return err("BUG: builtin trace filter failed to parse: " & builtinRes.error)
+  var classifier = builtinRes.get()
+
+  # Layer 2: auto-discovery, unless suppressed.
+  if config != nil and not config.noAutoFilter:
+    let autoPath = findAutoFilter(scriptPath)
+    if autoPath.len > 0:
+      let r = compileFilters(@[autoPath])
+      if r.isErr:
+        return err(r.error)
+      let extra = r.get()
+      for rule in extra.rules:
+        classifier.rules.add(rule)
+      classifier.sources.add(autoPath)
+      for w in extra.warnings:
+        classifier.warnings.add(w)
+      classifier.defaultExec = extra.defaultExec
+
+  # Layer 3: env var.
+  let envPaths = parseEnvFilterPaths(getEnv("CODETRACER_TRACE_FILTER"))
+  if envPaths.len > 0:
+    let r = compileFilters(envPaths)
+    if r.isErr:
+      return err(r.error)
+    let extra = r.get()
+    for rule in extra.rules:
+      classifier.rules.add(rule)
+    for s in extra.sources:
+      classifier.sources.add(s)
+    for w in extra.warnings:
+      classifier.warnings.add(w)
+    classifier.defaultExec = extra.defaultExec
+
+  # Layer 4: CLI flag(s).
+  if config != nil and config.traceFilterPaths.len > 0:
+    let r = compileFilters(config.traceFilterPaths)
+    if r.isErr:
+      return err(r.error)
+    let extra = r.get()
+    for rule in extra.rules:
+      classifier.rules.add(rule)
+    for s in extra.sources:
+      classifier.sources.add(s)
+    for w in extra.warnings:
+      classifier.warnings.add(w)
+    classifier.defaultExec = extra.defaultExec
+
+  ok(classifier)
+
 proc initVmTracer*(outputPath: string, scriptPath: string,
                    config: ConfigRef): Result[ptr VmTracer, string] =
   ## Create a new VmTracer. Returns a heap-allocated pointer suitable
@@ -174,6 +417,13 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   let writerRes = initMultiStreamWriter(outputPath, scriptPath)
   if writerRes.isErr:
     return err("failed to create trace writer: " & writerRes.error)
+
+  let filterRes = loadComposedClassifier(config, scriptPath)
+  if filterRes.isErr:
+    # Don't leak the half-built writer.
+    var w = writerRes.get()
+    w.closeCtfs()
+    return err("failed to compile trace filters: " & filterRes.error)
 
   var tracer = cast[ptr VmTracer](alloc0(sizeof(VmTracer)))
   tracer[] = VmTracer(
@@ -184,13 +434,14 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     lastPathId: 0,
     lastEmittedLine: 0,
     haveLastEmitted: false,
-    paths: initTable[int32, uint64](),
+    pathCache: @[],
     functions: initTable[string, uint64](),
     typeNames: initTable[string, uint64](),
     nextVariableIndex: 0,
     pendingValues: @[],
     depth: 0,
     config: config,
+    filter: filterRes.get(),
   )
   ok(tracer)
 
@@ -212,7 +463,14 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   tracer.lastLine = line
   tracer.lastFileIndex = fileIdx
 
-  let pathId = tracer.ensurePath(fileIdx)
+  var skip = false
+  let pathId = tracer.ensurePath(fileIdx, skip)
+  # TF-M4: if the classifier said skip (or registration failed), drop any
+  # pending values along with the step so we don't accumulate phantom
+  # assignments anchored to no real source line.
+  if skip:
+    tracer.pendingValues.setLen(0)
+    return
   let res = tracer.writer.registerStep(pathId, uint64(line),
                                        tracer.pendingValues)
   if res.isErr:

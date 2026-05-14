@@ -1193,6 +1193,16 @@ proc processSwitch*(switch, arg: string, pass: TCmdLinePass, info: TLineInfo;
   of "trace":
     conf.globalOptions.incl optTraceVM
     conf.traceOutputPath = arg
+  of "trace-filter", "tracefilter":
+    # TF-M4: register an additional --trace-filter:<path> filter file.
+    # Repeatable; composed last per spec § 5.
+    if arg.len == 0:
+      localError(conf, info, "--trace-filter:<path> requires a path argument")
+    else:
+      conf.traceFilterPaths.add(arg)
+  of "no-auto-filter", "noautofilter":
+    # TF-M4: skip the auto-discovered .codetracer/trace-filter.toml lookup.
+    conf.noAutoFilter = true
   of "deepcopy":
     processOnOffSwitchG(conf, {optEnableDeepCopy}, arg, pass, info)
   of "": # comes from "-" in for example: `nim c -r -` (gets stripped from -)

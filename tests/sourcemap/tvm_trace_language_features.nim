@@ -337,7 +337,12 @@ proc main() =
     doAssert "test_lang_features" in pathsContent,
       "paths.dat should contain the script file path"
 
-    doAssert stepsContent.len > 256,
+    # TF-M4 made the builtin filter skip the Nim stdlib, so steps.dat now
+    # only contains events from the comprehensive user script — substantially
+    # fewer bytes than the pre-M4 unfiltered baseline. The threshold still
+    # rejects an effectively-empty stream (no user code stepped at all) while
+    # leaving room for the user-code subset's natural size.
+    doAssert stepsContent.len > 64,
       "steps.dat too small for comprehensive script: " & $stepsContent.len & " bytes"
     doAssert callsContent.len > 0, "calls.dat is empty — no Call events emitted"
     doAssert valuesContent.len > 0, "values.dat is empty — no Value events emitted"
