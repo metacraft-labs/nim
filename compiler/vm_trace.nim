@@ -36,13 +36,27 @@
 ##     stream files into the container, and `toBytes` produces the on-disk
 ##     blob that the materializer / `ct-print` consume.
 ##
-## Variable identification: the VM does not surface variable names at the
-## per-instruction tracing sites (`traceAssignment(reg)` only sees the
-## register, not its bound symbol). We therefore emit each value under a
-## synthetic varname `r<N>` (one per assignment) so it round-trips through
-## the interning table. Mapping these back to source-level variables is a
-## later milestone; here we only need the materializer to surface
-## non-empty `events` / `paths` / `functions` arrays.
+## Variable identification (CTFS-M-Varnames update): the VM trace site
+## supplies the owning proc and the target register slot. vmgen.nim
+## populates `PCtx.regSymTable[(procId, slot)] -> PSym` for every user
+## binding (skLet / skVar / skForVar / skResult / skParam / generic param);
+## compiler temporaries (slotTempInt / slotTempFloat / slotTempStr /
+## slotTempUnknown / slotTempPerm / slotTempComplex) are deliberately
+## absent. `traceAssignment` consults that table:
+##
+##   * hit  -> emit the value under the symbol's source-level name
+##             (`x`, `bar`, `result`, ...). The slot's `r<N>` synthetic
+##             label never enters the trace.
+##   * miss -> the slot is a temporary; skip the emit entirely. The value
+##             never enters the value stream and the synthetic varname
+##             never enters the interning pool.
+##
+## Pre-CTFS-M-Varnames the tracer minted a fresh `r<N>` for every
+## assignment, which produced 1.4k-3k synthetic entries in the varname
+## pool for trivial programs and made post-hoc audit impossible. The
+## table-lookup gate is a single `withValue` (one hash lookup + early
+## return on miss), in the same complexity class as TF-M4b's function-side
+## filter.
 
 import std/[tables, syncio, os, strutils]
 import msgs, options, lineinfos
@@ -213,7 +227,13 @@ type
       ## a single hash lookup — still O(1), still single-read.
     functions*: Table[string, uint64]   ## name → functionId (TF-M4-era fallback)
     typeNames*: Table[string, uint64]   ## type name → typeId
-    nextVariableIndex*: uint64          ## counter for synthetic r<N> varnames
+    varnameIds*: Table[ItemId, uint64]
+      ## CTFS-M-Varnames: cache of `PSym.itemId -> varnameId` for
+      ## user-binding symbols already registered with the writer. Keeps the
+      ## hot path to one hash lookup (`regSymTable`) + one cache hit
+      ## (`varnameIds`) for repeat assignments to the same variable; only
+      ## the first assignment to each binding pays for the writer-side
+      ## interning-table registration.
     pendingValues*: seq[VariableValue]  ## values buffered between steps
     depth*: int
     config*: ConfigRef
@@ -704,7 +724,7 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     funcByItemId: initTable[ItemId, FuncCacheEntry](),
     functions: initTable[string, uint64](),
     typeNames: initTable[string, uint64](),
-    nextVariableIndex: 0,
+    varnameIds: initTable[ItemId, uint64](),
     pendingValues: @[],
     depth: 0,
     config: config,
@@ -806,22 +826,37 @@ proc traceReturn*(tracer: var VmTracer, prc: PSym) =
   if res.isErr:
     discard
 
-proc traceAssignment*(tracer: var VmTracer, reg: TFullReg,
+proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
                       typ: PType = nil) =
   ## Buffer a Value event for a register-writing opcode.
-  ## Serializes the register value and queues it; it is flushed as part of
-  ## the next `traceStep` (or via `flushPendingValuesAsStep` on transition).
+  ##
+  ## CTFS-M-Varnames: `sym` is the source-level binding that owns the target
+  ## register slot, or `nil` when the slot is a compiler temporary. A
+  ## `nil` sym short-circuits — no value enters the trace, no synthetic
+  ## `r<N>` is minted, and the writer's varname pool stays bounded to
+  ## the count of user bindings the program actually defines.
+  ##
+  ## Hot path on hit: one Table lookup (`varnameIds`) for repeat
+  ## assignments + one CBOR encode + one append to `pendingValues`. The
+  ## first assignment to each binding additionally pays a single
+  ## `registerVarname` call against the writer's interning table.
+  if sym == nil:
+    return
+
   let value = serializeVmValue(reg, typ)
   let typeName = typeNameForReg(reg, typ)
   let typeId = tracer.ensureTypeName(typeName)
 
-  # Synthetic varname per assignment so each value has a recoverable id.
-  let varIndex = tracer.nextVariableIndex
-  tracer.nextVariableIndex += 1
-  let varRes = tracer.writer.registerVarname("r" & $varIndex)
-  let varnameId =
-    if varRes.isErr: 0'u64
-    else: varRes.get()
+  let key = sym.itemId
+  var varnameId: uint64 = 0
+  tracer.varnameIds.withValue(key, idPtr):
+    varnameId = idPtr[]
+  do:
+    let varRes = tracer.writer.registerVarname(sym.name.s)
+    varnameId =
+      if varRes.isErr: 0'u64
+      else: varRes.get()
+    tracer.varnameIds[key] = varnameId
 
   tracer.pendingValues.add(VariableValue(
     varnameId: varnameId,

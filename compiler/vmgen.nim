@@ -1585,10 +1585,26 @@ proc genAsgn(c: PCtx; dest: TDest; ri: PNode; requiresCopy: bool) =
   gABC(c, ri, whichAsgnOpc(ri, requiresCopy), dest, tmp)
   c.freeTemp(tmp)
 
+proc procIdForRegSymTable(c: PCtx): ItemId {.inline.} =
+  ## CTFS-M-Varnames: the key half identifying the proc that owns a slot.
+  ## For top-level / module-body code (`c.prc.sym == nil`) we use the
+  ## default-constructed `ItemId(module: 0, item: 0)`; vm.nim performs the
+  ## same substitution when `tos.prc == nil`, so the two halves always match.
+  if c.prc != nil and c.prc.sym != nil:
+    c.prc.sym.itemId
+  else:
+    ItemId(module: 0, item: 0)
+
 proc setSlot(c: PCtx; v: PSym) =
   # XXX generate type initialization here?
   if v.position == 0:
     v.positionImpl = getFreeRegister(c, if v.kind == skLet: slotFixedLet else: slotFixedVar, start = 1)
+    # CTFS-M-Varnames: register the user binding -> slot mapping. `setSlot`
+    # is the path that allocates fresh slots for skLet / skVar / skForVar
+    # bindings (params and result are handled separately in `genParams`).
+    # Only `slotFixedVar` / `slotFixedLet` kinds reach this branch by
+    # construction, so we don't need an extra filter.
+    c.regSymTable[(procIdForRegSymTable(c), v.position)] = v
 
 template cannotEval(c: PCtx; n: PNode) =
   if c.config.cmd == cmdCheck and c.config.m.errorOutputs != {}:
@@ -2396,6 +2412,20 @@ proc genParams(c: PCtx; params: PNode) =
   c.prc.regInfo[0] = (inUse: true, kind: slotFixedVar)
   for i in 1..<params.len:
     c.prc.regInfo[i] = (inUse: true, kind: slotFixedLet)
+  # CTFS-M-Varnames: register the result (slot 0) and parameter (slots
+  # 1..N) -> PSym mapping. `params` is the proc type's `n` node (the
+  # formal parameters list); element 0 is the return-type/result, elements
+  # 1.. are the named parameters, each carrying its symbol in `.sym`. Slot
+  # arithmetic matches vmgen's reads at line ~1717 (skParam → position+1,
+  # skResult → position == 0).
+  let pid = procIdForRegSymTable(c)
+  if c.prc != nil and c.prc.sym != nil and c.prc.sym.ast != nil and
+     resultPos < c.prc.sym.ast.len and
+     c.prc.sym.ast[resultPos].kind == nkSym:
+    c.regSymTable[(pid, 0)] = c.prc.sym.ast[resultPos].sym
+  for i in 1..<params.len:
+    if params[i].kind == nkSym:
+      c.regSymTable[(pid, i)] = params[i].sym
 
 proc finalJumpTarget(c: PCtx; pc, diff: int) =
   internalAssert(c.config, regBxMin < diff and diff < regBxMax)
@@ -2407,10 +2437,13 @@ proc finalJumpTarget(c: PCtx; pc, diff: int) =
 proc genGenericParams(c: PCtx; gp: PNode) =
   var base = c.prc.regInfo.len
   setLen c.prc.regInfo, base + gp.len
+  let pid = procIdForRegSymTable(c)
   for i in 0..<gp.len:
     var param = gp[i].sym
     param.position = base + i # XXX: fix this earlier; make it consistent with templates
     c.prc.regInfo[base + i] = (inUse: true, kind: slotFixedLet)
+    # CTFS-M-Varnames: generic parameters are user-visible names too.
+    c.regSymTable[(pid, base + i)] = param
 
 proc optimizeJumps(c: PCtx; start: int) =
   const maxIterations = 10

@@ -554,6 +554,23 @@ proc takeCharAddress(c: PCtx, src: PNode, index: BiggestInt, pc: int): TFullReg 
   TFullReg(kind: rkNode, node: node)
 
 
+proc resolveTracedSlotSym(c: PCtx, tos: PStackFrame, slot: int): PSym {.inline.} =
+  ## CTFS-M-Varnames: look up the source-level binding that owns the
+  ## register slot being written. Returns nil when the slot is a compiler
+  ## temporary (in which case vm_trace.traceAssignment short-circuits and
+  ## emits nothing — keeping temporaries out of both the varname pool and
+  ## the value stream).
+  ##
+  ## Key composition mirrors vmgen's `procIdForRegSymTable`: top-level /
+  ## module-body code (where `tos.prc == nil`) maps to the default
+  ## `ItemId(module: 0, item: 0)`; otherwise the proc's own `itemId`.
+  let pid =
+    if tos != nil and tos.prc != nil: tos.prc.itemId
+    else: ItemId(module: 0, item: 0)
+  c.regSymTable.withValue((pid, slot), symPtr):
+    return symPtr[]
+  return nil
+
 proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
   result = TFullReg(kind: rkNone)
   var pc = start
@@ -628,12 +645,14 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       else:
         stackTrace(c, tos, pc, "opcAsgnInt: got " & $regs[rb].kind)
       if c.vmTracer != nil:
-        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
     of opcAsgnFloat:
       decodeB(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal
       if c.vmTracer != nil:
-        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
     of opcCastFloatToInt32:
       let rb = instr.regB
       ensureKind(rkInt)
@@ -687,11 +706,13 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
     of opcAsgnComplex:
       asgnComplex(regs[ra], regs[instr.regB])
       if c.vmTracer != nil:
-        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
     of opcFastAsgnComplex:
       fastAsgnComplex(regs[ra], regs[instr.regB])
       if c.vmTracer != nil:
-        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
     of opcAsgnRef:
       asgnRef(regs[ra], regs[instr.regB])
     of opcNodeToReg:
@@ -906,7 +927,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
           let n = src[rc]
           regs[ra].node = n
       if c.vmTracer != nil:
-        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[ra])
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
     of opcLdObjAddr:
       # a = addr(b.c)
       decodeBC(rkNodeAddr)
@@ -937,7 +959,14 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         writeField(dest[shiftedRb], regs[rc])
         dest[shiftedRb].flags.incl nfSkipFieldChecking
       if c.vmTracer != nil:
-        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], regs[rc])
+        # opcWrObj writes regs[rc] into a field of regs[ra]. The slot
+        # being written (in register-slot terms) is `rc` — but for an
+        # object field write the source is typically a temporary, so
+        # the regSymTable lookup almost always misses and the trace
+        # site short-circuits. That's the intended behaviour: tracing
+        # individual field-store source temporaries is noise.
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
+                        resolveTracedSlotSym(c, tos, rc.int), regs[rc])
     of opcWrStrIdx:
       decodeBC(rkNode)
       let idx = regs[rb].intVal.int

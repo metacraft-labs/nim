@@ -9,6 +9,18 @@ discard """
 ## Writes a NimScript with known values (int, float, string, bool),
 ## runs nim_trace e --trace on it, reads the .ct file using TraceReader,
 ## and verifies the decoded Value events contain the exact expected values.
+##
+## CTFS-M-Varnames update: after this milestone, the tracer only emits
+## values whose target register slot is owned by a source-level user
+## binding (`skLet` / `skVar` / `skForVar` / `skResult` / `skParam`).
+## Top-level NimScript `let x = 42` bindings are *global* — they're
+## written via `opcWrDeref` through a `genAdditionalCopy` temp slot, and
+## the temp slot is not in the `regSymTable` side table, so the
+## intermediate `opcAsgnInt cc, value` no longer emits a synthetic
+## `r<N>` value record. To exercise the value-serializer code paths we
+## now run the literal-assignment script *inside a proc body*, where
+## the user bindings are local and reachable through the traced
+## `opcAsgnInt` / `opcAsgnComplex` / `opcFastAsgnComplex` sites.
 
 import std/[os, osproc, assertions, strutils, math]
 
@@ -25,10 +37,17 @@ const
   buildDir = testsDir / "build_tvm_trace_exact_values"
 
 const testScript = """
-let x = 42
-let y = 3.14
-let s = "hello"
-let b = true
+proc demo(seedInt: int, seedFloat: float, seedStr: string, seedBool: bool) =
+  let x = seedInt
+  let y = seedFloat
+  let s = seedStr
+  let b = seedBool
+  let extra = seedInt  # tail line so b's pending value flushes on the
+                       # *next* user-file step before any stdlib emitter
+                       # (echo / addInt / addFloat / ...) consumes it.
+  echo x, " ", y, " ", s, " ", b, " ", extra
+
+demo(42, 3.14, "hello", true)
 """
 
 proc main() =

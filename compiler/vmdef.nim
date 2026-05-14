@@ -282,6 +282,26 @@ type
     # CTFS-M1: vmTracer is always present in the layout; nil when no
     # `--trace:<path>` was passed for the current run.
     vmTracer*: pointer  # ptr VmTracer (from vm_trace module), nil when tracing disabled
+    # CTFS-M-Varnames: side table mapping (procId, slot) -> source-level PSym.
+    # Populated by vmgen.nim only for slot kinds that correspond to a user
+    # binding (slotFixedVar / slotFixedLet — i.e. result, params, let, var,
+    # for-vars). Compiler temporaries (slotTempUnknown / slotTempInt / ... /
+    # slotTempPerm) are deliberately NOT entered; their absence is the signal
+    # that vm_trace should skip the value emission entirely.
+    #
+    # Key: (proc itemId, slot index). For top-level / module-body code the
+    # owning PProc has `sym == nil`; vmgen uses a default-constructed
+    # ItemId(module: 0, item: 0) in that case, and vm.nim matches it when
+    # `tos.prc == nil`. Slot indices come from `s.position` (for skLet /
+    # skVar / skForVar / skResult) or `s.position + 1` (for skParam) — the
+    # same arithmetic vm.nim uses to load the register.
+    #
+    # The table is always populated regardless of `optTraceVM` — the cost is
+    # bounded by the number of user-visible bindings in the program (one
+    # Table.add per setSlot / param / result), which is small compared to
+    # the per-instruction emit hot path. The lookup is performed only when
+    # tracing is active.
+    regSymTable*: Table[(ItemId, int), PSym]
 
   PStackFrame* = ref TStackFrame
   TStackFrame* {.acyclic.} = object

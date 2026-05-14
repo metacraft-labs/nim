@@ -10,6 +10,23 @@ discard """
 ## runs nim_trace e --trace on it, reads the .ct file using TraceReader,
 ## and verifies that Value events contain representations of these complex
 ## values (rendered via renderTree() in the serializer as vrkRaw strings).
+##
+## CTFS-M-Varnames update: the tracer now only emits values for slots
+## owned by a source-level user binding. Two changes for this test:
+##
+##   1. Wrap the bindings in a proc so the locals are user-named slots
+##      (skLet inside a `PProc(sym = demo)`), not top-level globals
+##      written via `opcWrDeref`. Local skLet binds go through traced
+##      `opcAsgnComplex` / `opcFastAsgnComplex` to their dedicated slot
+##      after `setSlot` populates `regSymTable`.
+##   2. Initialize the complex bindings indirectly through a `var`-then-
+##      *assign* pattern so the write to the user-binding slot fires the
+##      traceable assignment opcode. Direct construction of `let p =
+##      Point(x: 1, y: 2)` lays out the object via per-field
+##      `opcWrObj` writes whose source registers are temporaries —
+##      vmgen has no analogue of `setSlot` for the implicit nkObjConstr
+##      target, and per-field temporaries are correctly rejected by the
+##      side-table lookup.
 
 import std/[os, osproc, assertions, strutils]
 
@@ -28,9 +45,22 @@ const
 const testScript = """
 type Point = object
   x, y: int
-let p = Point(x: 1, y: 2)
-let arr = @[10, 20, 30]
-let nested = @[@[1, 2], @[3, 4]]
+
+proc demo() =
+  let src = Point(x: 1, y: 2)
+  let srcArr = @[10, 20, 30]
+  let srcNested = @[@[1, 2], @[3, 4]]
+  # Re-bind through an explicit copy so the user-binding slot becomes
+  # the destination of a traced opcAsgnComplex / opcFastAsgnComplex.
+  let p = src
+  let arr = srcArr
+  let nested = srcNested
+  let tail = arr  # tail flush so the last user binding lands in a
+                  # value record before the proc's return collapses
+                  # pending state.
+  echo p, " ", arr, " ", nested, " ", tail
+
+demo()
 """
 
 proc main() =
