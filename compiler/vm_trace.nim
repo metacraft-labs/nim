@@ -57,6 +57,109 @@ import codetracer_trace_types
 import vm_value_serializer
 import vmdef
 
+# ---------------------------------------------------------------------------
+# TF-M7: SHA-256 (minimal, RFC 6234)
+# ---------------------------------------------------------------------------
+#
+# The Nim stdlib only ships SHA-1; we need SHA-256 to populate the
+# trace-filter provenance digests recorded in meta.dat per spec § 7.
+# Pulling in `nimcrypto` (or any third-party crate) is overkill for one
+# digest call per recording session, and the compiler's bootstrap
+# already avoids non-stdlib deps for the boot-image hash budget.  ~60
+# lines of self-contained code suffice.
+
+const Sha256K: array[64, uint32] = [
+  0x428a2f98'u32, 0x71374491'u32, 0xb5c0fbcf'u32, 0xe9b5dba5'u32,
+  0x3956c25b'u32, 0x59f111f1'u32, 0x923f82a4'u32, 0xab1c5ed5'u32,
+  0xd807aa98'u32, 0x12835b01'u32, 0x243185be'u32, 0x550c7dc3'u32,
+  0x72be5d74'u32, 0x80deb1fe'u32, 0x9bdc06a7'u32, 0xc19bf174'u32,
+  0xe49b69c1'u32, 0xefbe4786'u32, 0x0fc19dc6'u32, 0x240ca1cc'u32,
+  0x2de92c6f'u32, 0x4a7484aa'u32, 0x5cb0a9dc'u32, 0x76f988da'u32,
+  0x983e5152'u32, 0xa831c66d'u32, 0xb00327c8'u32, 0xbf597fc7'u32,
+  0xc6e00bf3'u32, 0xd5a79147'u32, 0x06ca6351'u32, 0x14292967'u32,
+  0x27b70a85'u32, 0x2e1b2138'u32, 0x4d2c6dfc'u32, 0x53380d13'u32,
+  0x650a7354'u32, 0x766a0abb'u32, 0x81c2c92e'u32, 0x92722c85'u32,
+  0xa2bfe8a1'u32, 0xa81a664b'u32, 0xc24b8b70'u32, 0xc76c51a3'u32,
+  0xd192e819'u32, 0xd6990624'u32, 0xf40e3585'u32, 0x106aa070'u32,
+  0x19a4c116'u32, 0x1e376c08'u32, 0x2748774c'u32, 0x34b0bcb5'u32,
+  0x391c0cb3'u32, 0x4ed8aa4a'u32, 0x5b9cca4f'u32, 0x682e6ff3'u32,
+  0x748f82ee'u32, 0x78a5636f'u32, 0x84c87814'u32, 0x8cc70208'u32,
+  0x90befffa'u32, 0xa4506ceb'u32, 0xbef9a3f7'u32, 0xc67178f2'u32,
+]
+
+proc rotr32(x: uint32, n: int): uint32 {.inline.} =
+  (x shr uint32(n)) or (x shl uint32(32 - n))
+
+proc sha256Sum(data: openArray[byte]): array[32, byte] =
+  ## Compute the SHA-256 digest of `data`.  Returns the 32 raw digest
+  ## bytes (no hex encoding); the meta.dat writer wants raw bytes per
+  ## spec § 7.
+  result = default(array[32, byte])
+  var h: array[8, uint32] = [
+    0x6a09e667'u32, 0xbb67ae85'u32, 0x3c6ef372'u32, 0xa54ff53a'u32,
+    0x510e527f'u32, 0x9b05688c'u32, 0x1f83d9ab'u32, 0x5be0cd19'u32,
+  ]
+  # Build the padded message.  Padding is: append 0x80, then enough
+  # zero bytes for the result to be ≡ 56 (mod 64), then a big-endian
+  # 64-bit bit-length.
+  let msgBits = uint64(data.len) * 8'u64
+  var msg = newSeqOfCap[byte](data.len + 64)
+  for b in data:
+    msg.add(b)
+  msg.add(0x80'u8)
+  while (msg.len mod 64) != 56:
+    msg.add(0'u8)
+  for i in countdown(7, 0):
+    msg.add(byte((msgBits shr uint64(i * 8)) and 0xFF'u64))
+
+  var w: array[64, uint32] = default(array[64, uint32])
+  var blockIdx = 0
+  while blockIdx < msg.len:
+    for t in 0 ..< 16:
+      let off = blockIdx + t * 4
+      w[t] = (uint32(msg[off]) shl 24) or (uint32(msg[off + 1]) shl 16) or
+             (uint32(msg[off + 2]) shl 8) or uint32(msg[off + 3])
+    for t in 16 ..< 64:
+      let s0 = rotr32(w[t - 15], 7) xor rotr32(w[t - 15], 18) xor (w[t - 15] shr 3'u32)
+      let s1 = rotr32(w[t - 2], 17) xor rotr32(w[t - 2], 19) xor (w[t - 2] shr 10'u32)
+      w[t] = w[t - 16] + s0 + w[t - 7] + s1
+    var a = h[0]; var b = h[1]; var c = h[2]; var d = h[3]
+    var e = h[4]; var f = h[5]; var g = h[6]; var hh = h[7]
+    for t in 0 ..< 64:
+      let sig1 = rotr32(e, 6) xor rotr32(e, 11) xor rotr32(e, 25)
+      let ch = (e and f) xor ((not e) and g)
+      let temp1 = hh + sig1 + ch + Sha256K[t] + w[t]
+      let sig0 = rotr32(a, 2) xor rotr32(a, 13) xor rotr32(a, 22)
+      let maj = (a and b) xor (a and c) xor (b and c)
+      let temp2 = sig0 + maj
+      hh = g; g = f; f = e; e = d + temp1
+      d = c; c = b; b = a; a = temp1 + temp2
+    h[0] += a; h[1] += b; h[2] += c; h[3] += d
+    h[4] += e; h[5] += f; h[6] += g; h[7] += hh
+    blockIdx += 64
+
+  for i in 0 ..< 8:
+    result[i * 4] = byte((h[i] shr 24) and 0xFF)
+    result[i * 4 + 1] = byte((h[i] shr 16) and 0xFF)
+    result[i * 4 + 2] = byte((h[i] shr 8) and 0xFF)
+    result[i * 4 + 3] = byte(h[i] and 0xFF)
+
+proc sha256OfString(s: string): array[32, byte] =
+  ## Convenience: SHA-256 of a string's UTF-8 bytes.  Used for the
+  ## inline builtin-default filter (TOML literal in
+  ## `builtinNimVmFilterToml`) and for filter file contents we've
+  ## already slurped via readFile.
+  var buf = newSeq[byte](s.len)
+  for i in 0 ..< s.len:
+    buf[i] = byte(s[i])
+  sha256Sum(buf)
+
+const BuiltinFilterSentinelPath* = "<inline:builtin-default>"
+  ## TF-M7 spec § 7 sentinel for the recorder-embedded default filter.
+  ## Defined as a constant so the smoke tests (and any downstream
+  ## audit tooling) can match against it without recomputing the
+  ## string.
+
 const builtinNimVmFilterToml* = """
 [meta]
 name = "builtin-nim-vm-default"
@@ -507,8 +610,20 @@ proc parseEnvFilterPaths*(envValue: string): seq[string] =
       result.add(part)
     i = nextSep + 2
 
+proc readFilterFileForProvenance(path: string): Result[string, string] =
+  ## Slurp a filter TOML file's content for SHA-256 hashing.  Errors
+  ## are surfaced with the same prefix `loadComposedClassifier` uses,
+  ## so the recorder-startup diagnostic stays consistent.
+  try:
+    ok(readFile(path))
+  except IOError as e:
+    err("failed to read filter file '" & path & "': " & e.msg)
+  except OSError as e:
+    err("failed to read filter file '" & path & "': " & e.msg)
+
 proc loadComposedClassifier*(
-    config: ConfigRef, scriptPath: string): Result[Classifier, string] =
+    config: ConfigRef, scriptPath: string,
+    provenance: var seq[FilterProvenance]): Result[Classifier, string] =
   ## TF-M4: build the per-tracer Classifier from the four-layer composition
   ## defined in `Trace-Filters.md` § 5:
   ##   1. builtin default      (always)
@@ -518,6 +633,12 @@ proc loadComposedClassifier*(
   ##   4. CLI flags             (`--trace-filter:<path>`, repeatable)
   ## Later sources override earlier ones rule-by-rule per the library's
   ## last-match-wins semantics.
+  ##
+  ## TF-M7: each loaded source is also appended (in composition order)
+  ## to `provenance` with its SHA-256 digest, so the tracer can emit
+  ## the chain into meta.dat per Trace-Filters.md § 7.
+
+  provenance = @[]
 
   # Layer 1: builtin default. Parsing failure is a programmer bug — surface
   # it loudly rather than silently shipping an unfiltered trace.
@@ -525,12 +646,20 @@ proc loadComposedClassifier*(
   if builtinRes.isErr:
     return err("BUG: builtin trace filter failed to parse: " & builtinRes.error)
   var classifier = builtinRes.get()
+  provenance.add(FilterProvenance(
+    path: BuiltinFilterSentinelPath,
+    sha256: sha256OfString(builtinNimVmFilterToml),
+  ))
 
   # Layer 2: auto-discovery, unless suppressed.
   if config != nil and not config.noAutoFilter:
     let autoPath = findAutoFilter(scriptPath)
     if autoPath.len > 0:
-      let r = compileFilters(@[autoPath])
+      let contentRes = readFilterFileForProvenance(autoPath)
+      if contentRes.isErr:
+        return err(contentRes.error)
+      let content = contentRes.get()
+      let r = compileFiltersInline(content, autoPath)
       if r.isErr:
         return err(r.error)
       let extra = r.get()
@@ -540,35 +669,54 @@ proc loadComposedClassifier*(
       for w in extra.warnings:
         classifier.warnings.add(w)
       classifier.defaultExec = extra.defaultExec
+      provenance.add(FilterProvenance(
+        path: autoPath,
+        sha256: sha256OfString(content),
+      ))
 
   # Layer 3: env var.
   let envPaths = parseEnvFilterPaths(getEnv("CODETRACER_TRACE_FILTER"))
-  if envPaths.len > 0:
-    let r = compileFilters(envPaths)
+  for envPath in envPaths:
+    let contentRes = readFilterFileForProvenance(envPath)
+    if contentRes.isErr:
+      return err(contentRes.error)
+    let content = contentRes.get()
+    let r = compileFiltersInline(content, envPath)
     if r.isErr:
       return err(r.error)
     let extra = r.get()
     for rule in extra.rules:
       classifier.rules.add(rule)
-    for s in extra.sources:
-      classifier.sources.add(s)
+    classifier.sources.add(envPath)
     for w in extra.warnings:
       classifier.warnings.add(w)
     classifier.defaultExec = extra.defaultExec
+    provenance.add(FilterProvenance(
+      path: envPath,
+      sha256: sha256OfString(content),
+    ))
 
   # Layer 4: CLI flag(s).
-  if config != nil and config.traceFilterPaths.len > 0:
-    let r = compileFilters(config.traceFilterPaths)
-    if r.isErr:
-      return err(r.error)
-    let extra = r.get()
-    for rule in extra.rules:
-      classifier.rules.add(rule)
-    for s in extra.sources:
-      classifier.sources.add(s)
-    for w in extra.warnings:
-      classifier.warnings.add(w)
-    classifier.defaultExec = extra.defaultExec
+  if config != nil:
+    for cliPath in config.traceFilterPaths:
+      let contentRes = readFilterFileForProvenance(cliPath)
+      if contentRes.isErr:
+        return err(contentRes.error)
+      let content = contentRes.get()
+      let r = compileFiltersInline(content, cliPath)
+      if r.isErr:
+        return err(r.error)
+      let extra = r.get()
+      for rule in extra.rules:
+        classifier.rules.add(rule)
+      classifier.sources.add(cliPath)
+      for w in extra.warnings:
+        classifier.warnings.add(w)
+      classifier.defaultExec = extra.defaultExec
+      provenance.add(FilterProvenance(
+        path: cliPath,
+        sha256: sha256OfString(content),
+      ))
 
   ok(classifier)
 
@@ -580,7 +728,8 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   if writerRes.isErr:
     return err("failed to create trace writer: " & writerRes.error)
 
-  let filterRes = loadComposedClassifier(config, scriptPath)
+  var provenance: seq[FilterProvenance] = @[]
+  let filterRes = loadComposedClassifier(config, scriptPath, provenance)
   if filterRes.isErr:
     # Don't leak the half-built writer.
     var w = writerRes.get()
@@ -607,6 +756,15 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     config: config,
     filter: filterRes.get(),
   )
+
+  # TF-M7: record the active filter chain provenance (composition
+  # order, with SHA-256 of each source) so the meta.dat block reflects
+  # exactly which TOML files / inline defaults drove this recording.
+  # We always set `recordEvenIfEmpty = true` because the Nim VM tracer
+  # is a Tier-1 filter-aware recorder and spec § 7 mandates such
+  # recorders SHOULD emit at least the builtin-default entry (which
+  # `loadComposedClassifier` always produces).
+  tracer.writer.setFilterProvenance(provenance, recordEvenIfEmpty = true)
 
   # TF-M4a: populate `metadata.workdir` so the materializer's
   # `FullOpts(stripPaths: true)` can substitute `<workdir>` into paths
