@@ -621,7 +621,17 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       let info = c.debug[pc]
       # other useful variables: c.loopIterations
       echo "$# [$#] $#" % [c.config$info, $instr.opcode, c.config.sourceLine(info)]
-    if c.vmTracer != nil:
+    if c.vmTracer != nil and instr.opcode != opcEof:
+      # CTFS-M-TrailingStep: skip the dispatch-loop `traceStep` for
+      # `opcEof`. The end-of-frame marker is a synthetic opcode that
+      # never corresponds to user-source intent; its `c.debug[pc]`
+      # is filled with the module's leading TLineInfo (typically the
+      # `discard """` block at line 1 of a testament script), and
+      # emitting a step there leaves a spurious trailing event with
+      # no semantic meaning. Other dispatch hooks (`traceReturn` for
+      # `opcRet`, `flushPendingValuesAsStep` in `closeVmTracer`)
+      # already handle real frame-exit semantics, so suppressing the
+      # `opcEof` step here loses no information.
       traceStep(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc])
     c.profiler.enter(c, tos)
     case instr.opcode

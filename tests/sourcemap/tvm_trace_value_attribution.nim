@@ -110,12 +110,22 @@ proc main() =
   var echoStepValueCount = 0
   var echoStepFound = false
 
+  # CTFS-M-TrailingStep: also assert the final step lands on a real
+  # user line (1..4 in this test). Pre-CTFS-M-TrailingStep the dispatch
+  # loop emitted a final step at the script's leading line (often the
+  # testament header block); for a raw .nims with no header that means
+  # line 1, but a no-header script also wouldn't fail this assertion.
+  # We use it here as a sanity bound: the last step must be at the echo
+  # line (line 4), which is the last real user statement.
+  var lastStepLine = -1
+
   for n in 0'u64 ..< stepCount:
     let gliRes = rdr.stepAbsoluteGlobalLineIndex(n)
     doAssert gliRes.isOk,
       "stepAbsoluteGlobalLineIndex(" & $n & ") failed: " & gliRes.error
     let gli = gliRes.get()
     let line = int(gli mod DefaultLinesPerFile)
+    lastStepLine = line
     if line >= 1 and line <= 4:
       sawAtLine[line] = true
 
@@ -160,6 +170,15 @@ proc main() =
   doAssert echoStepValueCount == 0,
     "expected zero value records at the echo line (" & $lineEcho &
     "), got " & $echoStepValueCount
+
+  # CTFS-M-TrailingStep: the final step must be a real user line. For
+  # this script (4 lines), it should be the echo line (4). Pre-fix
+  # the dispatch loop also emitted a step for the terminal `opcEof`
+  # whose `c.debug[pc]` was pegged to line 1 of the script, so the
+  # last step would land at line 1 instead of line 4.
+  doAssert lastStepLine == int(lineEcho),
+    "expected final step at line " & $lineEcho &
+    " (the echo line), got line " & $lastStepLine
 
   removeDir(buildDir)
   echo "PASS: tvm_trace_value_attribution — a@", aFoundAtLine,
