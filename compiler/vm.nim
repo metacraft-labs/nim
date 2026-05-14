@@ -661,13 +661,15 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         stackTrace(c, tos, pc, "opcAsgnInt: got " & $regs[rb].kind)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcAsgnFloat:
       decodeB(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcCastFloatToInt32:
       let rb = instr.regB
       ensureKind(rkInt)
@@ -722,12 +724,14 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       asgnComplex(regs[ra], regs[instr.regB])
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcFastAsgnComplex:
       fastAsgnComplex(regs[ra], regs[instr.regB])
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcAsgnRef:
       asgnRef(regs[ra], regs[instr.regB])
     of opcNodeToReg:
@@ -921,7 +925,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # the trace short-circuits. When `rc` is itself a user binding
         # the value flows through naturally.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, rc.int), regs[rc])
+                        resolveTracedSlotSym(c, tos, rc.int), regs[rc],
+                        c.debug[pc])
     of opcLdObj:
       # a = b.c
       decodeBC(rkNode)
@@ -951,7 +956,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
           regs[ra].node = n
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcLdObjAddr:
       # a = addr(b.c)
       decodeBC(rkNodeAddr)
@@ -989,7 +995,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # site short-circuits. That's the intended behaviour: tracing
         # individual field-store source temporaries is noise.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, rc.int), regs[rc])
+                        resolveTracedSlotSym(c, tos, rc.int), regs[rc],
+                        c.debug[pc])
     of opcWrStrIdx:
       decodeBC(rkNode)
       let idx = regs[rb].intVal.int
@@ -1063,7 +1070,7 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
           globalSym = gsPtr[]
         if globalSym != nil:
           traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                          globalSym, regs[rc])
+                          globalSym, regs[rc], c.debug[pc])
     of opcAddInt:
       decodeBC(rkInt)
       let
@@ -1079,7 +1086,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # is the destination of `var x = ...; x = x + y`, the user
         # binding's slot is `ra` and the trace records the new value.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcAddImmInt:
       decodeBImm(rkInt)
       #message(c.config, c.debug[pc], warnUser, "came here")
@@ -1094,7 +1102,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         stackTrace(c, tos, pc, errOverOrUnderflow)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcSubInt:
       decodeBC(rkInt)
       let
@@ -1107,7 +1116,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         stackTrace(c, tos, pc, errOverOrUnderflow)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcSubImmInt:
       decodeBImm(rkInt)
       let
@@ -1120,7 +1130,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         stackTrace(c, tos, pc, errOverOrUnderflow)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcLenSeq:
       decodeBImm(rkInt)
       #assert regs[rb].kind == nkBracket
@@ -1187,45 +1198,52 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         stackTrace(c, tos, pc, errOverOrUnderflow)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcDivInt:
       decodeBC(rkInt)
       if regs[rc].intVal == 0: stackTrace(c, tos, pc, errConstantDivisionByZero)
       else: regs[ra].intVal = regs[rb].intVal div regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcModInt:
       decodeBC(rkInt)
       if regs[rc].intVal == 0: stackTrace(c, tos, pc, errConstantDivisionByZero)
       else: regs[ra].intVal = regs[rb].intVal mod regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcAddFloat:
       decodeBC(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal + regs[rc].floatVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcSubFloat:
       decodeBC(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal - regs[rc].floatVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcMulFloat:
       decodeBC(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal * regs[rc].floatVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcDivFloat:
       decodeBC(rkFloat)
       regs[ra].floatVal = regs[rb].floatVal / regs[rc].floatVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcShrInt:
       decodeBC(rkInt)
       block:
@@ -1235,67 +1253,78 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         regs[ra].intVal = a
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcShlInt:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal shl regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcAshrInt:
       decodeBC(rkInt)
       regs[ra].intVal = ashr(regs[rb].intVal, regs[rc].intVal)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcBitandInt:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal and regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcBitorInt:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal or regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcBitxorInt:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal xor regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcAddu:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal +% regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcSubu:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal -% regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcMulu:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal *% regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcDivu:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal /% regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcModu:
       decodeBC(rkInt)
       regs[ra].intVal = regs[rb].intVal %% regs[rc].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcEqInt:
       decodeBC(rkInt)
       regs[ra].intVal = ord(regs[rb].intVal == regs[rc].intVal)
@@ -1385,7 +1414,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       regs[ra].intVal = 1 - regs[rb].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcUnaryMinusInt:
       decodeB(rkInt)
       assert regs[rb].kind == rkInt
@@ -1396,21 +1426,24 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         stackTrace(c, tos, pc, errOverOrUnderflow)
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcUnaryMinusFloat:
       decodeB(rkFloat)
       assert regs[rb].kind == rkFloat
       regs[ra].floatVal = -regs[rb].floatVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcBitnotInt:
       decodeB(rkInt)
       assert regs[rb].kind == rkInt
       regs[ra].intVal = not regs[rb].intVal
       if c.vmTracer != nil:
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcEqStr:
       decodeBC(rkInt)
       regs[ra].intVal = ord(regs[rb].node.strVal == regs[rc].node.strVal)
@@ -1831,7 +1864,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # slot for `let x = 42` (proc-local) and similar; resolver
         # returns nil for compiler temps and the tracer short-circuits.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra])
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc])
     of opcLdNull:
       ensureKind(rkNode)
       let typ = c.types[instr.regBx - wordExcess]
@@ -1848,7 +1882,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # binding's declared type rather than inferring from the (empty)
         # register state.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra], typ)
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc], typ)
     of opcLdNullReg:
       let typ = c.types[instr.regBx - wordExcess]
       if typ.skipTypes(abstractInst+{tyRange}-{tyTypeDesc}).kind in {
@@ -1863,7 +1898,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # (int / float / bool / enum). Type info forwarded so bool /
         # enum locals serialise with the correct surface type.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra], typ)
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc], typ)
     of opcLdConst:
       let rb = instr.regBx - wordExcess
       let cnst = c.constants[rb]
@@ -1878,7 +1914,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # constants). Pass the constant's type so the tracer surfaces
         # it accurately.
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra], cnst.typ)
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc], cnst.typ)
     of opcAsgnConst:
       let rb = instr.regBx - wordExcess
       let cnst = c.constants[rb]
@@ -1891,7 +1928,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         # CTFS-M-TraceSites: copying constant assignment (mirrors
         # opcLdConst but with a fresh tree copy for mutables).
         traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                        resolveTracedSlotSym(c, tos, ra.int), regs[ra], cnst.typ)
+                        resolveTracedSlotSym(c, tos, ra.int), regs[ra],
+                        c.debug[pc], cnst.typ)
     of opcLdGlobal:
       let rb = instr.regBx - wordExcess - 1
       ensureKind(rkNode)

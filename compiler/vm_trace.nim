@@ -36,6 +36,21 @@
 ##     stream files into the container, and `toBytes` produces the on-disk
 ##     blob that the materializer / `ct-print` consume.
 ##
+## CTFS-M-ValueAttribution update: the previous model attached values to
+## the NEXT step after the assignment, regardless of where in the source
+## the writing opcode lived. That misattributed `let x = 123` (line N) to
+## the next user-visible step (e.g. a macro call site at line N+M). The
+## fix tracks the writing opcode's `TLineInfo` alongside each buffered
+## value (`PendingValue`). `traceStep`, before emitting the requested
+## step at the next (path, line), groups buffered pending values by their
+## writing-site (path, line) and synthesises one `registerStep` per
+## group whose site differs from the new step's site. Values whose
+## writing-site equals the new step's site flow through into the new
+## step's `vars[]` exactly as before. `traceCall` / `traceReturn` /
+## `closeVmTracer` use the same grouping, with the trailing flush
+## anchoring values at their actual writing site rather than at the last
+## emitted step's stale (path, line).
+##
 ## Variable identification (CTFS-M-Varnames update): the VM trace site
 ## supplies the owning proc and the target register slot. vmgen.nim
 ## populates `PCtx.regSymTable[(procId, slot)] -> PSym` for every user
@@ -196,6 +211,17 @@ type
     kind*: FuncCacheKind
     functionId*: uint64
 
+  PendingValue* = object
+    ## CTFS-M-ValueAttribution: a buffered value record together with
+    ## the source position of the writing opcode. `value` is the wire
+    ## payload that will eventually flow into a `registerStep` call;
+    ## `info` is the `TLineInfo` of the instruction that fired
+    ## `traceAssignment`. The flush logic groups by (fileIndex, line)
+    ## so that values land on the step at their writing site instead
+    ## of leaking onto the next user-visible step.
+    value*: VariableValue
+    info*: TLineInfo
+
   VmTracer* = object
     writer*: MultiStreamTraceWriter
     outputPath*: string                 ## destination .ct path
@@ -235,7 +261,11 @@ type
       ## (`varnameIds`) for repeat assignments to the same variable; only
       ## the first assignment to each binding pays for the writer-side
       ## interning-table registration.
-    pendingValues*: seq[VariableValue]  ## values buffered between steps
+    pendingValues*: seq[PendingValue]   ## values buffered between steps
+      ## CTFS-M-ValueAttribution: each entry carries the writing
+      ## opcode's `TLineInfo` so the flush logic can synthesise an
+      ## intermediate step at the writing site when it differs from
+      ## the next user-visible step's (path, line).
     depth*: int
     config*: ConfigRef
     filter*: Classifier                 ## TF-M4: cross-language trace filter
@@ -662,24 +692,80 @@ proc typeNameForReg(reg: TFullReg, typ: PType): string =
   of rkNone: return "none"
   of rkRegisterAddr, rkNodeAddr: return "address"
 
-proc flushPendingValuesAsStep(tracer: var VmTracer) =
-  ## If there are buffered values without a following step, emit a synthetic
-  ## step at the last known (path, line) so the values are recoverable. This
-  ## is used by traceCall / traceReturn / closeVmTracer to avoid dropping
-  ## values when no further `traceStep` will arrive before the transition.
-  if tracer.pendingValues.len == 0:
-    return
-  if not tracer.haveLastEmitted:
-    # No step has ever been emitted; we have no (path,line) to attach values
-    # to. Drop them — the trace has no observable state to anchor them on.
-    tracer.pendingValues.setLen(0)
-    return
-  let res = tracer.writer.registerStep(tracer.lastPathId,
-                                       tracer.lastEmittedLine,
-                                       tracer.pendingValues)
+proc emitPendingGroup(tracer: var VmTracer,
+                      pathId: uint64, line: uint64,
+                      group: openArray[VariableValue]) =
+  ## CTFS-M-ValueAttribution helper: emit one `registerStep` carrying
+  ## `group`'s values at (pathId, line). Errors are swallowed in the
+  ## same shape as the rest of the tracer — a writer error here cannot
+  ## be surfaced to the executing VM and dropping the step is the
+  ## least-bad recovery. The caller is responsible for updating the
+  ## tracer's "last emitted" cursor when the synthetic step
+  ## represents the new authoritative source position.
+  let res = tracer.writer.registerStep(pathId, line, group)
   if res.isErr:
     discard
+
+proc flushPendingValuesByWritingSite(tracer: var VmTracer) =
+  ## CTFS-M-ValueAttribution: emit one synthetic `registerStep` per
+  ## distinct writing-site `(fileIndex, line)` carried by the buffered
+  ## pending values, in the order they were buffered. After this
+  ## proc returns `pendingValues` is empty.
+  ##
+  ## Used by `traceCall` / `traceReturn` / `closeVmTracer` and as the
+  ## "leftover" path in `traceStep` when the new user-visible step's
+  ## site doesn't match any of the buffered values' sites. In those
+  ## contexts there's no anchoring forthcoming step, so each writing
+  ## site must produce its own dedicated step.
+  ##
+  ## Values whose writing site is invalid (missing line / filtered
+  ## path) are dropped silently. This mirrors the behaviour of
+  ## `traceStep` which also short-circuits on invalid line info.
+  if tracer.pendingValues.len == 0:
+    return
+
+  # Group preserving insertion order: walk pendingValues left-to-right,
+  # accumulating runs that share (fileIndex, line). For typical short
+  # buffers (a handful of writes between two steps), this O(n²)-shaped
+  # walk is cheaper than initialising a Table.
+  var i = 0
+  while i < tracer.pendingValues.len:
+    let info = tracer.pendingValues[i].info
+    let fileIdx = int32(info.fileIndex)
+    let line = info.line
+    var j = i + 1
+    while j < tracer.pendingValues.len and
+          int32(tracer.pendingValues[j].info.fileIndex) == fileIdx and
+          tracer.pendingValues[j].info.line == line:
+      inc j
+    # [i, j) shares the same writing site. Skip groups with no usable
+    # source position — the writing opcode has no line info we can
+    # attribute the value to.
+    if fileIdx >= 0 and line != 0:
+      var skip = false
+      let pathId = tracer.ensurePath(fileIdx, skip)
+      if not skip:
+        var group = newSeq[VariableValue](j - i)
+        for k in 0 ..< (j - i):
+          group[k] = tracer.pendingValues[i + k].value
+        emitPendingGroup(tracer, pathId, uint64(line), group)
+        # Each synthetic step advances the tracer's emitted cursor so
+        # subsequent delta encodings stay correct and a following
+        # `traceCall` / `traceReturn` / final flush observes the right
+        # "last known" position.
+        tracer.lastPathId = pathId
+        tracer.lastEmittedLine = uint64(line)
+        tracer.haveLastEmitted = true
+    i = j
   tracer.pendingValues.setLen(0)
+
+proc flushPendingValuesAsStep(tracer: var VmTracer) {.inline.} =
+  ## CTFS-M-ValueAttribution: legacy alias used by traceCall / traceReturn /
+  ## traceRaise / closeVmTracer / the filtered branch of traceStep. The
+  ## flush now groups by writing site so each value lands on a step at
+  ## its source line rather than collapsing onto a single
+  ## "last known" position.
+  flushPendingValuesByWritingSite(tracer)
 
 proc findAutoFilter*(scriptPath: string): string =
   ## TF-M4: walk upward from `scriptPath`'s directory looking for a
@@ -929,7 +1015,14 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
 proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   ## Emit a Step event if the source line changed since last step.
   ## This avoids flooding on instructions that map to the same line.
-  ## Any pending values accumulated since the last step are attached.
+  ##
+  ## CTFS-M-ValueAttribution: any buffered pending values whose
+  ## writing site differs from `info`'s (file, line) are flushed first
+  ## via dedicated synthetic steps at their writing site. Values whose
+  ## writing site equals `info`'s (file, line) are attached as the
+  ## `vars[]` of the new step. This makes value records appear at the
+  ## source line where the assignment was actually written rather than
+  ## leaking onto the next user-visible step.
   # CTFS-M-CompileTimeFilter: drop all step emission while the VM is
   # inside a compile-time evaluation scope (static:, {.compileTime.}
   # proc bodies, macro/template body execution). The trace records
@@ -954,16 +1047,59 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   let pathId = tracer.ensurePath(fileIdx, skip)
   # TF-M4: if the classifier said skip (or registration failed), drop the
   # step itself so we don't anchor phantom events on filtered code.
-  # CTFS-M-TraceSites: but FLUSH any pending values onto the previous
-  # user-traced step before dropping — they were produced by traced
-  # user code and would otherwise be silently lost at the
-  # traced->filtered transition (cf. the symmetric flush in `traceCall`
-  # and `traceReturn`).
+  # CTFS-M-TraceSites: but FLUSH any pending values at their writing
+  # sites before dropping — they were produced by traced user code and
+  # would otherwise be silently lost at the traced->filtered transition
+  # (cf. the symmetric flush in `traceCall` and `traceReturn`).
   if skip:
-    flushPendingValuesAsStep(tracer)
+    flushPendingValuesByWritingSite(tracer)
     return
-  let res = tracer.writer.registerStep(pathId, uint64(line),
-                                       tracer.pendingValues)
+
+  # CTFS-M-ValueAttribution: split pendingValues into
+  #   * `matching`: values whose writing site equals (fileIdx, line) —
+  #     these flow into the new step's vars[] as before.
+  #   * everything else: emitted as synthetic intermediate steps at
+  #     their respective writing sites first.
+  # We walk pendingValues left-to-right and emit a synthetic step
+  # whenever we encounter a maximal run of non-matching values that
+  # share a writing site. Matching values are accumulated separately
+  # and attached to the new step at the end.
+  var matching: seq[VariableValue] = @[]
+  var i = 0
+  while i < tracer.pendingValues.len:
+    let pv = tracer.pendingValues[i]
+    let pvFileIdx = int32(pv.info.fileIndex)
+    let pvLine = pv.info.line
+    if pvFileIdx == fileIdx and pvLine == line:
+      # Matching value: defer to the new step's vars[].
+      matching.add(pv.value)
+      inc i
+      continue
+    # Non-matching run: gather everything that shares this (file, line)
+    # then emit one synthetic step for them. Invalid-info values are
+    # dropped (no anchoring (path, line) available).
+    var j = i + 1
+    while j < tracer.pendingValues.len and
+          int32(tracer.pendingValues[j].info.fileIndex) == pvFileIdx and
+          tracer.pendingValues[j].info.line == pvLine:
+      inc j
+    if pvFileIdx >= 0 and pvLine != 0:
+      var pvSkip = false
+      let pvPathId = tracer.ensurePath(pvFileIdx, pvSkip)
+      if not pvSkip:
+        var group = newSeq[VariableValue](j - i)
+        for k in 0 ..< (j - i):
+          group[k] = tracer.pendingValues[i + k].value
+        emitPendingGroup(tracer, pvPathId, uint64(pvLine), group)
+        # Update emitted cursor so the writer's delta encoder stays
+        # aligned and subsequent flushes observe the correct "last
+        # emitted" position.
+        tracer.lastPathId = pvPathId
+        tracer.lastEmittedLine = uint64(pvLine)
+        tracer.haveLastEmitted = true
+    i = j
+
+  let res = tracer.writer.registerStep(pathId, uint64(line), matching)
   if res.isErr:
     discard
   tracer.pendingValues.setLen(0)
@@ -1125,7 +1261,7 @@ proc traceCatch*(tracer: var VmTracer, info: TLineInfo,
     discard
 
 proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
-                      typ: PType = nil) =
+                      info: TLineInfo, typ: PType = nil) =
   ## Buffer a Value event for a register-writing opcode.
   ##
   ## CTFS-M-Varnames: `sym` is the source-level binding that owns the target
@@ -1133,6 +1269,12 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
   ## `nil` sym short-circuits — no value enters the trace, no synthetic
   ## `r<N>` is minted, and the writer's varname pool stays bounded to
   ## the count of user bindings the program actually defines.
+  ##
+  ## CTFS-M-ValueAttribution: `info` is the writing opcode's source
+  ## position (`c.debug[pc]` at the call site). It's stored alongside
+  ## the buffered value so the flush logic can attribute the value to
+  ## the source line that produced it rather than to the next
+  ## user-visible step.
   ##
   ## Hot path on hit: one Table lookup (`varnameIds`) for repeat
   ## assignments + one CBOR encode + one append to `pendingValues`. The
@@ -1176,10 +1318,13 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
       else: varRes.get()
     tracer.varnameIds[key] = varnameId
 
-  tracer.pendingValues.add(VariableValue(
-    varnameId: varnameId,
-    typeId: typeId,
-    data: encodeValue(value),
+  tracer.pendingValues.add(PendingValue(
+    value: VariableValue(
+      varnameId: varnameId,
+      typeId: typeId,
+      data: encodeValue(value),
+    ),
+    info: info,
   ))
 
 proc syncVmTracer*(tracer: ptr VmTracer) =
