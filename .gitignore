@@ -1,6 +1,7 @@
 *
 !**/
 !*.*
+!justfile
 
 # Cache
 nimcache*/
