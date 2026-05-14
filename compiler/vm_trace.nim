@@ -67,6 +67,7 @@ import codetracer_trace_writer/multi_stream_writer
 import codetracer_trace_writer/value_stream
 import codetracer_trace_writer/cbor
 import codetracer_trace_writer/path_filter
+import ../dist/checksums/src/checksums/sha2
 import codetracer_trace_types
 import vm_value_serializer
 import vmdef
@@ -359,6 +360,65 @@ proc canonicalizePath(tracer: var VmTracer, p: string): string =
     # a single (uncanonicalized) entry rather than crash.
     result = p
 
+proc shouldSkipPath(tracer: var VmTracer, fileIndex: int32): bool =
+  ## TF-M5-Prep-2 (Blocker 1): non-registering counterpart of
+  ## `ensurePath`. Used by `traceAssignment` (and any other emit site
+  ## that needs to know "would this path be filtered" without forcing
+  ## the writer to allocate a paths[] entry for it).
+  ##
+  ## Returns `true` if the classifier decided to skip this file, or
+  ## the FileIndex is invalid. Returns `false` when the path is
+  ## tracedeable — the caller is free to emit. Mutates only the
+  ## classification caches (`pathByFileIdx`, `pathByCanonical`); does
+  ## not touch the writer's interning table. A subsequent
+  ## `ensurePath` for the same FileIndex will register the path then.
+  ##
+  ## Hot-path budget: one array deref on a cached FileIndex (the same
+  ## O(1) primary-cache hit `ensurePath` enjoys). Cold path performs
+  ## the same canonicalize + classify as `ensurePath` but stops
+  ## before `registerPath`.
+  if fileIndex < 0:
+    return true
+  let idx = int(fileIndex)
+  if idx < tracer.pathByFileIdx.len:
+    let entry = tracer.pathByFileIdx[idx]
+    case entry.kind
+    of pcSkip:
+      return true
+    of pcTrace:
+      return false
+    of pcUnclassified: discard
+  else:
+    tracer.pathByFileIdx.setLen(idx + 1)
+
+  # Cold path: classify against the same composed Classifier the rest
+  # of the tracer consults. Only mutate the SKIP side of the cache —
+  # we deliberately do NOT call writer.registerPath, because doing so
+  # would pollute the paths[] interning table with files we never
+  # emit a step for.
+  let rawPath = toFullPath(tracer.config, FileIndex(fileIndex))
+  let canonical = canonicalizePath(tracer, rawPath)
+
+  if canonical in tracer.pathByCanonical:
+    let cached = tracer.pathByCanonical[canonical]
+    tracer.pathByFileIdx[idx] = cached
+    return cached.kind == pcSkip
+
+  let decision = classify(tracer.filter, canonical)
+  if decision.exec == eaSkip:
+    let entry = PathCacheEntry(kind: pcSkip, pathId: 0)
+    tracer.pathByFileIdx[idx] = entry
+    tracer.pathByCanonical[canonical] = entry
+    return true
+
+  # Decision is `trace`, but we don't register here — the next
+  # `ensurePath` call (e.g. from traceStep) will do that, and we
+  # leave the primary cache as Unclassified so registration runs
+  # exactly once. The classification work we did is still useful via
+  # the secondary cache (`pathByCanonical`) — `ensurePath` will hit
+  # it on its second probe.
+  return false
+
 proc ensurePath(tracer: var VmTracer, fileIndex: int32,
                 skip: var bool): uint64 =
   ## TF-M4a: two-level path cache.
@@ -628,8 +688,37 @@ proc parseEnvFilterPaths*(envValue: string): seq[string] =
       result.add(part)
     i = nextSep + 2
 
+type
+  ComposedClassifier* = object
+    ## TF-M5-Prep-2 (Blocker 2): the loaded classifier plus the
+    ## provenance chain (path + content sha256) for every source that
+    ## contributed rules, in composition order. The provenance feeds
+    ## the writer's `setFilterProvenance` so that meta.dat carries the
+    ## `FlagHasTraceFilterProvenance` bit and the post-trace JSON
+    ## materializer surfaces `metadata.trace_filter.filters[]` per
+    ## Trace-Filters.md § 7.
+    classifier*: Classifier
+    provenance*: seq[FilterProvenance]
+
+proc filterDigest(data: string): array[32, byte] =
+  ## Compute SHA-256 of `data` and return the raw 32-byte digest in the
+  ## shape the meta.dat writer expects. Uses the bundled
+  ## `dist/checksums` module — the same SHA-2 implementation the
+  ## compiler already pulls in for ccgtypes/modulegraphs.
+  var digest: array[32, byte] = default(array[32, byte])
+  let raw = secureHash(Sha_256, data)  # returns array[32, char]
+  for i in 0 ..< 32:
+    digest[i] = byte(raw[i])
+  digest
+
+proc makeProvenance(path: string, content: string): FilterProvenance =
+  ## Build one provenance entry: `path` is either a real filter file
+  ## path or a sentinel like `<inline:builtin-default>`; `content` is
+  ## the literal source bytes whose digest we record.
+  FilterProvenance(path: path, sha256: filterDigest(content))
+
 proc loadComposedClassifier*(
-    config: ConfigRef, scriptPath: string): Result[Classifier, string] =
+    config: ConfigRef, scriptPath: string): Result[ComposedClassifier, string] =
   ## TF-M4: build the per-tracer Classifier from the four-layer composition
   ## defined in `Trace-Filters.md` § 5:
   ##   1. builtin default      (always)
@@ -639,13 +728,26 @@ proc loadComposedClassifier*(
   ##   4. CLI flags             (`--trace-filter:<path>`, repeatable)
   ## Later sources override earlier ones rule-by-rule per the library's
   ## last-match-wins semantics.
+  ##
+  ## TF-M5-Prep-2 (Blocker 2): the returned `ComposedClassifier` now
+  ## also carries a `provenance: seq[FilterProvenance]` recording each
+  ## contributing source (`<inline:builtin-default>` for the embedded
+  ## default; absolute file paths for the on-disk sources) together
+  ## with the SHA-256 of its source bytes, in the same composition
+  ## order the rules were merged. The caller wires this to the writer
+  ## via `setFilterProvenance` so meta.dat records the chain (TF-M7).
+
+  var provenance: seq[FilterProvenance] = @[]
 
   # Layer 1: builtin default. Parsing failure is a programmer bug — surface
   # it loudly rather than silently shipping an unfiltered trace.
-  let builtinRes = compileFiltersInline(builtinNimVmFilterToml, "<builtin>")
+  let builtinRes = compileFiltersInline(
+    builtinNimVmFilterToml, "<inline:builtin-default>")
   if builtinRes.isErr:
     return err("BUG: builtin trace filter failed to parse: " & builtinRes.error)
   var classifier = builtinRes.get()
+  provenance.add(makeProvenance(
+    "<inline:builtin-default>", builtinNimVmFilterToml))
 
   # Layer 2: auto-discovery, unless suppressed.
   if config != nil and not config.noAutoFilter:
@@ -661,6 +763,16 @@ proc loadComposedClassifier*(
       for w in extra.warnings:
         classifier.warnings.add(w)
       classifier.defaultExec = extra.defaultExec
+      # Provenance: hash the on-disk bytes. A read failure here would
+      # already have failed compileFilters above, so the readFile is
+      # best-effort — if it raises now, fall back to an empty digest
+      # rather than abort the whole tracer.
+      var content = ""
+      try:
+        content = readFile(autoPath)
+      except IOError, OSError:
+        content = ""
+      provenance.add(makeProvenance(autoPath, content))
 
   # Layer 3: env var.
   let envPaths = parseEnvFilterPaths(getEnv("CODETRACER_TRACE_FILTER"))
@@ -676,6 +788,13 @@ proc loadComposedClassifier*(
     for w in extra.warnings:
       classifier.warnings.add(w)
     classifier.defaultExec = extra.defaultExec
+    for p in envPaths:
+      var content = ""
+      try:
+        content = readFile(p)
+      except IOError, OSError:
+        content = ""
+      provenance.add(makeProvenance(p, content))
 
   # Layer 4: CLI flag(s).
   if config != nil and config.traceFilterPaths.len > 0:
@@ -690,8 +809,15 @@ proc loadComposedClassifier*(
     for w in extra.warnings:
       classifier.warnings.add(w)
     classifier.defaultExec = extra.defaultExec
+    for p in config.traceFilterPaths:
+      var content = ""
+      try:
+        content = readFile(p)
+      except IOError, OSError:
+        content = ""
+      provenance.add(makeProvenance(p, content))
 
-  ok(classifier)
+  ok(ComposedClassifier(classifier: classifier, provenance: provenance))
 
 proc initVmTracer*(outputPath: string, scriptPath: string,
                    config: ConfigRef): Result[ptr VmTracer, string] =
@@ -707,6 +833,7 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     var w = writerRes.get()
     w.closeCtfs()
     return err("failed to compile trace filters: " & filterRes.error)
+  let composed = filterRes.get()
 
   var tracer = cast[ptr VmTracer](alloc0(sizeof(VmTracer)))
   tracer[] = VmTracer(
@@ -728,8 +855,20 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     pendingValues: @[],
     depth: 0,
     config: config,
-    filter: filterRes.get(),
+    filter: composed.classifier,
   )
+
+  # TF-M5-Prep-2 (Blocker 2): hand the composed provenance chain to
+  # the writer so meta.dat carries the `FlagHasTraceFilterProvenance`
+  # bit and the post-trace materializer surfaces
+  # `metadata.trace_filter.filters[]` per Trace-Filters.md § 7. We
+  # pass `recordEvenIfEmpty = true` so the bit is also set on the
+  # vanishingly rare path where the chain is empty — the spec uses
+  # the bit to distinguish "did not record" from "recorded an empty
+  # chain", and the Nim VM tracer always at least loads the embedded
+  # builtin default, so this branch is mainly defensive.
+  tracer.writer.setFilterProvenance(composed.provenance,
+                                    recordEvenIfEmpty = true)
 
   # TF-M4a: populate `metadata.workdir` so the materializer's
   # `FullOpts(stripPaths: true)` can substitute `<workdir>` into paths
@@ -936,6 +1075,19 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
   ## first assignment to each binding additionally pays a single
   ## `registerVarname` call against the writer's interning table.
   if sym == nil:
+    return
+
+  # TF-M5-Prep-2 (Blocker 1): filter assignments by the symbol's
+  # *defining-file* path, not the currently-executing instruction's
+  # path. The VM still EXECUTES bodies of stdlib functions whose
+  # call_entry/call_exit was suppressed by `traceCall`'s function-side
+  # filter (TF-M4b), and CTFS-M-TraceSites wired `traceAssignment`
+  # inside arithmetic opcodes that fire from inside e.g. `system.$`.
+  # Without this guard, stdlib-internal symbols (`num`, `tmp`,
+  # `i\`gensym1`, package-config bindings) get buffered in
+  # `pendingValues` and then flushed onto the next user-visible step,
+  # polluting the varname pool with noise.
+  if shouldSkipPath(tracer, int32(sym.info.fileIndex)):
     return
 
   let value = serializeVmValue(reg, typ)
