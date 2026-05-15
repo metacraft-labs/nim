@@ -37,7 +37,7 @@
 ## (`--path:"$nim/dist/codetracer-trace-format-nim/src"`), mirroring the
 ## compiler's `config/nim.cfg` setup.
 
-import std/[json, os, strutils]
+import std/[json, os, strutils, tables]
 import codetracer_trace_writer/new_trace_reader
 import codetracer_ct_print_lib
 
@@ -85,6 +85,36 @@ proc resolveGoldenPath*(testFile, evalTraceField: string): string =
     # write `evalTrace: "snapshots/foo.json"` and have it land next to the
     # test rather than relative to cwd.
     result = testFile.parentDir / evalTraceField
+
+proc canonicalizeAddresses*(j: JsonNode) =
+  ## CTFS-M-SnapshotAddressDeterminism: in-place rewrite of every numeric
+  ## `"address"` field to a per-snapshot ordinal (1, 2, 3, ...). The trace
+  ## library and `ct-print` materializer correctly emit raw heap addresses
+  ## — those are useful for real debug sessions — but for golden-snapshot
+  ## comparison they vary per run (ASLR) and make the snapshot a fragile
+  ## regression gate. We do the canonicalization here, at the latest stage
+  ## before diffing, so library and CLI consumers keep the real values.
+  ## Reference identity is preserved: two records that shared a raw address
+  ## share the same canonical ordinal.
+  var mapping = initTable[BiggestInt, int]()
+  var nextId = 1
+  proc walk(node: JsonNode) =
+    case node.kind
+    of JObject:
+      for k, v in node.pairs:
+        if k == "address" and v.kind == JInt:
+          let raw = v.num
+          if raw notin mapping:
+            mapping[raw] = nextId
+            inc nextId
+          node[k] = newJInt(mapping[raw].BiggestInt)
+        else:
+          walk(v)
+    of JArray:
+      for item in node.items:
+        walk(item)
+    else: discard
+  walk(j)
 
 proc renderJsonStable*(j: JsonNode): string =
   ## Pretty-print with deterministic key order. `std/json` preserves insertion
@@ -135,6 +165,7 @@ proc runSnapshotCheck*(testFile, evalTraceField, ctFile: string): SnapshotResult
     return SnapshotResult(outcome: snapError, goldenPath: goldenPath,
       detail: "[CTFS] materializer failed: " & mat.detail)
 
+  canonicalizeAddresses(mat.json)
   let generated = renderJsonStable(mat.json)
 
   if not fileExists(goldenPath):
