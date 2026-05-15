@@ -982,7 +982,7 @@
     },
     {
       "kind": "call_entry",
-      "call_key": 4,
+      "call_key": 3,
       "function_id": 3,
       "function": "pp",
       "entry_step": 40,
@@ -991,7 +991,7 @@
       "parent_call_key": -1,
       "args": [],
       "children": [
-        3
+        4
       ]
     },
     {
@@ -1079,13 +1079,13 @@
     },
     {
       "kind": "call_entry",
-      "call_key": 3,
+      "call_key": 4,
       "function_id": 2,
       "function": "foobar",
       "entry_step": 44,
       "exit_step": 45,
       "depth": 1,
-      "parent_call_key": 2,
+      "parent_call_key": 3,
       "args": [],
       "children": []
     },
@@ -1096,9 +1096,9 @@
       "line": 38,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 3,
-      "function": "pp",
-      "depth": 0,
+      "function_id": 2,
+      "function": "foobar",
+      "depth": 1,
       "vars": []
     },
     {
@@ -1108,9 +1108,9 @@
       "line": 38,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 3,
-      "function": "pp",
-      "depth": 0,
+      "function_id": 2,
+      "function": "foobar",
+      "depth": 1,
       "vars": [
         {
           "varname_id": 2,
@@ -1182,7 +1182,7 @@
     },
     {
       "kind": "call_exit",
-      "call_key": 3,
+      "call_key": 4,
       "function_id": 2,
       "function": "foobar",
       "exit_step": 45,
@@ -1198,9 +1198,6 @@
       "line": 43,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 3,
-      "function": "pp",
-      "depth": 0,
       "vars": []
     },
     {
@@ -1210,14 +1207,11 @@
       "line": 42,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 3,
-      "function": "pp",
-      "depth": 0,
       "vars": []
     },
     {
       "kind": "call_exit",
-      "call_key": 4,
+      "call_key": 3,
       "function_id": 3,
       "function": "pp",
       "exit_step": 47,
@@ -1246,7 +1240,7 @@
     },
     {
       "kind": "call_entry",
-      "call_key": 6,
+      "call_key": 5,
       "function_id": 4,
       "function": "pg(var int, var int)",
       "entry_step": 50,
@@ -1255,7 +1249,7 @@
       "parent_call_key": -1,
       "args": [],
       "children": [
-        5
+        6
       ]
     },
     {
@@ -1265,6 +1259,9 @@
       "line": 46,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
       "vars": []
     },
     {
@@ -1274,6 +1271,9 @@
       "line": 46,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
       "vars": [
         {
           "varname_id": 10,
@@ -1295,6 +1295,9 @@
       "line": 47,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
       "vars": []
     },
     {
@@ -1304,6 +1307,9 @@
       "line": 47,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
       "vars": [
         {
           "varname_id": 9,
@@ -1331,13 +1337,13 @@
     },
     {
       "kind": "call_entry",
-      "call_key": 5,
+      "call_key": 6,
       "function_id": 2,
       "function": "foobar",
       "entry_step": 54,
       "exit_step": 55,
       "depth": 1,
-      "parent_call_key": 4,
+      "parent_call_key": 5,
       "args": [],
       "children": []
     },
@@ -1348,9 +1354,9 @@
       "line": 38,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 4,
-      "function": "pg(var int, var int)",
-      "depth": 0,
+      "function_id": 2,
+      "function": "foobar",
+      "depth": 1,
       "vars": []
     },
     {
@@ -1360,9 +1366,9 @@
       "line": 38,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 4,
-      "function": "pg(var int, var int)",
-      "depth": 0,
+      "function_id": 2,
+      "function": "foobar",
+      "depth": 1,
       "vars": [
         {
           "varname_id": 2,
@@ -1434,7 +1440,7 @@
     },
     {
       "kind": "call_exit",
-      "call_key": 5,
+      "call_key": 6,
       "function_id": 2,
       "function": "foobar",
       "exit_step": 55,
@@ -1450,14 +1456,11 @@
       "line": 51,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 4,
-      "function": "pg(var int, var int)",
-      "depth": 0,
       "vars": []
     },
     {
       "kind": "call_exit",
-      "call_key": 6,
+      "call_key": 5,
       "function_id": 4,
       "function": "pg(var int, var int)",
       "exit_step": 56,
@@ -2046,7 +2049,7 @@
     },
     {
       "kind": "call_entry",
-      "call_key": 11,
+      "call_key": 10,
       "function_id": 7,
       "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
       "entry_step": 102,
@@ -2055,7 +2058,7 @@
       "parent_call_key": -1,
       "args": [],
       "children": [
-        10
+        11
       ]
     },
     {
@@ -2084,13 +2087,13 @@
     },
     {
       "kind": "call_entry",
-      "call_key": 10,
+      "call_key": 11,
       "function_id": 8,
       "function": "<anon>@ttuples_various.nim:139",
       "entry_step": 104,
       "exit_step": 104,
       "depth": 1,
-      "parent_call_key": 9,
+      "parent_call_key": 10,
       "args": [],
       "children": []
     },
@@ -2108,7 +2111,7 @@
     },
     {
       "kind": "call_exit",
-      "call_key": 10,
+      "call_key": 11,
       "function_id": 8,
       "function": "<anon>@ttuples_various.nim:139",
       "exit_step": 104,
@@ -2124,14 +2127,11 @@
       "line": 119,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
-      "function_id": 7,
-      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
-      "depth": 0,
       "vars": []
     },
     {
       "kind": "call_exit",
-      "call_key": 11,
+      "call_key": 10,
       "function_id": 7,
       "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
       "exit_step": 105,
