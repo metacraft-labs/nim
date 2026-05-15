@@ -1221,6 +1221,20 @@ proc createSetType(c: PContext; baseType: PType): PType =
   result = newTypeS(tySet, c)
   rawAddSon(result, baseType)
 
+proc copyTreeWithInfo(n: PNode, info: TLineInfo): PNode =
+  # CTFS-M-VariantStep: clone an AST subtree, recursively rewriting every
+  # node's `info` to `info`. Used when copying matching-literal subtrees out
+  # of a type definition's `nkRecCase` into runtime check code: those nodes
+  # would otherwise carry the type-def's `of <X>:` source position, which
+  # then leaks into vmgen opcodes (LdImmInt for set members, Branch for the
+  # case test) and makes a debugger user stepping forward appear to jump
+  # backward into the type definition.
+  result = copyTree(n)
+  result.info = info
+  if result.safeLen > 0:
+    for i in 0 ..< result.len:
+      result[i] = copyTreeWithInfo(n[i], info)
+
 proc lookupInRecordAndBuildCheck(c: PContext, n, r: PNode, field: PIdent,
                                  check: var PNode): PSym =
   # transform in a node that contains the runtime check for the
@@ -1244,17 +1258,19 @@ proc lookupInRecordAndBuildCheck(c: PContext, n, r: PNode, field: PIdent,
       of nkOfBranch:
         result = lookupInRecordAndBuildCheck(c, n, lastSon(it), field, check)
         if result == nil:
-          for j in 0..<it.len-1: s.add copyTree(it[j])
+          # CTFS-M-VariantStep: retag literals with the access site so their
+          # opcodes don't anchor to the type-definition's `of <X>:` line.
+          for j in 0..<it.len-1: s.add copyTreeWithInfo(it[j], n.info)
         else:
           if check == nil:
             check = newNodeI(nkCheckedFieldExpr, n.info)
             check.add c.graph.emptyNode # make space for access node
           s = newNodeIT(nkCurly, n.info, setType)
-          for j in 0..<it.len - 1: s.add copyTree(it[j])
+          for j in 0..<it.len - 1: s.add copyTreeWithInfo(it[j], n.info)
           var inExpr = newNodeIT(nkCall, n.info, getSysType(c.graph, n.info, tyBool))
           inExpr.add newSymNode(getSysMagic(c.graph, n.info, "contains", mInSet), n.info)
           inExpr.add s
-          inExpr.add copyTree(r[0])
+          inExpr.add copyTreeWithInfo(r[0], n.info)
           check.add inExpr
           #check.add semExpr(c, inExpr)
           return
@@ -1267,7 +1283,7 @@ proc lookupInRecordAndBuildCheck(c: PContext, n, r: PNode, field: PIdent,
           var inExpr = newNodeIT(nkCall, n.info, getSysType(c.graph, n.info, tyBool))
           inExpr.add newSymNode(getSysMagic(c.graph, n.info, "contains", mInSet), n.info)
           inExpr.add s
-          inExpr.add copyTree(r[0])
+          inExpr.add copyTreeWithInfo(r[0], n.info)
           var notExpr = newNodeIT(nkCall, n.info, getSysType(c.graph, n.info, tyBool))
           notExpr.add newSymNode(getSysMagic(c.graph, n.info, "not", mNot), n.info)
           notExpr.add inExpr
