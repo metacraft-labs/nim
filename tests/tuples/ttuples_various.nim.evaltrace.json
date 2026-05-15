@@ -1,0 +1,3560 @@
+{
+  "metadata": {
+    "program": "<workdir>/tests/tuples/ttuples_various.nim",
+    "args": [],
+    "workdir": "<workdir>",
+    "recorder": "",
+    "trace_filter": {
+      "filters": [
+        {
+          "path": "<inline:builtin-default>",
+          "sha256": "85fe0bdb13b50c5b8dc28e02aefca13b635e1f084bf747e193374c001104624f"
+        }
+      ]
+    }
+  },
+  "paths": [
+    "<workdir>/tests/tuples/ttuples_various.nim"
+  ],
+  "functions": [
+    "^",
+    "nowTuple",
+    "foobar",
+    "pp",
+    "pg(var int, var int)",
+    "[]=(var tuple[a: int, b: string], string, string)",
+    "[](tuple[a: int, b: string], string) -> string",
+    "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+    "<anon>@ttuples_various.nim:139",
+    "takeTup",
+    "f",
+    "g",
+    "test",
+    "value"
+  ],
+  "varnames": [
+    "m",
+    "n",
+    ":tmp",
+    "result",
+    "i",
+    "x",
+    "y",
+    "a",
+    "b",
+    "tmpTupleAsgn",
+    "y`gensym6",
+    "tt",
+    "val",
+    "t",
+    "s",
+    "v",
+    "tmpTuple",
+    "c",
+    "_"
+  ],
+  "types": [
+    "node",
+    "int"
+  ],
+  "counts": {
+    "paths": 1,
+    "functions": 14,
+    "varnames": 19,
+    "types": 2,
+    "steps": 186,
+    "calls": 19,
+    "values": 186,
+    "io_events": 2
+  },
+  "events": [
+    {
+      "kind": "step",
+      "step_index": 0,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 1,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "m",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 0,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 5,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 2,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 3,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 1,
+          "varname": "n",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 56,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 3,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 4,
+      "path_id": 0,
+      "line": 21,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 5,
+      "path_id": 0,
+      "line": 21,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 61,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 0,
+      "function_id": 0,
+      "function": "^",
+      "entry_step": 6,
+      "exit_step": 16,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 6,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 7,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 8,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 9,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 4,
+          "varname": "i",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 10,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 11,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 4,
+          "varname": "i",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 5,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 12,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 13,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 4,
+          "varname": "i",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 25,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 14,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 15,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 4,
+          "varname": "i",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 3,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 125,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 16,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "^",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 0,
+      "function_id": 0,
+      "function": "^",
+      "exit_step": 16,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 17,
+      "path_id": 0,
+      "line": 21,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 18,
+      "path_id": 0,
+      "line": 21,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 61,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 125,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 0,
+          "varname": "m",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 61,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 125,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 19,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 20,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 21,
+      "path_id": 0,
+      "line": 32,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 1,
+      "function_id": 1,
+      "function": "nowTuple",
+      "entry_step": 22,
+      "exit_step": 23,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 22,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "nowTuple",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 23,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "nowTuple",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 0,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 1,
+      "function_id": 1,
+      "function": "nowTuple",
+      "exit_step": 23,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 24,
+      "path_id": 0,
+      "line": 32,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 25,
+      "path_id": 0,
+      "line": 32,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 26,
+      "path_id": 0,
+      "line": 33,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 27,
+      "path_id": 0,
+      "line": 33,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 28,
+      "path_id": 0,
+      "line": 54,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 29,
+      "path_id": 0,
+      "line": 54,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 5,
+          "varname": "x",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 6,
+          "varname": "y",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 7,
+          "varname": "a",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 8,
+          "varname": "b",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 30,
+      "path_id": 0,
+      "line": 56,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 31,
+      "path_id": 0,
+      "line": 56,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 5,
+          "varname": "x",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 6,
+          "varname": "y",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 32,
+      "path_id": 0,
+      "line": 57,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 2,
+      "function_id": 2,
+      "function": "foobar",
+      "entry_step": 33,
+      "exit_step": 34,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 33,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "foobar",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 34,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "foobar",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 4,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 2,
+      "function_id": 2,
+      "function": "foobar",
+      "exit_step": 34,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 35,
+      "path_id": 0,
+      "line": 57,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 36,
+      "path_id": 0,
+      "line": 57,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 4,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 5,
+          "varname": "x",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 6,
+          "varname": "y",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 37,
+      "path_id": 0,
+      "line": 59,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 38,
+      "path_id": 0,
+      "line": 60,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 39,
+      "path_id": 0,
+      "line": 62,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 4,
+      "function_id": 3,
+      "function": "pp",
+      "entry_step": 40,
+      "exit_step": 47,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": [
+        3
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 40,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 41,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 6,
+          "varname": "y",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 42,
+      "path_id": 0,
+      "line": 43,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 43,
+      "path_id": 0,
+      "line": 43,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 0,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 0,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 3,
+      "function_id": 2,
+      "function": "foobar",
+      "entry_step": 44,
+      "exit_step": 45,
+      "depth": 1,
+      "parent_call_key": 2,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 44,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 45,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 4,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 3,
+      "function_id": 2,
+      "function": "foobar",
+      "exit_step": 45,
+      "depth": 1,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 46,
+      "path_id": 0,
+      "line": 43,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 47,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 4,
+      "function_id": 3,
+      "function": "pp",
+      "exit_step": 47,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 48,
+      "path_id": 0,
+      "line": 63,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 49,
+      "path_id": 0,
+      "line": 65,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 6,
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "entry_step": 50,
+      "exit_step": 56,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": [
+        5
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 50,
+      "path_id": 0,
+      "line": 46,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 51,
+      "path_id": 0,
+      "line": 46,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 10,
+          "varname": "y`gensym6",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 52,
+      "path_id": 0,
+      "line": 47,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 53,
+      "path_id": 0,
+      "line": 47,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 0,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 0,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 5,
+      "function_id": 2,
+      "function": "foobar",
+      "entry_step": 54,
+      "exit_step": 55,
+      "depth": 1,
+      "parent_call_key": 4,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 54,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 55,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 2,
+          "varname": ":tmp",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 4,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 5,
+      "function_id": 2,
+      "function": "foobar",
+      "exit_step": 55,
+      "depth": 1,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 56,
+      "path_id": 0,
+      "line": 51,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 6,
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "exit_step": 56,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 57,
+      "path_id": 0,
+      "line": 66,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 58,
+      "path_id": 0,
+      "line": 67,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 59,
+      "path_id": 0,
+      "line": 73,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 60,
+      "path_id": 0,
+      "line": 76,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 61,
+      "path_id": 0,
+      "line": 77,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 62,
+      "path_id": 0,
+      "line": 81,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 63,
+      "path_id": 0,
+      "line": 82,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 64,
+      "path_id": 0,
+      "line": 83,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 65,
+      "path_id": 0,
+      "line": 89,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 66,
+      "path_id": 0,
+      "line": 92,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 67,
+      "path_id": 0,
+      "line": 93,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 68,
+      "path_id": 0,
+      "line": 96,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 69,
+      "path_id": 0,
+      "line": 97,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 70,
+      "path_id": 0,
+      "line": 98,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 71,
+      "path_id": 0,
+      "line": 103,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 72,
+      "path_id": 0,
+      "line": 104,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 73,
+      "path_id": 0,
+      "line": 105,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 74,
+      "path_id": 0,
+      "line": 127,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 75,
+      "path_id": 0,
+      "line": 127,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 11,
+          "varname": "tt",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "String",
+                "text": "str1",
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 76,
+      "path_id": 0,
+      "line": 130,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 77,
+      "path_id": 0,
+      "line": 132,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 78,
+      "path_id": 0,
+      "line": 133,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 79,
+      "path_id": 0,
+      "line": 136,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 7,
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "entry_step": 80,
+      "exit_step": 84,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 80,
+      "path_id": 0,
+      "line": 124,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 81,
+      "path_id": 0,
+      "line": 122,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 82,
+      "path_id": 0,
+      "line": 125,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 83,
+      "path_id": 0,
+      "line": 125,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 12,
+          "varname": "val",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "String",
+            "text": "str2",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 84,
+      "path_id": 0,
+      "line": 122,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 7,
+      "function_id": 5,
+      "function": "[]=(var tuple[a: int, b: string], string, string)",
+      "exit_step": 84,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 85,
+      "path_id": 0,
+      "line": 137,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 8,
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "entry_step": 86,
+      "exit_step": 90,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 86,
+      "path_id": 0,
+      "line": 111,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 87,
+      "path_id": 0,
+      "line": 112,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 88,
+      "path_id": 0,
+      "line": 109,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 89,
+      "path_id": 0,
+      "line": 109,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "String",
+            "text": "str2",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 90,
+      "path_id": 0,
+      "line": 112,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 8,
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "exit_step": 90,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 91,
+      "path_id": 0,
+      "line": 137,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 92,
+      "path_id": 0,
+      "line": 138,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 9,
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "entry_step": 93,
+      "exit_step": 97,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 93,
+      "path_id": 0,
+      "line": 111,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 94,
+      "path_id": 0,
+      "line": 112,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 95,
+      "path_id": 0,
+      "line": 109,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 96,
+      "path_id": 0,
+      "line": 109,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "String",
+            "text": "str2",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 97,
+      "path_id": 0,
+      "line": 112,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 9,
+      "function_id": 6,
+      "function": "[](tuple[a: int, b: string], string) -> string",
+      "exit_step": 97,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 98,
+      "path_id": 0,
+      "line": 138,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 99,
+      "path_id": 0,
+      "line": 139,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 100,
+      "path_id": 0,
+      "line": 139,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 101,
+      "path_id": 0,
+      "line": 139,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 11,
+      "function_id": 7,
+      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+      "entry_step": 102,
+      "exit_step": 105,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": [
+        10
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 102,
+      "path_id": 0,
+      "line": 118,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 7,
+      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 103,
+      "path_id": 0,
+      "line": 119,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 7,
+      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 10,
+      "function_id": 8,
+      "function": "<anon>@ttuples_various.nim:139",
+      "entry_step": 104,
+      "exit_step": 104,
+      "depth": 1,
+      "parent_call_key": 9,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 104,
+      "path_id": 0,
+      "line": 139,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 8,
+      "function": "<anon>@ttuples_various.nim:139",
+      "depth": 1,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 10,
+      "function_id": 8,
+      "function": "<anon>@ttuples_various.nim:139",
+      "exit_step": 104,
+      "depth": 1,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 105,
+      "path_id": 0,
+      "line": 119,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 7,
+      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 11,
+      "function_id": 7,
+      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+      "exit_step": 105,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 106,
+      "path_id": 0,
+      "line": 139,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 107,
+      "path_id": 0,
+      "line": 145,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 108,
+      "path_id": 0,
+      "line": 146,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 0,
+      "step_id": 108,
+      "text": "it's nil\n",
+      "bytes_b64": "aXQncyBuaWwK",
+      "bytes_len": 9
+    },
+    {
+      "kind": "step",
+      "step_index": 109,
+      "path_id": 0,
+      "line": 154,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 12,
+      "function_id": 9,
+      "function": "takeTup",
+      "entry_step": 110,
+      "exit_step": 110,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 110,
+      "path_id": 0,
+      "line": 153,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 9,
+      "function": "takeTup",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 12,
+      "function_id": 9,
+      "function": "takeTup",
+      "exit_step": 110,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 111,
+      "path_id": 0,
+      "line": 164,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 13,
+      "function_id": 10,
+      "function": "f",
+      "entry_step": 112,
+      "exit_step": 112,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 112,
+      "path_id": 0,
+      "line": 158,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 10,
+      "function": "f",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 13,
+      "function_id": 10,
+      "function": "f",
+      "exit_step": 112,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 113,
+      "path_id": 0,
+      "line": 165,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 14,
+      "function_id": 11,
+      "function": "g",
+      "entry_step": 114,
+      "exit_step": 114,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 114,
+      "path_id": 0,
+      "line": 161,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 11,
+      "function": "g",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 14,
+      "function_id": 11,
+      "function": "g",
+      "exit_step": 114,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 115,
+      "path_id": 0,
+      "line": 166,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 15,
+      "function_id": 11,
+      "function": "g",
+      "entry_step": 116,
+      "exit_step": 116,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 116,
+      "path_id": 0,
+      "line": 161,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 11,
+      "function": "g",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 15,
+      "function_id": 11,
+      "function": "g",
+      "exit_step": 116,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 117,
+      "path_id": 0,
+      "line": 170,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 118,
+      "path_id": 0,
+      "line": 170,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 13,
+          "varname": "t",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Sequence",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 1,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Int",
+                    "i": 2,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Int",
+                    "i": 3,
+                    "type_id": 0
+                  }
+                ],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 7,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 119,
+      "path_id": 0,
+      "line": 175,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 16,
+      "function_id": 12,
+      "function": "test",
+      "entry_step": 120,
+      "exit_step": 126,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 120,
+      "path_id": 0,
+      "line": 173,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 121,
+      "path_id": 0,
+      "line": 173,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 1,
+      "step_id": 121,
+      "text": "@[1, 2, 3]\n",
+      "bytes_b64": "QFsxLCAyLCAzXQo=",
+      "bytes_len": 11
+    },
+    {
+      "kind": "step",
+      "step_index": 122,
+      "path_id": 0,
+      "line": 174,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 123,
+      "path_id": 0,
+      "line": 174,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 14,
+          "varname": "s",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Sequence",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 3,
+                "type_id": 0
+              }
+            ],
+            "is_slice": false,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 124,
+      "path_id": 0,
+      "line": 172,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 125,
+      "path_id": 0,
+      "line": 172,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 3,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Sequence",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 1,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Int",
+                    "i": 2,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Int",
+                    "i": 3,
+                    "type_id": 0
+                  }
+                ],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 7,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 126,
+      "path_id": 0,
+      "line": 173,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 12,
+      "function": "test",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 16,
+      "function_id": 12,
+      "function": "test",
+      "exit_step": 126,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 127,
+      "path_id": 0,
+      "line": 175,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 128,
+      "path_id": 0,
+      "line": 175,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 13,
+          "varname": "t",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Sequence",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 1,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Int",
+                    "i": 2,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Int",
+                    "i": 3,
+                    "type_id": 0
+                  }
+                ],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 7,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 129,
+      "path_id": 0,
+      "line": 185,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 130,
+      "path_id": 0,
+      "line": 185,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 15,
+          "varname": "v",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Undecodable",
+            "error": "cbor: expected unsigned int (major 0), got major 4",
+            "raw_hex": "a4646b696e64665374727563746c6669656c645f76616c75657381a3646b696e64655475706c6568656c656d656e747383a4646b696e646853657175656e636568656c656d656e747381a3646b696e6463496e7461690167747970655f6964006869735f736c696365f467747970655f696400a4646b696e646853657175656e636568656c656d656e747381a3646b696e6463496e7461690267747970655f6964006869735f736c696365f467747970655f696400a4646b696e646853657175656e636568656c656d656e747381a3646b696e6463496e7461690367747970655f6964006869735f736c696365f467747970655f69640067747970655f6964006b6669656c645f6e616d657381656669656c6467747970655f696400"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 131,
+      "path_id": 0,
+      "line": 186,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 132,
+      "path_id": 0,
+      "line": 186,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 16,
+          "varname": "tmpTuple",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Sequence",
+                "elements": [],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Sequence",
+                "elements": [],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Sequence",
+                "elements": [],
+                "is_slice": false,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 133,
+      "path_id": 0,
+      "line": 183,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 134,
+      "path_id": 0,
+      "line": 186,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 17,
+      "function_id": 13,
+      "function": "value",
+      "entry_step": 135,
+      "exit_step": 137,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 135,
+      "path_id": 0,
+      "line": 182,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 13,
+      "function": "value",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 136,
+      "path_id": 0,
+      "line": 181,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 13,
+      "function": "value",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 137,
+      "path_id": 0,
+      "line": 182,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 13,
+      "function": "value",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 17,
+      "function_id": 13,
+      "function": "value",
+      "exit_step": 137,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 138,
+      "path_id": 0,
+      "line": 186,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 139,
+      "path_id": 0,
+      "line": 186,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 16,
+          "varname": "tmpTuple",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Sequence",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 1,
+                    "type_id": 0
+                  }
+                ],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Sequence",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 2,
+                    "type_id": 0
+                  }
+                ],
+                "is_slice": false,
+                "type_id": 0
+              },
+              {
+                "kind": "Sequence",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 3,
+                    "type_id": 0
+                  }
+                ],
+                "is_slice": false,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 7,
+          "varname": "a",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Sequence",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 1,
+                "type_id": 0
+              }
+            ],
+            "is_slice": false,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 8,
+          "varname": "b",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Sequence",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 2,
+                "type_id": 0
+              }
+            ],
+            "is_slice": false,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 17,
+          "varname": "c",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Sequence",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 3,
+                "type_id": 0
+              }
+            ],
+            "is_slice": false,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 140,
+      "path_id": 0,
+      "line": 188,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 141,
+      "path_id": 0,
+      "line": 188,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 142,
+      "path_id": 0,
+      "line": 189,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 143,
+      "path_id": 0,
+      "line": 189,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 144,
+      "path_id": 0,
+      "line": 190,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 145,
+      "path_id": 0,
+      "line": 190,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 146,
+      "path_id": 0,
+      "line": 200,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 147,
+      "path_id": 0,
+      "line": 200,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 15,
+          "varname": "v",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Undecodable",
+            "error": "cbor: expected unsigned int (major 0), got major 4",
+            "raw_hex": "a4646b696e64665374727563746c6669656c645f76616c75657381a3646b696e64655475706c6568656c656d656e747381a3646b696e6463496e74616919052267747970655f69640067747970655f6964006b6669656c645f6e616d657381656669656c6467747970655f696400"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 148,
+      "path_id": 0,
+      "line": 201,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 18,
+      "function_id": 13,
+      "function": "value",
+      "entry_step": 149,
+      "exit_step": 151,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 149,
+      "path_id": 0,
+      "line": 197,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 13,
+      "function": "value",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 150,
+      "path_id": 0,
+      "line": 196,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 13,
+      "function": "value",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 151,
+      "path_id": 0,
+      "line": 197,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 13,
+      "function": "value",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 18,
+      "function_id": 13,
+      "function": "value",
+      "exit_step": 151,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 152,
+      "path_id": 0,
+      "line": 201,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 153,
+      "path_id": 0,
+      "line": 205,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 154,
+      "path_id": 0,
+      "line": 205,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 7,
+          "varname": "a",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 155,
+      "path_id": 0,
+      "line": 206,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 156,
+      "path_id": 0,
+      "line": 206,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 8,
+          "varname": "b",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 157,
+      "path_id": 0,
+      "line": 207,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 158,
+      "path_id": 0,
+      "line": 207,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 159,
+      "path_id": 0,
+      "line": 208,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 160,
+      "path_id": 0,
+      "line": 208,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 3,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 4,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 7,
+          "varname": "a",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 3,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 18,
+          "varname": "_",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 161,
+      "path_id": 0,
+      "line": 209,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 162,
+      "path_id": 0,
+      "line": 209,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 163,
+      "path_id": 0,
+      "line": 210,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 164,
+      "path_id": 0,
+      "line": 210,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 5,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 6,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 18,
+          "varname": "_",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 5,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 7,
+          "varname": "a",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 6,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 165,
+      "path_id": 0,
+      "line": 211,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 166,
+      "path_id": 0,
+      "line": 211,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 167,
+      "path_id": 0,
+      "line": 212,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 168,
+      "path_id": 0,
+      "line": 212,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 9,
+          "varname": "tmpTupleAsgn",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "Tuple",
+            "elements": [
+              {
+                "kind": "Int",
+                "i": 7,
+                "type_id": 0
+              },
+              {
+                "kind": "Int",
+                "i": 8,
+                "type_id": 0
+              }
+            ],
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 8,
+          "varname": "b",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 7,
+            "type_id": 0
+          }
+        },
+        {
+          "varname_id": 18,
+          "varname": "_",
+          "type_id": 1,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 8,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 169,
+      "path_id": 0,
+      "line": 213,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 170,
+      "path_id": 0,
+      "line": 213,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 171,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 172,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 173,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 174,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 175,
+      "path_id": 0,
+      "line": 51,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 176,
+      "path_id": 0,
+      "line": 122,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 177,
+      "path_id": 0,
+      "line": 110,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 178,
+      "path_id": 0,
+      "line": 116,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 179,
+      "path_id": 0,
+      "line": 139,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 180,
+      "path_id": 0,
+      "line": 153,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 181,
+      "path_id": 0,
+      "line": 158,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 182,
+      "path_id": 0,
+      "line": 161,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 183,
+      "path_id": 0,
+      "line": 173,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 184,
+      "path_id": 0,
+      "line": 182,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 185,
+      "path_id": 0,
+      "line": 197,
+      "path": "<workdir>/tests/tuples/ttuples_various.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    }
+  ]
+}

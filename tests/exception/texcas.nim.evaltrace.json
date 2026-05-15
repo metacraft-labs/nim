@@ -1,0 +1,536 @@
+{
+  "metadata": {
+    "program": "<workdir>/tests/exception/texcas.nim",
+    "args": [],
+    "workdir": "<workdir>",
+    "recorder": "",
+    "trace_filter": {
+      "filters": [
+        {
+          "path": "<inline:builtin-default>",
+          "sha256": "85fe0bdb13b50c5b8dc28e02aefca13b635e1f084bf747e193374c001104624f"
+        }
+      ]
+    }
+  },
+  "paths": [
+    "<workdir>/tests/exception/texcas.nim"
+  ],
+  "functions": [
+    "test()",
+    "test2",
+    "testTryAsExpr"
+  ],
+  "varnames": [
+    "foobar",
+    "foobar`gensym0",
+    "x"
+  ],
+  "types": [
+    "Exception",
+    "node",
+    "int"
+  ],
+  "counts": {
+    "paths": 1,
+    "functions": 3,
+    "varnames": 3,
+    "types": 3,
+    "steps": 32,
+    "calls": 3,
+    "values": 32,
+    "io_events": 2
+  },
+  "events": [
+    {
+      "kind": "step",
+      "step_index": 0,
+      "path_id": 0,
+      "line": 33,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 0,
+      "function_id": 0,
+      "function": "test()",
+      "entry_step": 1,
+      "exit_step": 10,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 1,
+      "path_id": 0,
+      "line": 9,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 2,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 3,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 4,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekRaise",
+      "exception_type_id": 0,
+      "exception_message": "Hello",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 5,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 6,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekCatch",
+      "catch_exception_type_id": 0,
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 7,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "foobar",
+          "type_id": 1,
+          "type_name": "node",
+          "value": {
+            "kind": "None",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 8,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 0,
+      "step_id": 8,
+      "text": "Hello\n",
+      "bytes_b64": "SGVsbG8K",
+      "bytes_len": 6
+    },
+    {
+      "kind": "step",
+      "step_index": 9,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 10,
+      "path_id": 0,
+      "line": 9,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "test()",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 0,
+      "function_id": 0,
+      "function": "test()",
+      "exit_step": 10,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 11,
+      "path_id": 0,
+      "line": 34,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 1,
+      "function_id": 1,
+      "function": "test2",
+      "entry_step": 12,
+      "exit_step": 22,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 12,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 13,
+      "path_id": 0,
+      "line": 17,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 14,
+      "path_id": 0,
+      "line": 17,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 15,
+      "path_id": 0,
+      "line": 17,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekRaise",
+      "exception_type_id": 0,
+      "exception_message": "Hello",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 16,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 17,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekCatch",
+      "catch_exception_type_id": 0,
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 18,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 1,
+          "varname": "foobar`gensym0",
+          "type_id": 1,
+          "type_name": "node",
+          "value": {
+            "kind": "None",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 19,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 1,
+      "step_id": 19,
+      "text": "Hello\n",
+      "bytes_b64": "SGVsbG8K",
+      "bytes_len": 6
+    },
+    {
+      "kind": "step",
+      "step_index": 20,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 21,
+      "path_id": 0,
+      "line": 24,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 22,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "test2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 1,
+      "function_id": 1,
+      "function": "test2",
+      "exit_step": 22,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 23,
+      "path_id": 0,
+      "line": 35,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 2,
+      "function_id": 2,
+      "function": "testTryAsExpr",
+      "entry_step": 24,
+      "exit_step": 27,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 24,
+      "path_id": 0,
+      "line": 28,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "testTryAsExpr",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 25,
+      "path_id": 0,
+      "line": 28,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "testTryAsExpr",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 2,
+          "varname": "x",
+          "type_id": 2,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 5,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 26,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "testTryAsExpr",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 27,
+      "path_id": 0,
+      "line": 28,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "testTryAsExpr",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 2,
+      "function_id": 2,
+      "function": "testTryAsExpr",
+      "exit_step": 27,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 28,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 29,
+      "path_id": 0,
+      "line": 9,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 30,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 31,
+      "path_id": 0,
+      "line": 28,
+      "path": "<workdir>/tests/exception/texcas.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    }
+  ]
+}

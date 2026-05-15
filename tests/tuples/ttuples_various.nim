@@ -1,5 +1,5 @@
 discard """
-targets: "c cpp"
+targets: "c cpp e"
 matrix: "--mm:refc; --mm:arc"
 output: '''
 it's nil

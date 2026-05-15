@@ -1,5 +1,5 @@
 discard """
-  targets: "c cpp js"
+  targets: "c cpp js e"
 """
 
 # targets include `cpp` because in the past, there were several cpp-specific bugs with tuples.
