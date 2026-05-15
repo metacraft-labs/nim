@@ -2290,7 +2290,16 @@ proc gen(c: PCtx; n: PNode; dest: var TDest; flags: TGenFlags = {}) =
     of skConst:
       let constVal = if s.astdef != nil: s.astdef else: s.typ.n
       if dontInlineConstant(n, constVal):
-        genLit(c, constVal, dest)
+        # CTFS-M-ConstUseSiteAttribution: the const value is loaded as a
+        # single literal at runtime, but the literal's `.info` points to
+        # wherever the value was constructed at compile time (e.g. inside
+        # a `proc` whose body produced it). Attribute the emitted
+        # `opcLdConst` to the use-site `n` so the VM dispatch loop's
+        # `traceStep` reports the source line where the const is referenced
+        # rather than the unrelated production site.
+        if dest < 0: dest = c.getTemp(n.typ)
+        let lit = genLiteral(c, constVal)
+        c.gABx(n, opcLdConst, dest, lit)
       else:
         gen(c, constVal, dest)
     of skEnumField:
