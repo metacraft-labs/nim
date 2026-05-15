@@ -536,6 +536,7 @@ proc execCmd(cmd: string; graph: ModuleGraph; cachedMsgs: CachedMsgs) =
   of "declaration": conf.ideCmd = ideDeclaration
   of "expand": conf.ideCmd = ideExpand
   of "traceexpand": conf.ideCmd = ideTraceExpand
+  of "tracestatic": conf.ideCmd = ideTraceStatic
   of "chkfile": conf.ideCmd = ideChkFile
   of "recompile": conf.ideCmd = ideRecompile
   of "type": conf.ideCmd = ideType
@@ -1101,7 +1102,7 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     graph.unmarkAllDirty()
 
   # these commands require partially compiled project
-  elif cmd in {ideSug, ideCon, ideOutline, ideHighlight, ideHighlightRange, ideDef, ideChkFile, ideType, ideDeclaration, ideExpand, ideTraceExpand} and
+  elif cmd in {ideSug, ideCon, ideOutline, ideHighlight, ideHighlightRange, ideDef, ideChkFile, ideType, ideDeclaration, ideExpand, ideTraceExpand, ideTraceStatic} and
        (graph.needsCompilation(fileIndex) or cmd in {ideSug, ideCon}):
     # for ideSug use v2 implementation
     if cmd in {ideSug, ideCon}:
@@ -1110,8 +1111,9 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     else:
       conf.m.trackPos = default(TLineInfo)
       # CTFS-M1: the VM trace emitter is unconditional in the compiler;
-      # ideTraceExpand is therefore always available — no compile-time gate.
-      if cmd == ideTraceExpand:
+      # ideTraceExpand / ideTraceStatic are therefore always available —
+      # no compile-time gate.
+      if cmd in {ideTraceExpand, ideTraceStatic}:
         conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
         conf.traceExpandResult = ""
       graph.recompilePartially(fileIndex)
@@ -1310,6 +1312,32 @@ proc executeNoHooksV3(cmd: IdeCmd, file: AbsoluteFile, dirtyfile: AbsoluteFile, 
     suggestResult(graph.config, suggest)
 
     # Reset for next call
+    conf.traceExpandPosition = default(TLineInfo)
+    conf.traceExpandResult = ""
+
+    graph.markDirty fileIndex
+    graph.markClientsDirty fileIndex
+  of ideTraceStatic:
+    # CTFS-M-StaticBlockTrace: same pattern as ideTraceExpand but matched
+    # at `evalConstExprAux` entry points (static: blocks, const
+    # initializers, {.compileTime.} proc bodies) instead of macro
+    # expansions. Always available — no compile-time gate.
+    if conf.traceExpandResult == "":
+      conf.traceExpandPosition = newLineInfo(fileIndex, line, col)
+      conf.traceExpandResult = ""
+
+      graph.markDirty fileIndex
+      graph.markClientsDirty fileIndex
+      graph.recompilePartially()
+
+    var suggest = Suggest()
+    suggest.section = ideTraceStatic
+    suggest.version = 3
+    suggest.line = line
+    suggest.column = col
+    suggest.doc = conf.traceExpandResult
+    suggestResult(graph.config, suggest)
+
     conf.traceExpandPosition = default(TLineInfo)
     conf.traceExpandResult = ""
 

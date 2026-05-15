@@ -208,7 +208,8 @@ type
   IdeCmd* = enum
     ideNone, ideSug, ideCon, ideDef, ideUse, ideDus, ideChk, ideChkFile, ideMod,
     ideHighlight, ideHighlightRange, ideOutline, ideKnown, ideMsg, ideProject, ideGlobalSymbols,
-    ideRecompile, ideChanged, ideType, ideDeclaration, ideExpand, ideTraceExpand, ideInlayHints
+    ideRecompile, ideChanged, ideType, ideDeclaration, ideExpand, ideTraceExpand, ideInlayHints,
+    ideTraceStatic
 
   Feature* = enum  ## experimental features; DO NOT RENAME THESE!
     dotOperators,
@@ -1145,6 +1146,7 @@ proc parseIdeCmd*(s: string): IdeCmd =
   of "changed": ideChanged
   of "type": ideType
   of "traceExpand": ideTraceExpand
+  of "traceStatic": ideTraceStatic
   else: ideNone
 
 proc `$`*(c: IdeCmd): string =
@@ -1168,6 +1170,7 @@ proc `$`*(c: IdeCmd): string =
   of ideDeclaration: "declaration"
   of ideExpand: "expand"
   of ideTraceExpand: "traceExpand"
+  of ideTraceStatic: "traceStatic"
   of ideRecompile: "recompile"
   of ideChanged: "changed"
   of ideType: "type"

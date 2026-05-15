@@ -2805,7 +2805,41 @@ proc evalConstExprAux(module: PSym; idgen: IdGenerator;
   # `leaveCompileTime` after `rawExecute` keeps the depth balanced.
   if c.vmTracer != nil:
     enterCompileTime(cast[ptr VmTracer](c.vmTracer)[])
+
+  # CTFS-M-StaticBlockTrace: when nimsuggest (or another driver) issues an
+  # `ideTraceStatic` query whose cursor matches this evaluation's source
+  # position, install a fresh per-evaluation tracer. The fresh tracer's
+  # `compileTimeDepth` deliberately stays at 0 — its whole purpose is to
+  # record this compile-time block — so the gate above (which fires on the
+  # outer/original tracer) does not affect it. The swap is the analog of
+  # the `ideTraceExpand` path in `evalMacroCall` below, applied to
+  # `static:` / `const` / `{.compileTime.}` entry points instead of macros.
+  var traceStaticActive = false
+  var savedVmTracer: pointer = nil
+  if g.config.ideCmd == ideTraceStatic and c.vmTracer == nil:
+    let trackPos = g.config.traceExpandPosition
+    if n.info.fileIndex == trackPos.fileIndex and
+       n.info.line == trackPos.line:
+      let nimcache = getNimcacheDir(g.config)
+      createDir(nimcache)
+      let tracePath = string(nimcache /
+        RelativeFile("static_trace_" & $n.info.line & ".ct"))
+      let tracerRes = initVmTracer(tracePath,
+        "static@" & $n.info.line, g.config)
+      if tracerRes.isOk:
+        savedVmTracer = c.vmTracer
+        c.vmTracer = tracerRes.get()
+        traceStaticActive = true
+        g.config.traceExpandResult = tracePath
+
   result = rawExecute(c, start, tos).regToNode
+
+  if traceStaticActive:
+    let tracer = cast[ptr VmTracer](c.vmTracer)
+    syncVmTracer(tracer)
+    discard closeVmTracer(tracer)
+    c.vmTracer = savedVmTracer
+
   if c.vmTracer != nil:
     leaveCompileTime(cast[ptr VmTracer](c.vmTracer)[])
   if result.info.col < 0: result.info = n.info
