@@ -29,7 +29,7 @@
     "steps": 7,
     "calls": 0,
     "values": 7,
-    "io_events": 0
+    "io_events": 1
   },
   "events": [
     {
@@ -97,6 +97,15 @@
       "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
       "step_kind": "sekDeltaStep",
       "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 0,
+      "step_id": 6,
+      "text": "caught\n",
+      "bytes_b64": "Y2F1Z2h0Cg==",
+      "bytes_len": 7
     }
   ]
 }

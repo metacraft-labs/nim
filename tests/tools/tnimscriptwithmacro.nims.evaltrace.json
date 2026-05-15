@@ -31,7 +31,7 @@
     "steps": 5,
     "calls": 0,
     "values": 5,
-    "io_events": 0
+    "io_events": 3
   },
   "events": [
     {
@@ -42,6 +42,15 @@
       "path": "<workdir>/tests/tools/tnimscriptwithmacro.nims",
       "step_kind": "sekAbsoluteStep",
       "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 0,
+      "step_id": 0,
+      "text": "foobar\n",
+      "bytes_b64": "Zm9vYmFyCg==",
+      "bytes_len": 7
     },
     {
       "kind": "step",
@@ -83,6 +92,15 @@
       "vars": []
     },
     {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 1,
+      "step_id": 3,
+      "text": "nothing\n",
+      "bytes_b64": "bm90aGluZwo=",
+      "bytes_len": 8
+    },
+    {
       "kind": "step",
       "step_index": 4,
       "path_id": 0,
@@ -90,6 +108,15 @@
       "path": "<workdir>/tests/tools/tnimscriptwithmacro.nims",
       "step_kind": "sekDeltaStep",
       "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioFileOp",
+      "io_index": 2,
+      "step_id": 4,
+      "text": "exec: echo hallo",
+      "bytes_b64": "ZXhlYzogZWNobyBoYWxsbw==",
+      "bytes_len": 16
     }
   ]
 }
