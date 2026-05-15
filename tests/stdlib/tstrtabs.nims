@@ -1,3 +1,7 @@
+discard """
+  cmd: "nim e $file"
+  targets: "e"
+"""
 import std/[strtabs, assertions]
 
 static:

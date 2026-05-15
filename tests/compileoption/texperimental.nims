@@ -1,3 +1,7 @@
+discard """
+  cmd: "nim e $file"
+  targets: "e"
+"""
 switch("experimental", "dotOperators")
 switch("experimental", "callOperator")
 switch("experimental", "parallel")

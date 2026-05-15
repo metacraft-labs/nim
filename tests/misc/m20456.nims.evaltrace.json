@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "program": "<workdir>/tests/misc/m20456.nims",
+    "args": [],
+    "workdir": "<workdir>",
+    "recorder": "",
+    "trace_filter": {
+      "filters": [
+        {
+          "path": "<inline:builtin-default>",
+          "sha256": "85fe0bdb13b50c5b8dc28e02aefca13b635e1f084bf747e193374c001104624f"
+        }
+      ]
+    }
+  },
+  "paths": [
+    "<workdir>/tests/misc/m20456.nims"
+  ],
+  "functions": [],
+  "varnames": [],
+  "types": [],
+  "counts": {
+    "paths": 1,
+    "functions": 0,
+    "varnames": 0,
+    "types": 0,
+    "steps": 1,
+    "calls": 0,
+    "values": 1,
+    "io_events": 1
+  },
+  "events": [
+    {
+      "kind": "step",
+      "step_index": 0,
+      "path_id": 0,
+      "line": 5,
+      "path": "<workdir>/tests/misc/m20456.nims",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "io",
+      "io_kind": "ioStdout",
+      "io_index": 0,
+      "step_id": 0,
+      "text": "123\n",
+      "bytes_b64": "MTIzCg==",
+      "bytes_len": 4
+    }
+  ]
+}
