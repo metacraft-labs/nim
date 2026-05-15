@@ -1325,6 +1325,22 @@ template liftDefer(c, root) =
 proc transformBody*(g: ModuleGraph; idgen: IdGenerator; prc: PSym; flags: TransformFlags): PNode =
   assert prc.kind in routineKinds
 
+  # CTFS-M-OOP: dispatchers synthesised by `cgmeth.createDispatcher`
+  # carry `sfDispatcher` and a deliberately empty body — `cgen` and
+  # `jsgen` fill it in via `generateIfMethodDispatchers` after the
+  # whole module has been processed. For VM evaluation (`nim e`) no
+  # backend pass runs, so the dispatcher's body would stay empty and a
+  # call through it would fall off the end of the proc. Trigger
+  # dispatcher-body generation lazily here, the first time a
+  # dispatcher's body is requested. Each method bucket's body is
+  # produced once: `genIfDispatcher` writes `nilchecks` (with
+  # `nfTransf` set) into the dispatcher's `bodyPos`, so the next
+  # `getBody(g, prc)` returns the populated body and we fall through
+  # the `nfTransf` shortcut below.
+  if prc.kind == skMethod and sfDispatcher in prc.flags and
+     getBody(g, prc).kind == nkEmpty:
+    generateIfMethodDispatchers(g, idgen)
+
   if prc.transformedBody != nil:
     result = prc.transformedBody
   elif nfTransf in getBody(g, prc).flags or prc.kind in {skTemplate}:

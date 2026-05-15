@@ -2317,10 +2317,35 @@ proc gen(c: PCtx; n: PNode; dest: var TDest; flags: TGenFlags = {}) =
       let s = n[0].sym
       if s.magic != mNone:
         genMagic(c, n, dest, flags, s.magic)
-      elif s.kind == skMethod:
+      elif s.kind == skMethod and c.mode != emRepl:
+        # CTFS-M-OOP: method calls are now permitted in `emRepl` mode
+        # (the path `nim e` / NimScript uses). The pre-CTFS-M-OOP
+        # behaviour rejected them outright with "cannot call method
+        # ... at compile time"; that ban blocked the OOP milestone of
+        # the VM tracer, since dispatcher resolution never reached
+        # `traceCall`. For `emConst` / `emStatic*` (`const x = obj.m()`,
+        # `static: obj.m()`) we still reject: ownership of the
+        # dispatcher's params + result is the original method, so
+        # `checkCanEval` would otherwise emit a much more confusing
+        # "cannot evaluate at compile time: e" for the param `e`.
+        # Preserving the original clear error in those modes also
+        # keeps the t2574 regression test meaningful — it pinned that
+        # message.
         localError(c.config, n.info, "cannot call method " & s.name.s &
           " at compile time")
       else:
+        # `transf.transformCall` rewrites a method call to invoke its
+        # dispatcher (`cgmeth.methodCall`), and `transformBody` now
+        # lazily generates dispatcher bodies for VM evaluation (the
+        # cgen / jsgen passes do this for their backends). The
+        # dispatcher's body is a transformed `if/elif isn` chain that
+        # calls the concrete-method PSyms; those inner calls reach
+        # this site as `skMethod` again, with `nfTransf` set so they
+        # bypass `transformCall`'s dispatcher rewrite. Passing them
+        # through `genCall` is the right thing: the VM ends up entering
+        # the concrete method's body, and `traceCall` sees the
+        # dispatch-resolved PSym — which `functionNameForTrace` then
+        # renders as `name[DispatchType]`.
         genCall(c, n, dest)
         clearDest(c, n, dest)
     else:

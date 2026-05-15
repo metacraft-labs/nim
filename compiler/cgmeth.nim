@@ -250,8 +250,20 @@ proc genIfDispatcher*(g: ModuleGraph; methods: seq[PSym], relevantCols: IntSet; 
     if contains(relevantCols, col):
       let param = base.typ.n[col].sym
       if param.typ.skipTypes(abstractInst).kind in {tyRef, tyPtr}:
-        nilchecks.add newTree(nkCall,
-            newSymNode(getCompilerProc(g, "chckNilDisp")), newSymNode(param))
+        # CTFS-M-OOP: `chckNilDisp` lives in `system/chcks.nim`, which
+        # is guarded by `notJSnotNims` and therefore absent in
+        # NimScript builds. `getCompilerProc` returns nil there, and
+        # building an `nkCall` around a nil sym crashes the VM at
+        # dispatch time. The nil-receiver check is a defensive
+        # diagnostic — the dispatcher still falls off the end with a
+        # benign "no matching branch" if the user passes nil, which
+        # is the standard VM behaviour for an unhandled `if` chain —
+        # so skipping the check here costs nothing semantically for
+        # `nim e`, the only path that lacks the compiler proc.
+        let chckNilDisp = getCompilerProc(g, "chckNilDisp")
+        if chckNilDisp != nil:
+          nilchecks.add newTree(nkCall,
+              newSymNode(chckNilDisp), newSymNode(param))
   for meth in 0..high(methods):
     var curr = methods[meth]      # generate condition:
     var cond: PNode = nil
