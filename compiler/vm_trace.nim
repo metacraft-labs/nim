@@ -578,6 +578,37 @@ proc ensureFunction(tracer: var VmTracer, name: string): uint64 =
   tracer.functions[name] = funcId
   return funcId
 
+proc displayNameForVarname*(name: string): string =
+  ## CTFS-M-GensymDisplay: strip Nim's `\`gensymNN` hygiene suffix from a
+  ## varname before it enters the trace's varname interning pool.
+  ##
+  ## Background: when a template/macro body binds a local (e.g.
+  ## ``template log(msg) = let line = msg``), the compiler renames the
+  ## binding to ``line\`gensymNN`` to avoid identifier collisions across
+  ## expansions. The renamed string lives on `PSym.name.s`. The C / cpp /
+  ## js backends never expose this suffix to user-facing artefacts — it's
+  ## a compiler-internal mechanism — and the .ct trace should match.
+  ##
+  ## Why this is safe re: varname identity: `traceAssignment` keys the
+  ## per-symbol varname cache by `sym.itemId`, so two distinct gensym'd
+  ## symbols stay distinct in `varnameIds` even when they normalize to
+  ## the same display string. The writer's interning table dedupes by
+  ## string, so two distinct PSyms whose stripped names collide will
+  ## share one varnameId in the pool — acceptable because at the source
+  ## level they ARE the same name (the local `line` in template `log`),
+  ## just reinstantiated per expansion, and trace consumers disambiguate
+  ## via the surrounding call context.
+  ##
+  ## Edge case: a user-written identifier literally named ``foo\`gensym42``
+  ## (legal only via `quote do:` shenanigans) would be normalized to
+  ## `foo`. Treat this as a documented hygiene-display contract rather
+  ## than a bug — internal gensym uniqueness is preserved upstream of the
+  ## display string.
+  let idx = name.find("`gensym")
+  if idx >= 0:
+    return name[0 ..< idx]
+  return name
+
 proc functionNameForTrace*(prc: PSym, config: ConfigRef = nil): string =
   ## CTFS-M-Generics / CTFS-M-OOP: compose an instantiation-aware
   ## function name.
@@ -1474,7 +1505,13 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
   tracer.varnameIds.withValue(key, idPtr):
     varnameId = idPtr[]
   do:
-    let varRes = tracer.writer.registerVarname(sym.name.s)
+    # CTFS-M-GensymDisplay: normalize the displayed varname by stripping
+    # Nim's ``\`gensymNN`` hygiene suffix. Per-symbol identity is keyed
+    # above by `sym.itemId`, so distinct gensym'd symbols stay distinct
+    # in `varnameIds` even when their display strings collide in the
+    # writer's interning pool.
+    let displayName = displayNameForVarname(sym.name.s)
+    let varRes = tracer.writer.registerVarname(displayName)
     varnameId =
       if varRes.isErr: 0'u64
       else: varRes.get()
