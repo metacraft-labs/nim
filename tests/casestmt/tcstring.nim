@@ -1,5 +1,5 @@
 discard """
-  targets: "c cpp js"
+  targets: "c cpp js e"
 """
 
 type Result = enum none, a, b, c, d, e, f

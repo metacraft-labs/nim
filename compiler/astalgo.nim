@@ -109,6 +109,14 @@ proc sameValue*(a, b: PNode): bool =
     if b.kind in {nkFloatLit..nkFloat64Lit}: result = a.floatVal == b.floatVal
   of nkStrLit..nkTripleStrLit:
     if b.kind in {nkStrLit..nkTripleStrLit}: result = a.strVal == b.strVal
+  of nkNilLit:
+    # Two `nil` literals represent the same value. Without this case, a
+    # `case x: cstring` statement with an `of nil:` arm matched against a
+    # nil cstring input would fail to match under the VM (`nim e`), because
+    # the VM's `opcBranch` calls `nimsets.overlap` -> `sameValue` to decide
+    # whether the input matches a branch literal. The c/cpp/js backends
+    # handle the nil arm correctly; this restores parity for the VM.
+    result = b.kind == nkNilLit
   else:
     # don't raise an internal error for 'nim check':
     #InternalError(a.info, "SameValue")
