@@ -24,9 +24,9 @@
     "functions": 0,
     "varnames": 0,
     "types": 0,
-    "steps": 6,
+    "steps": 4,
     "calls": 0,
-    "values": 6,
+    "values": 4,
     "io_events": 0
   },
   "events": [
@@ -60,24 +60,6 @@
     {
       "kind": "step",
       "step_index": 3,
-      "path_id": 0,
-      "line": 13,
-      "path": "<workdir>/tests/vm/t9622.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 4,
-      "path_id": 0,
-      "line": 13,
-      "path": "<workdir>/tests/vm/t9622.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 5,
       "path_id": 0,
       "line": 30,
       "path": "<workdir>/tests/vm/t9622.nim",
