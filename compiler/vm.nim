@@ -2929,6 +2929,7 @@ proc evalMacroCall*(module: PSym; idgen: IdGenerator; g: ModuleGraph; templInstC
     leaveCompileTime(cast[ptr VmTracer](c.vmTracer)[])
 
   if result.info.line < 0: result.info = nOrig.info
+
   if cyclicTree(result): globalError(c.config, n.info, "macro produced a cyclic tree")
   dec(g.config.evalMacroCounter)
   c.callsite = nil

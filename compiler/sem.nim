@@ -628,6 +628,86 @@ proc getLineInfo(n: PNode): TLineInfo =
 const
   errMissingGenericParamsForTemplate = "'$1' has unspecified generic parameters"
 
+proc rewriteMacroSplicedInfo(c: PContext, sym: PSym, callSite: TLineInfo,
+                              spliced: PNode) =
+  ## CTFS-M-MacroEmittedRuntime: rewrite `info` on AST nodes synthesized
+  ## by macro execution so they point at the macro call site.
+  ##
+  ## When a macro splices its result back at the call site, the spliced
+  ## nodes carry one of three kinds of `info`:
+  ##
+  ##   (a) A position inside the macro definition's source (e.g. nodes
+  ##       produced by `quote do:` or by the VM's `opcNNewNimNode`
+  ##       fallback to `c.debug[pc]` while inside the macro body).
+  ##   (b) A position inside the Nim standard library (e.g. nodes
+  ##       freshly created by AST helpers like `newCall`, `newLit`,
+  ##       `newStmtList` defined in `lib/core/macros.nim`).
+  ##   (c) A position in user code legitimately captured from a macro
+  ##       argument (in which case the user's `info` is preserved).
+  ##
+  ## Cases (a) and (b) describe code the user never wrote at that
+  ## location but that DOES execute at runtime when the macro call
+  ## returns. Per the trace's "what happens if I execute this program?"
+  ## invariant, traced steps for that runtime should attribute to the
+  ## call site, not to the macro body or to a compiler helper file.
+  ##
+  ## Implementation notes:
+  ##  * Runs AFTER `semAfterMacroCall`. Sem's post-processing can wrap
+  ##    children in fresh structural nodes (e.g. an `nkBracket` for a
+  ##    varargs `echo` call) whose `info` is copied from a child — if
+  ##    we rewrote before that pass, those wrappers would still leak
+  ##    body-internal positions.
+  ##  * Case (a) uses a "max line in `sym.ast`" heuristic for the body
+  ##    range. `lastNodeChild(getBody)` alone is unreliable because
+  ##    `quote do:` lifts its do-block into a sibling template whose
+  ##    body lines aren't reachable from the macro body's `sons`.
+  ##  * Case (b) caches the lib-file verdict per `FileIndex` to avoid
+  ##    re-stringifying paths during deep AST walks.
+  if sym == nil: return
+  let macroFile = sym.info.fileIndex
+  let macroFirstLine = sym.info.line.int
+  let callLine = callSite.line.int
+  let callCol = callSite.col.int
+
+  let libDir = c.config.libpath.string
+  let hasLibDir = libDir.len > 0
+  var libFileCache = initTable[FileIndex, bool]()
+  proc isLibFile(fi: FileIndex): bool =
+    if fi.int32 < 0: return false
+    if libFileCache.hasKey(fi): return libFileCache[fi]
+    var verdict = false
+    if hasLibDir:
+      let fp = toFullPath(c.config, fi)
+      verdict = fp.startsWith(libDir)
+    libFileCache[fi] = verdict
+    verdict
+
+  # We can't reliably bound the macro's lexical end-line: `quote do:`
+  # lifts its do-block into a sibling template that isn't reachable
+  # from the macro body's `sons` tree, so a "max line in `sym.ast`"
+  # walk underestimates. Instead use an open-ended rule: rewrite any
+  # node whose info is in the macro file and on a line at or after
+  # the macro definition's start, EXCEPT positions that match the
+  # call site exactly (those represent positions the macro itself
+  # synthesized at the call site, e.g. user args copied in via
+  # `getCallLineInfo`, and don't need rewriting).
+  proc rewriteInfo(n: PNode) =
+    if n == nil: return
+    let info = n.info
+    var rewrite = false
+    if info.fileIndex == macroFile and info.line.int >= macroFirstLine and
+       not (info.line.int == callLine and info.col.int == callCol):
+      rewrite = true
+    elif info.fileIndex != callSite.fileIndex and isLibFile(info.fileIndex):
+      rewrite = true
+    if rewrite:
+      n.info = callSite
+    if n.kind notin {nkNone..nkNilLit}:
+      for child in n.sons:
+        rewriteInfo(child)
+
+  rewriteInfo(spliced)
+
 proc semMacroExpr(c: PContext, n, nOrig: PNode, sym: PSym,
                   flags: TExprFlags = {}; expectedType: PType = nil): PNode =
   rememberExpansion(c, nOrig.info, sym)
@@ -650,6 +730,9 @@ proc semMacroExpr(c: PContext, n, nOrig: PNode, sym: PSym,
   result = evalMacroCall(c.module, c.idgen, c.graph, c.templInstCounter, n, nOrig, sym)
   if efNoSemCheck notin flags:
     result = semAfterMacroCall(c, n, result, sym, flags, expectedType)
+  # CTFS-M-MacroEmittedRuntime: rewrite spliced AST line info AFTER the
+  # post-macro sem pass — see `rewriteMacroSplicedInfo` above.
+  rewriteMacroSplicedInfo(c, sym, nOrig.info, result)
   if c.config.macrosToExpand.hasKey(sym.name.s):
     message(c.config, nOrig.info, hintExpandMacro, renderTree(result, {
       renderNonExportedFields, renderDocComments, renderNoComments

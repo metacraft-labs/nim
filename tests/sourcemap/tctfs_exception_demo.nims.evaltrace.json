@@ -26,9 +26,9 @@
     "functions": 0,
     "varnames": 0,
     "types": 1,
-    "steps": 8,
+    "steps": 7,
     "calls": 0,
-    "values": 8,
+    "values": 7,
     "io_events": 0
   },
   "events": [
@@ -94,15 +94,6 @@
       "step_index": 6,
       "path_id": 0,
       "line": 17,
-      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 7,
-      "path_id": 0,
-      "line": 1,
       "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
       "step_kind": "sekDeltaStep",
       "vars": []
