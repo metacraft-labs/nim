@@ -23,7 +23,6 @@
   ],
   "varnames": [
     "foobar",
-    "foobar`gensym0",
     "x"
   ],
   "types": [
@@ -34,7 +33,7 @@
   "counts": {
     "paths": 1,
     "functions": 3,
-    "varnames": 3,
+    "varnames": 2,
     "types": 3,
     "steps": 29,
     "calls": 3,
@@ -325,8 +324,8 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 1,
-          "varname": "foobar`gensym0",
+          "varname_id": 0,
+          "varname": "foobar",
           "type_id": 1,
           "type_name": "node",
           "value": {
@@ -449,7 +448,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 2,
+          "varname_id": 1,
           "varname": "x",
           "type_id": 2,
           "type_name": "int",

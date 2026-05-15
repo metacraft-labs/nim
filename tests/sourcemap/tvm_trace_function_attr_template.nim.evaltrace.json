@@ -25,7 +25,7 @@
     "a",
     "b",
     "x",
-    "y`gensym0"
+    "y"
   ],
   "types": [
     "int"
@@ -283,7 +283,7 @@
       "vars": [
         {
           "varname_id": 3,
-          "varname": "y`gensym0",
+          "varname": "y",
           "type_id": 0,
           "type_name": "int",
           "value": {

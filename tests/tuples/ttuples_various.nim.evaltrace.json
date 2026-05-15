@@ -43,7 +43,6 @@
     "a",
     "b",
     "tmpTupleAsgn",
-    "y`gensym6",
     "tt",
     "val",
     "t",
@@ -60,7 +59,7 @@
   "counts": {
     "paths": 1,
     "functions": 14,
-    "varnames": 19,
+    "varnames": 18,
     "types": 2,
     "steps": 171,
     "calls": 19,
@@ -1282,8 +1281,8 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 10,
-          "varname": "y`gensym6",
+          "varname_id": 6,
+          "varname": "y",
           "type_id": 1,
           "type_name": "int",
           "value": {
@@ -1649,7 +1648,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 11,
+          "varname_id": 10,
           "varname": "tt",
           "type_id": 0,
           "type_name": "node",
@@ -1768,7 +1767,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 12,
+          "varname_id": 11,
           "varname": "val",
           "type_id": 0,
           "type_name": "node",
@@ -2382,7 +2381,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 13,
+          "varname_id": 12,
           "varname": "t",
           "type_id": 0,
           "type_name": "node",
@@ -2500,7 +2499,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 14,
+          "varname_id": 13,
           "varname": "s",
           "type_id": 0,
           "type_name": "node",
@@ -2634,7 +2633,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 13,
+          "varname_id": 12,
           "varname": "t",
           "type_id": 0,
           "type_name": "node",
@@ -2692,7 +2691,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 15,
+          "varname_id": 14,
           "varname": "v",
           "type_id": 0,
           "type_name": "node",
@@ -2812,7 +2811,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 16,
+          "varname_id": 15,
           "varname": "tmpTuple",
           "type_id": 0,
           "type_name": "node",
@@ -2938,7 +2937,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 16,
+          "varname_id": 15,
           "varname": "tmpTuple",
           "type_id": 0,
           "type_name": "node",
@@ -3022,7 +3021,7 @@
           }
         },
         {
-          "varname_id": 17,
+          "varname_id": 16,
           "varname": "c",
           "type_id": 0,
           "type_name": "node",
@@ -3113,7 +3112,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 15,
+          "varname_id": 14,
           "varname": "v",
           "type_id": 0,
           "type_name": "node",
@@ -3359,7 +3358,7 @@
           }
         },
         {
-          "varname_id": 18,
+          "varname_id": 17,
           "varname": "_",
           "type_id": 1,
           "type_name": "int",
@@ -3429,7 +3428,7 @@
           }
         },
         {
-          "varname_id": 18,
+          "varname_id": 17,
           "varname": "_",
           "type_id": 1,
           "type_name": "int",
@@ -3521,7 +3520,7 @@
           }
         },
         {
-          "varname_id": 18,
+          "varname_id": 17,
           "varname": "_",
           "type_id": 1,
           "type_name": "int",

@@ -24,33 +24,30 @@
     "f(Tup[system.void]) -> int"
   ],
   "varnames": [
-    "foo`gensym44",
-    "bar`gensym44",
-    "fooUnnamed`gensym44",
-    "n`gensym44",
-    "fooSym`gensym44",
-    "p`gensym44",
-    "q`gensym44",
-    "key`gensym44",
+    "foo",
+    "bar",
+    "fooUnnamed",
+    "n",
+    "fooSym",
+    "p",
+    "q",
+    "key",
     "tmpTuple",
-    "x`gensym44",
-    "y`gensym44",
-    "g`gensym44",
-    "item`gensym2",
-    "scores`gensym44",
-    "x1`gensym44",
-    "item`gensym44",
-    "x2`gensym44",
-    "chars`gensym44",
-    "value`gensym44",
-    "a`gensym44",
-    "k`gensym44",
-    "v`gensym44",
+    "x",
+    "y",
+    "g",
+    "item",
+    "scores",
+    "x1",
+    "x2",
+    "chars",
+    "value",
+    "a",
+    "k",
+    "v",
     ":tmp",
     "result",
-    "x",
     "_",
-    "y",
     "o",
     "z"
   ],
@@ -62,7 +59,7 @@
   "counts": {
     "paths": 1,
     "functions": 5,
-    "varnames": 29,
+    "varnames": 26,
     "types": 3,
     "steps": 127,
     "calls": 6,
@@ -125,7 +122,7 @@
       "vars": [
         {
           "varname_id": 0,
-          "varname": "foo`gensym44",
+          "varname": "foo",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -209,7 +206,7 @@
       "vars": [
         {
           "varname_id": 1,
-          "varname": "bar`gensym44",
+          "varname": "bar",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -257,7 +254,7 @@
       "vars": [
         {
           "varname_id": 2,
-          "varname": "fooUnnamed`gensym44",
+          "varname": "fooUnnamed",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -305,7 +302,7 @@
       "vars": [
         {
           "varname_id": 3,
-          "varname": "n`gensym44",
+          "varname": "n",
           "type_id": 1,
           "type_name": "int",
           "value": {
@@ -335,7 +332,7 @@
       "vars": [
         {
           "varname_id": 4,
-          "varname": "fooSym`gensym44",
+          "varname": "fooSym",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -401,7 +398,7 @@
       "vars": [
         {
           "varname_id": 5,
-          "varname": "p`gensym44",
+          "varname": "p",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -4610,7 +4607,7 @@
       "vars": [
         {
           "varname_id": 6,
-          "varname": "q`gensym44",
+          "varname": "q",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -8801,7 +8798,7 @@
       "vars": [
         {
           "varname_id": 7,
-          "varname": "key`gensym44",
+          "varname": "key",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -8830,7 +8827,7 @@
       "vars": [
         {
           "varname_id": 7,
-          "varname": "key`gensym44",
+          "varname": "key",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -8868,7 +8865,7 @@
       "vars": [
         {
           "varname_id": 6,
-          "varname": "q`gensym44",
+          "varname": "q",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -8938,7 +8935,7 @@
         },
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 1,
           "type_name": "int",
           "value": {
@@ -8949,7 +8946,7 @@
         },
         {
           "varname_id": 10,
-          "varname": "y`gensym44",
+          "varname": "y",
           "type_id": 1,
           "type_name": "int",
           "value": {
@@ -8979,7 +8976,7 @@
       "vars": [
         {
           "varname_id": 11,
-          "varname": "g`gensym44",
+          "varname": "g",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9064,7 +9061,7 @@
       "vars": [
         {
           "varname_id": 12,
-          "varname": "item`gensym2",
+          "varname": "item",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9075,7 +9072,7 @@
         },
         {
           "varname_id": 12,
-          "varname": "item`gensym2",
+          "varname": "item",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9092,7 +9089,7 @@
         },
         {
           "varname_id": 13,
-          "varname": "scores`gensym44",
+          "varname": "scores",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9146,7 +9143,7 @@
       "vars": [
         {
           "varname_id": 14,
-          "varname": "x1`gensym44",
+          "varname": "x1",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9175,8 +9172,8 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 15,
-          "varname": "item`gensym44",
+          "varname_id": 12,
+          "varname": "item",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9205,7 +9202,7 @@
       "vars": [
         {
           "varname_id": 14,
-          "varname": "x1`gensym44",
+          "varname": "x1",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9249,8 +9246,8 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 16,
-          "varname": "x2`gensym44",
+          "varname_id": 15,
+          "varname": "x2",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9279,8 +9276,8 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 17,
-          "varname": "chars`gensym44",
+          "varname_id": 16,
+          "varname": "chars",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9289,8 +9286,8 @@
           }
         },
         {
-          "varname_id": 18,
-          "varname": "value`gensym44",
+          "varname_id": 17,
+          "varname": "value",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9318,8 +9315,8 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 16,
-          "varname": "x2`gensym44",
+          "varname_id": 15,
+          "varname": "x2",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9390,8 +9387,8 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 19,
-          "varname": "a`gensym44",
+          "varname_id": 18,
+          "varname": "a",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9402,8 +9399,8 @@
           }
         },
         {
-          "varname_id": 19,
-          "varname": "a`gensym44",
+          "varname_id": 18,
+          "varname": "a",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9467,8 +9464,8 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 20,
-          "varname": "k`gensym44",
+          "varname_id": 19,
+          "varname": "k",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9477,8 +9474,8 @@
           }
         },
         {
-          "varname_id": 21,
-          "varname": "v`gensym44",
+          "varname_id": 20,
+          "varname": "v",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9512,7 +9509,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 2,
           "type_name": "string",
@@ -9523,7 +9520,7 @@
           }
         },
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 0,
           "type_name": "node",
@@ -9545,7 +9542,7 @@
           }
         },
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 0,
           "type_name": "node",
@@ -9556,7 +9553,7 @@
           }
         },
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 0,
           "type_name": "node",
@@ -9603,7 +9600,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 23,
+          "varname_id": 22,
           "varname": "result",
           "type_id": 0,
           "type_name": "node",
@@ -9696,8 +9693,8 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 19,
-          "varname": "a`gensym44",
+          "varname_id": 18,
+          "varname": "a",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9771,7 +9768,7 @@
       "vars": [
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9781,7 +9778,7 @@
         },
         {
           "varname_id": 10,
-          "varname": "y`gensym44",
+          "varname": "y",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -9827,7 +9824,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 0,
           "type_name": "node",
@@ -9844,7 +9841,7 @@
           }
         },
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 1,
           "type_name": "int",
@@ -9855,7 +9852,7 @@
           }
         },
         {
-          "varname_id": 22,
+          "varname_id": 21,
           "varname": ":tmp",
           "type_id": 0,
           "type_name": "node",
@@ -9897,7 +9894,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 23,
+          "varname_id": 22,
           "varname": "result",
           "type_id": 0,
           "type_name": "node",
@@ -10013,7 +10010,7 @@
       "vars": [
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -10035,7 +10032,7 @@
         },
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -10082,7 +10079,7 @@
       "vars": [
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -10140,7 +10137,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 23,
+          "varname_id": 22,
           "varname": "result",
           "type_id": 0,
           "type_name": "node",
@@ -10250,7 +10247,7 @@
       "vars": [
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -10272,7 +10269,7 @@
         },
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -10319,7 +10316,7 @@
       "vars": [
         {
           "varname_id": 9,
-          "varname": "x`gensym44",
+          "varname": "x",
           "type_id": 0,
           "type_name": "node",
           "value": {
@@ -10377,7 +10374,7 @@
       "depth": 0,
       "vars": [
         {
-          "varname_id": 23,
+          "varname_id": 22,
           "varname": "result",
           "type_id": 0,
           "type_name": "node",
@@ -10527,7 +10524,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 24,
+          "varname_id": 9,
           "varname": "x",
           "type_id": 0,
           "type_name": "node",
@@ -10572,7 +10569,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 25,
+          "varname_id": 23,
           "varname": "_",
           "type_id": 0,
           "type_name": "node",
@@ -10603,7 +10600,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 26,
+          "varname_id": 10,
           "varname": "y",
           "type_id": 0,
           "type_name": "node",
@@ -10662,7 +10659,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 27,
+          "varname_id": 24,
           "varname": "o",
           "type_id": 0,
           "type_name": "node",
@@ -10713,7 +10710,7 @@
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 28,
+          "varname_id": 25,
           "varname": "z",
           "type_id": 0,
           "type_name": "node",
