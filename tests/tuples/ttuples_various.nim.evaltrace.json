@@ -54,13 +54,14 @@
   ],
   "types": [
     "node",
-    "int"
+    "int",
+    "A"
   ],
   "counts": {
     "paths": 1,
     "functions": 14,
     "varnames": 18,
-    "types": 2,
+    "types": 3,
     "steps": 171,
     "calls": 19,
     "values": 171,
@@ -2693,8 +2694,8 @@
         {
           "varname_id": 14,
           "varname": "v",
-          "type_id": 0,
-          "type_name": "node",
+          "type_id": 2,
+          "type_name": "A",
           "value": {
             "kind": "Struct",
             "field_values": [
@@ -3114,8 +3115,8 @@
         {
           "varname_id": 14,
           "varname": "v",
-          "type_id": 0,
-          "type_name": "node",
+          "type_id": 2,
+          "type_name": "A",
           "value": {
             "kind": "Struct",
             "field_values": [

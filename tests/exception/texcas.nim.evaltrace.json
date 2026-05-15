@@ -27,7 +27,7 @@
   ],
   "types": [
     "Exception",
-    "node",
+    "ref Exception",
     "int"
   ],
   "counts": {
@@ -152,7 +152,7 @@
           "varname_id": 0,
           "varname": "foobar",
           "type_id": 1,
-          "type_name": "node",
+          "type_name": "ref Exception",
           "value": {
             "kind": "None",
             "type_id": 0
@@ -327,7 +327,7 @@
           "varname_id": 0,
           "varname": "foobar",
           "type_id": 1,
-          "type_name": "node",
+          "type_name": "ref Exception",
           "value": {
             "kind": "None",
             "type_id": 0

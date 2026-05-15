@@ -54,13 +54,14 @@
   "types": [
     "node",
     "int",
+    "ref OrderedTable",
     "string"
   ],
   "counts": {
     "paths": 1,
     "functions": 5,
     "varnames": 26,
-    "types": 3,
+    "types": 4,
     "steps": 127,
     "calls": 6,
     "values": 127,
@@ -399,8 +400,8 @@
         {
           "varname_id": 5,
           "varname": "p",
-          "type_id": 0,
-          "type_name": "node",
+          "type_id": 2,
+          "type_name": "ref OrderedTable",
           "value": {
             "kind": "Reference",
             "dereferenced": {
@@ -4608,8 +4609,8 @@
         {
           "varname_id": 6,
           "varname": "q",
-          "type_id": 0,
-          "type_name": "node",
+          "type_id": 2,
+          "type_name": "ref OrderedTable",
           "value": {
             "kind": "Reference",
             "dereferenced": {
@@ -9511,7 +9512,7 @@
         {
           "varname_id": 21,
           "varname": ":tmp",
-          "type_id": 2,
+          "type_id": 3,
           "type_name": "string",
           "value": {
             "kind": "String",
