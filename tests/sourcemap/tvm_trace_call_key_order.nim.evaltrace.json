@@ -110,6 +110,9 @@
       "line": 26,
       "path": "<workdir>/tests/sourcemap/tvm_trace_call_key_order.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "outer",
+      "depth": 0,
       "vars": []
     },
     {

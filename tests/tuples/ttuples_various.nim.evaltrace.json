@@ -1198,6 +1198,9 @@
       "line": 43,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
       "vars": []
     },
     {
@@ -1207,6 +1210,9 @@
       "line": 42,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 3,
+      "function": "pp",
+      "depth": 0,
       "vars": []
     },
     {
@@ -1456,6 +1462,9 @@
       "line": 51,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "pg(var int, var int)",
+      "depth": 0,
       "vars": []
     },
     {
@@ -2127,6 +2136,9 @@
       "line": 119,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
+      "function_id": 7,
+      "function": "[](tuple[a: int, b: string], string, proc (x: string): int{.closure.}) -> int",
+      "depth": 0,
       "vars": []
     },
     {
