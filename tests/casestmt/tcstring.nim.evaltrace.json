@@ -1,0 +1,3361 @@
+{
+  "metadata": {
+    "program": "<workdir>/tests/casestmt/tcstring.nim",
+    "args": [],
+    "workdir": "<workdir>",
+    "recorder": "",
+    "trace_filter": {
+      "filters": [
+        {
+          "path": "<inline:builtin-default>",
+          "sha256": "85fe0bdb13b50c5b8dc28e02aefca13b635e1f084bf747e193374c001104624f"
+        }
+      ]
+    }
+  },
+  "paths": [
+    "<workdir>/tests/casestmt/tcstring.nim"
+  ],
+  "functions": [
+    "foo1",
+    "foo2"
+  ],
+  "varnames": [
+    "result",
+    "results"
+  ],
+  "types": [
+    "int",
+    "node"
+  ],
+  "counts": {
+    "paths": 1,
+    "functions": 2,
+    "varnames": 2,
+    "types": 2,
+    "steps": 203,
+    "calls": 22,
+    "values": 203,
+    "io_events": 0
+  },
+  "events": [
+    {
+      "kind": "step",
+      "step_index": 0,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 1,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 0,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 2,
+      "exit_step": 6,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 2,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 3,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 4,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 5,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 6,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 0,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 6,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 7,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 8,
+      "path_id": 0,
+      "line": 19,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 1,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 9,
+      "exit_step": 13,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 9,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 10,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 11,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 12,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 13,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 1,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 13,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 14,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 15,
+      "path_id": 0,
+      "line": 20,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 2,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 16,
+      "exit_step": 21,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 16,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 17,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 18,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 19,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 20,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 21,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 2,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 21,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 22,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 23,
+      "path_id": 0,
+      "line": 20,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 3,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 24,
+      "exit_step": 29,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 24,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 25,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 26,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 27,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 28,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 29,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 3,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 29,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 30,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 31,
+      "path_id": 0,
+      "line": 21,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 4,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 32,
+      "exit_step": 38,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 32,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 33,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 34,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 35,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 36,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 37,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 38,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 3,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 4,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 38,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 39,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 40,
+      "path_id": 0,
+      "line": 21,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 5,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 41,
+      "exit_step": 47,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 41,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 42,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 43,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 44,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 45,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 46,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 47,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 3,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 5,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 47,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 48,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 49,
+      "path_id": 0,
+      "line": 22,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 6,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 50,
+      "exit_step": 57,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 50,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 51,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 52,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 53,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 54,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 55,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 56,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 57,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 6,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 57,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 58,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 59,
+      "path_id": 0,
+      "line": 22,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 7,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 60,
+      "exit_step": 67,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 60,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 61,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 62,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 63,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 64,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 65,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 66,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 67,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 7,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 67,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 68,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 69,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 8,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 70,
+      "exit_step": 78,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 70,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 71,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 72,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 73,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 74,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 75,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 76,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 77,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 78,
+      "path_id": 0,
+      "line": 8,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 8,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 78,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 79,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 80,
+      "path_id": 0,
+      "line": 23,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 9,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 81,
+      "exit_step": 89,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 81,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 82,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 83,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 84,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 85,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 86,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 87,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 88,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 89,
+      "path_id": 0,
+      "line": 8,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 9,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 89,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 90,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 91,
+      "path_id": 0,
+      "line": 24,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 10,
+      "function_id": 0,
+      "function": "foo1",
+      "entry_step": 92,
+      "exit_step": 100,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 92,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 93,
+      "path_id": 0,
+      "line": 10,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 0,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 94,
+      "path_id": 0,
+      "line": 11,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 95,
+      "path_id": 0,
+      "line": 12,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 96,
+      "path_id": 0,
+      "line": 13,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 97,
+      "path_id": 0,
+      "line": 14,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 98,
+      "path_id": 0,
+      "line": 15,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 99,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 100,
+      "path_id": 0,
+      "line": 16,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "foo1",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 6,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 10,
+      "function_id": 0,
+      "function": "foo1",
+      "exit_step": 100,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 101,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 102,
+      "path_id": 0,
+      "line": 18,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 1,
+          "varname": "results",
+          "type_id": 1,
+          "type_name": "node",
+          "value": {
+            "kind": "Sequence",
+            "elements": [
+              {
+                "kind": "Enum",
+                "name": "a",
+                "ordinal": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "a",
+                "ordinal": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "b",
+                "ordinal": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "b",
+                "ordinal": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "c",
+                "ordinal": 3,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "c",
+                "ordinal": 3,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "d",
+                "ordinal": 4,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "d",
+                "ordinal": 4,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "none",
+                "ordinal": 0,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "none",
+                "ordinal": 0,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "f",
+                "ordinal": 6,
+                "type_id": 0
+              }
+            ],
+            "is_slice": false,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 103,
+      "path_id": 0,
+      "line": 25,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 104,
+      "path_id": 0,
+      "line": 25,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 105,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 106,
+      "path_id": 0,
+      "line": 45,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 11,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 107,
+      "exit_step": 110,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 107,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 108,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 109,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 110,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 11,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 110,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 111,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 112,
+      "path_id": 0,
+      "line": 45,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 12,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 113,
+      "exit_step": 116,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 113,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 114,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 115,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 116,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 1,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 12,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 116,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 117,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 118,
+      "path_id": 0,
+      "line": 46,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 13,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 119,
+      "exit_step": 123,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 119,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 120,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 121,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 122,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 123,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 13,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 123,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 124,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 125,
+      "path_id": 0,
+      "line": 46,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 14,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 126,
+      "exit_step": 130,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 126,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 127,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 128,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 129,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 130,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 2,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 14,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 130,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 131,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 132,
+      "path_id": 0,
+      "line": 47,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 15,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 133,
+      "exit_step": 138,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 133,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 134,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 135,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 136,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 137,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 138,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 3,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 15,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 138,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 139,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 140,
+      "path_id": 0,
+      "line": 47,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 16,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 141,
+      "exit_step": 146,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 141,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 142,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 143,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 144,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 145,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 146,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 3,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 16,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 146,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 147,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 148,
+      "path_id": 0,
+      "line": 48,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 17,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 149,
+      "exit_step": 155,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 149,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 150,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 151,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 152,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 153,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 154,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 155,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 17,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 155,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 156,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 157,
+      "path_id": 0,
+      "line": 48,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 18,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 158,
+      "exit_step": 164,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 158,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 159,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 160,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 161,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 162,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 163,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 164,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 4,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 18,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 164,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 165,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 166,
+      "path_id": 0,
+      "line": 49,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 19,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 167,
+      "exit_step": 176,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 167,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 168,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 169,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 170,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 171,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 172,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 173,
+      "path_id": 0,
+      "line": 41,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 174,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 175,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 5,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 176,
+      "path_id": 0,
+      "line": 28,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 19,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 176,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 177,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 178,
+      "path_id": 0,
+      "line": 49,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 20,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 179,
+      "exit_step": 188,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 179,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 180,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 181,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 182,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 183,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 184,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 185,
+      "path_id": 0,
+      "line": 41,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 186,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 187,
+      "path_id": 0,
+      "line": 42,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 5,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 188,
+      "path_id": 0,
+      "line": 28,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 20,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 188,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 189,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 190,
+      "path_id": 0,
+      "line": 50,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "call_entry",
+      "call_key": 21,
+      "function_id": 1,
+      "function": "foo2",
+      "entry_step": 191,
+      "exit_step": 198,
+      "depth": 0,
+      "parent_call_key": -1,
+      "args": [],
+      "children": []
+    },
+    {
+      "kind": "step",
+      "step_index": 191,
+      "path_id": 0,
+      "line": 30,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 192,
+      "path_id": 0,
+      "line": 36,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 193,
+      "path_id": 0,
+      "line": 37,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 194,
+      "path_id": 0,
+      "line": 38,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 195,
+      "path_id": 0,
+      "line": 39,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 196,
+      "path_id": 0,
+      "line": 40,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 197,
+      "path_id": 0,
+      "line": 41,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 198,
+      "path_id": 0,
+      "line": 41,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "foo2",
+      "depth": 0,
+      "vars": [
+        {
+          "varname_id": 0,
+          "varname": "result",
+          "type_id": 0,
+          "type_name": "int",
+          "value": {
+            "kind": "Int",
+            "i": 6,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "call_exit",
+      "call_key": 21,
+      "function_id": 1,
+      "function": "foo2",
+      "exit_step": 198,
+      "depth": 0,
+      "return_value": {
+        "kind": "Void"
+      }
+    },
+    {
+      "kind": "step",
+      "step_index": 199,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 200,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 1,
+          "varname": "results",
+          "type_id": 1,
+          "type_name": "node",
+          "value": {
+            "kind": "Sequence",
+            "elements": [
+              {
+                "kind": "Enum",
+                "name": "a",
+                "ordinal": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "a",
+                "ordinal": 1,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "b",
+                "ordinal": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "b",
+                "ordinal": 2,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "c",
+                "ordinal": 3,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "c",
+                "ordinal": 3,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "d",
+                "ordinal": 4,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "d",
+                "ordinal": 4,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "e",
+                "ordinal": 5,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "e",
+                "ordinal": 5,
+                "type_id": 0
+              },
+              {
+                "kind": "Enum",
+                "name": "f",
+                "ordinal": 6,
+                "type_id": 0
+              }
+            ],
+            "is_slice": false,
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 201,
+      "path_id": 0,
+      "line": 52,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 202,
+      "path_id": 0,
+      "line": 52,
+      "path": "<workdir>/tests/casestmt/tcstring.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    }
+  ]
+}
