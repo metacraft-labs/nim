@@ -267,6 +267,17 @@ proc registerAdditionalOps*(c: PCtx) =
     systemop getCurrentExceptionMsg
     systemop getCurrentException
     systemop raiseDefect
+    registerCallback c, "stdlib.system.setCurrentException", proc (a: VmArgs) =
+      # Mirror the c/cpp/js backends' `setCurrentException`: overwrite the
+      # VM's current-exception slot with the caller-supplied `ref Exception`.
+      # The `raise` opcode performs the same assignment to
+      # `c.currentExceptionA`; we mirror that, plus tolerate a `nil` ref so
+      # callers can clear the slot.
+      let excNode = getNode(a, 0)
+      if excNode == nil or excNode.kind == nkNilLit:
+        c.currentExceptionA = nil
+      else:
+        c.currentExceptionA = excNode
     registerCallback c, "stdlib.staticos.staticWalkDir", proc (a: VmArgs) {.nimcall.} =
       setResult(a, staticWalkDirImpl(getString(a, 0), getBool(a, 1)))
     registerCallback c, "stdlib.staticos.staticDirExists", proc (a: VmArgs) {.nimcall.} =

@@ -2349,6 +2349,8 @@ when notJSnotNims and hostOS != "standalone":
 
 elif defined(nimscript):
   proc getCurrentException*(): ref Exception {.compilerRtl.} = discard
+  proc getCurrentExceptionMsg*(): string {.compilerRtl.} = discard
+  proc setCurrentException*(exc: ref Exception) {.compilerRtl.} = discard
   proc raiseDefect*() {.compilerRtl.} = discard
 
 when not defined(js):
