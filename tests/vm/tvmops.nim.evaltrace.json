@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "program": "<workdir>/tests/vm/tvmops.nim",
+    "args": [],
+    "workdir": "<workdir>",
+    "recorder": "",
+    "trace_filter": {
+      "filters": [
+        {
+          "path": "<inline:builtin-default>",
+          "sha256": "85fe0bdb13b50c5b8dc28e02aefca13b635e1f084bf747e193374c001104624f"
+        }
+      ]
+    }
+  },
+  "paths": [
+    "<workdir>/tests/vm/tvmops.nim"
+  ],
+  "functions": [],
+  "varnames": [],
+  "types": [],
+  "counts": {
+    "paths": 1,
+    "functions": 0,
+    "varnames": 0,
+    "types": 0,
+    "steps": 2,
+    "calls": 0,
+    "values": 2,
+    "io_events": 0
+  },
+  "events": [
+    {
+      "kind": "step",
+      "step_index": 0,
+      "path_id": 0,
+      "line": 44,
+      "path": "<workdir>/tests/vm/tvmops.nim",
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 1,
+      "path_id": 0,
+      "line": 45,
+      "path": "<workdir>/tests/vm/tvmops.nim",
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    }
+  ]
+}
