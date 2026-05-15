@@ -36,9 +36,9 @@
     "functions": 3,
     "varnames": 3,
     "types": 3,
-    "steps": 32,
+    "steps": 29,
     "calls": 3,
-    "values": 32,
+    "values": 29,
     "io_events": 2
   },
   "events": [
@@ -501,33 +501,6 @@
       "step_index": 28,
       "path_id": 0,
       "line": 38,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 29,
-      "path_id": 0,
-      "line": 9,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 30,
-      "path_id": 0,
-      "line": 23,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 31,
-      "path_id": 0,
-      "line": 28,
       "path": "<workdir>/tests/exception/texcas.nim",
       "step_kind": "sekDeltaStep",
       "vars": []

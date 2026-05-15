@@ -62,9 +62,9 @@
     "functions": 14,
     "varnames": 19,
     "types": 2,
-    "steps": 186,
+    "steps": 171,
     "calls": 19,
-    "values": 186,
+    "values": 171,
     "io_events": 2
   },
   "events": [
@@ -2685,9 +2685,99 @@
           "type_id": 0,
           "type_name": "node",
           "value": {
-            "kind": "Undecodable",
-            "error": "cbor: expected unsigned int (major 0), got major 4",
-            "raw_hex": "a4646b696e64665374727563746c6669656c645f76616c75657381a3646b696e64655475706c6568656c656d656e747383a4646b696e646853657175656e636568656c656d656e747381a3646b696e6463496e7461690167747970655f6964006869735f736c696365f467747970655f696400a4646b696e646853657175656e636568656c656d656e747381a3646b696e6463496e7461690267747970655f6964006869735f736c696365f467747970655f696400a4646b696e646853657175656e636568656c656d656e747381a3646b696e6463496e7461690367747970655f6964006869735f736c696365f467747970655f69640067747970655f6964006b6669656c645f6e616d657381656669656c6467747970655f696400"
+            "kind": "Struct",
+            "field_values": [
+              {
+                "kind": "Tuple",
+                "elements": [
+                  {
+                    "kind": "Sequence",
+                    "elements": [
+                      {
+                        "kind": "Int",
+                        "i": 1,
+                        "type_id": 0
+                      }
+                    ],
+                    "is_slice": false,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Sequence",
+                    "elements": [
+                      {
+                        "kind": "Int",
+                        "i": 2,
+                        "type_id": 0
+                      }
+                    ],
+                    "is_slice": false,
+                    "type_id": 0
+                  },
+                  {
+                    "kind": "Sequence",
+                    "elements": [
+                      {
+                        "kind": "Int",
+                        "i": 3,
+                        "type_id": 0
+                      }
+                    ],
+                    "is_slice": false,
+                    "type_id": 0
+                  }
+                ],
+                "type_id": 0
+              }
+            ],
+            "fields": [
+              [
+                "field",
+                {
+                  "kind": "Tuple",
+                  "elements": [
+                    {
+                      "kind": "Sequence",
+                      "elements": [
+                        {
+                          "kind": "Int",
+                          "i": 1,
+                          "type_id": 0
+                        }
+                      ],
+                      "is_slice": false,
+                      "type_id": 0
+                    },
+                    {
+                      "kind": "Sequence",
+                      "elements": [
+                        {
+                          "kind": "Int",
+                          "i": 2,
+                          "type_id": 0
+                        }
+                      ],
+                      "is_slice": false,
+                      "type_id": 0
+                    },
+                    {
+                      "kind": "Sequence",
+                      "elements": [
+                        {
+                          "kind": "Int",
+                          "i": 3,
+                          "type_id": 0
+                        }
+                      ],
+                      "is_slice": false,
+                      "type_id": 0
+                    }
+                  ],
+                  "type_id": 0
+                }
+              ]
+            ],
+            "type_id": 0
           }
         }
       ]
@@ -3016,9 +3106,37 @@
           "type_id": 0,
           "type_name": "node",
           "value": {
-            "kind": "Undecodable",
-            "error": "cbor: expected unsigned int (major 0), got major 4",
-            "raw_hex": "a4646b696e64665374727563746c6669656c645f76616c75657381a3646b696e64655475706c6568656c656d656e747381a3646b696e6463496e74616919052267747970655f69640067747970655f6964006b6669656c645f6e616d657381656669656c6467747970655f696400"
+            "kind": "Struct",
+            "field_values": [
+              {
+                "kind": "Tuple",
+                "elements": [
+                  {
+                    "kind": "Int",
+                    "i": 1314,
+                    "type_id": 0
+                  }
+                ],
+                "type_id": 0
+              }
+            ],
+            "fields": [
+              [
+                "field",
+                {
+                  "kind": "Tuple",
+                  "elements": [
+                    {
+                      "kind": "Int",
+                      "i": 1314,
+                      "type_id": 0
+                    }
+                  ],
+                  "type_id": 0
+                }
+              ]
+            ],
+            "type_id": 0
           }
         }
       ]
@@ -3417,141 +3535,6 @@
       "step_index": 170,
       "path_id": 0,
       "line": 213,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 171,
-      "path_id": 0,
-      "line": 15,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekAbsoluteStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 172,
-      "path_id": 0,
-      "line": 30,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 173,
-      "path_id": 0,
-      "line": 38,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 174,
-      "path_id": 0,
-      "line": 42,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 175,
-      "path_id": 0,
-      "line": 51,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 176,
-      "path_id": 0,
-      "line": 122,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekAbsoluteStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 177,
-      "path_id": 0,
-      "line": 110,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 178,
-      "path_id": 0,
-      "line": 116,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 179,
-      "path_id": 0,
-      "line": 139,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 180,
-      "path_id": 0,
-      "line": 153,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 181,
-      "path_id": 0,
-      "line": 158,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 182,
-      "path_id": 0,
-      "line": 161,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 183,
-      "path_id": 0,
-      "line": 173,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 184,
-      "path_id": 0,
-      "line": 182,
-      "path": "<workdir>/tests/tuples/ttuples_various.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 185,
-      "path_id": 0,
-      "line": 197,
       "path": "<workdir>/tests/tuples/ttuples_various.nim",
       "step_kind": "sekDeltaStep",
       "vars": []
