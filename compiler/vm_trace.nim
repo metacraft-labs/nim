@@ -75,7 +75,7 @@
 
 import std/[tables, syncio, os, strutils]
 import msgs, options, lineinfos
-import ast
+import ast, renderer
 import results
 export results
 import codetracer_trace_writer/multi_stream_writer
@@ -577,6 +577,60 @@ proc ensureFunction(tracer: var VmTracer, name: string): uint64 =
   tracer.functions[name] = funcId
   return funcId
 
+proc functionNameForTrace*(prc: PSym): string =
+  ## CTFS-M-Generics: compose an instantiation-aware function name.
+  ##
+  ## For ordinary (non-generic) procs this returns the bare source-level
+  ## name (`prc.name.s`) — identical to the pre-Generics behaviour, so
+  ## existing snapshots stay byte-stable.
+  ##
+  ## For generic *instantiations* (`sfFromGeneric in prc.flags`) we suffix
+  ## the bare name with the resolved parameter and return types in the
+  ## form `name(param1, param2, ...) -> ret`. Two different
+  ## instantiations of the same generic — say `f[int]` and `f[string]` —
+  ## therefore produce distinct entries in the trace's `functions[]`
+  ## table, matching the "the trace shows what happens at runtime"
+  ## principle: at runtime they really are different procedures with
+  ## different code and different behaviour.
+  ##
+  ## We use parameter / return types (not the original generic type
+  ## arguments) because:
+  ##   * After `seminst.generateInstance` the proc's
+  ##     `ast[genericParamsPos]` is reset to `emptyNode` — the resolved
+  ##     generic args are no longer reachable from the PSym without the
+  ##     `ModuleGraph` instance cache, which the tracer does not have
+  ##     access to.
+  ##   * The proc's resolved signature (`prc.typ`) fully distinguishes
+  ##     all observable instantiations: two `sfFromGeneric` PSyms whose
+  ##     signatures coincide describe code paths that behave identically
+  ##     at the VM level, so collapsing them into one function entry
+  ##     would still be correct from a "what happens at runtime"
+  ##     standpoint.
+  ##
+  ## Edge case: parameterless generics (e.g. `proc g[T](): T`) instantiate
+  ## with a return-type-only suffix — `g() -> int`, `g() -> string`.
+  if prc == nil:
+    return ""
+  let base = prc.name.s
+  if sfFromGeneric notin prc.flags or prc.typ == nil:
+    return base
+  # Walk resolved parameter types via `paramTypes` (skips the return
+  # type at index 0). `typeToString` with the default `preferName`
+  # produces compact, deterministic output (`int`, `string`,
+  # `seq[int]`, …) and is the same renderer Nim's own diagnostics use,
+  # so the suffix matches what a user would write at the call site.
+  var params = ""
+  for i, paramType in prc.typ.paramTypes:
+    if i > FirstParamAt: params.add(", ")
+    params.add(typeToString(paramType))
+  let ret =
+    if prc.typ.returnType != nil: typeToString(prc.typ.returnType)
+    else: ""
+  result = base & "(" & params & ")"
+  if ret.len > 0:
+    result.add(" -> ")
+    result.add(ret)
+
 proc ensureFunctionForSym(tracer: var VmTracer, prc: PSym,
                           skip: var bool): uint64 =
   ## TF-M4b: function-side counterpart of `ensurePath`.
@@ -643,7 +697,14 @@ proc ensureFunctionForSym(tracer: var VmTracer, prc: PSym,
   # sharing a name collapse into one functionId (same as pre-M4b
   # behaviour); the M4b distinction is purely the *filter gate*, not
   # the interning policy.
-  let funcId = tracer.ensureFunction(prc.name.s)
+  #
+  # CTFS-M-Generics: for generic instantiations, `functionNameForTrace`
+  # returns a name that incorporates the resolved signature
+  # (`f(int) -> int`, `f(string) -> string`, …) so `f[int]` and
+  # `f[string]` produce distinct functionIds. Non-generic procs still
+  # register under the bare `prc.name.s` — byte-stable for existing
+  # snapshots.
+  let funcId = tracer.ensureFunction(functionNameForTrace(prc))
   let entry = FuncCacheEntry(kind: fcTrace, functionId: funcId)
   tracer.funcByItemId[key] = entry
   return funcId
