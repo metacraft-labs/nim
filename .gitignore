@@ -64,6 +64,7 @@ lib/**/*.html
 /testresults.json
 testament.db
 /tests/**/*.json
+!/tests/**/*.evaltrace.json
 /tests/**/*.js
 
 /csources
