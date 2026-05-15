@@ -73,7 +73,7 @@
 ## return on miss), in the same complexity class as TF-M4b's function-side
 ## filter.
 
-import std/[tables, syncio, os, strutils]
+import std/[tables, syncio, os, strutils, sets]
 import msgs, options, lineinfos
 import ast, renderer
 import results
@@ -81,6 +81,7 @@ export results
 import codetracer_trace_writer/multi_stream_writer
 export multi_stream_writer.IOEventKind
 import codetracer_trace_writer/value_stream
+import codetracer_trace_writer/call_stream
 import codetracer_trace_writer/cbor
 import codetracer_trace_writer/path_filter
 import ../dist/checksums/src/checksums/sha2
@@ -577,7 +578,7 @@ proc ensureFunction(tracer: var VmTracer, name: string): uint64 =
   tracer.functions[name] = funcId
   return funcId
 
-proc functionNameForTrace*(prc: PSym): string =
+proc functionNameForTrace*(prc: PSym, config: ConfigRef = nil): string =
   ## CTFS-M-Generics / CTFS-M-OOP: compose an instantiation-aware
   ## function name.
   ##
@@ -631,9 +632,23 @@ proc functionNameForTrace*(prc: PSym): string =
   ## legal — `method m[T](x: First[T])`) goes through the
   ## `sfFromGeneric` branch first because the resolved signature already
   ## captures the dispatch type as parameter 1.
+  ##
+  ## CTFS-M-Closures: anonymous closures synthesised from a `proc(...) =`
+  ## lambda land in the trace as `:anonymous` (the canonical name
+  ## minted by `semexprs.semProcAux` via `idents.idAnon`). Two distinct
+  ## lambdas in the same program therefore collapse onto one functionId,
+  ## which is unhelpful — the user sees only "some anonymous proc was
+  ## called", not which one. We rewrite the bare `:anonymous` to
+  ## `<anon>@<file>:<line>`, anchored at the lambda's *definition* site
+  ## (`prc.info`). Two lambdas defined on different source lines now get
+  ## distinct names, the call-side reader can jump directly to the
+  ## defining line, and the angle-bracketed form keeps the entry
+  ## visually distinct from named procs in the trace UI.
   if prc == nil:
     return ""
-  let base = prc.name.s
+  let base =
+    if prc.name == nil: ""
+    else: prc.name.s
   if prc.typ == nil:
     return base
   if sfFromGeneric in prc.flags:
@@ -670,6 +685,26 @@ proc functionNameForTrace*(prc: PSym): string =
     if firstParam != nil:
       result = base & "[" & typeToString(firstParam) & "]"
       return
+  # CTFS-M-Closures: rename `:anonymous` lambdas to `<anon>@file:line`
+  # using the proc's defining-site `info`. We only rewrite the
+  # canonical anonymous marker — named local procs (which can still
+  # capture state and become closures) keep their source-level names.
+  # When a ConfigRef is available we use the *basename* of the
+  # defining file so the entry stays compact and readable in the trace
+  # UI (`<anon>@adder.nim:3`); without a config we fall back to just
+  # the line number (`<anon>@:3`). Two anonymous procs defined on
+  # different source lines get distinct functionIds either way.
+  if base == ":anonymous" and prc.info.fileIndex.int32 >= 0:
+    let line = prc.info.line
+    var loc: string
+    if config != nil:
+      let full = toFullPath(config, prc.info.fileIndex)
+      let (_, name, ext) = splitFile(full)
+      loc = name & ext & ":" & $line
+    else:
+      loc = ":" & $line
+    result = "<anon>@" & loc
+    return
   result = base
 
 proc ensureFunctionForSym(tracer: var VmTracer, prc: PSym,
@@ -745,7 +780,7 @@ proc ensureFunctionForSym(tracer: var VmTracer, prc: PSym,
   # `f[string]` produce distinct functionIds. Non-generic procs still
   # register under the bare `prc.name.s` — byte-stable for existing
   # snapshots.
-  let funcId = tracer.ensureFunction(functionNameForTrace(prc))
+  let funcId = tracer.ensureFunction(functionNameForTrace(prc, tracer.config))
   let entry = FuncCacheEntry(kind: fcTrace, functionId: funcId)
   tracer.funcByItemId[key] = entry
   return funcId
@@ -1210,7 +1245,8 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   tracer.lastEmittedLine = uint64(line)
   tracer.haveLastEmitted = true
 
-proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo) =
+proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo,
+                envNode: PNode = nil) =
   ## Emit a Call event.
   ##
   ## TF-M4b: gated on the function-side trace filter. If the callee's
@@ -1224,9 +1260,19 @@ proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo) =
   ## filter decision: those values were assigned in code we *did* trace
   ## and would otherwise be silently dropped at the unobservable
   ## entry-to-filtered-frame transition.
-  # CTFS-M-CompileTimeFilter: suppress Call events emitted from
-  # compile-time evaluation. Symmetrically suppressed in traceReturn so
-  # tracer.depth stays balanced.
+  ##
+  ## CTFS-M-Closures: when `envNode` is non-nil the call is a closure
+  ## invocation (`opcIndCall` with an `nkTupleConstr` callee). We
+  ## serialize the captured environment as a single `:env` CallArg so
+  ## that the trace's `call_entry.args[]` exposes the lexical state the
+  ## closure carries — without it the closure body appears to run from
+  ## thin air. The env's PNode is the second slot of the closure tuple
+  ## (`regs[rb].node[1]`), produced by `transf`'s lambdalifting pass;
+  ## it walks through the existing `serializeNode` exactly like any
+  ## other aggregate value, so cyclic-ref protection, the depth cap,
+  ## and the M-ComplexTypes structural shape all carry over for free.
+  ## Non-closure calls keep the legacy empty-args call event so existing
+  ## snapshots stay byte-stable.
   if inCompileTimeContext(tracer):
     return
   flushPendingValuesAsStep(tracer)
@@ -1234,7 +1280,20 @@ proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo) =
   let funcId = tracer.ensureFunctionForSym(prc, skip)
   if skip:
     return
-  let res = tracer.writer.registerCall(funcId, [])
+  var args: seq[CallArg] = @[]
+  if envNode != nil and envNode.kind != nkNilLit:
+    # The env varname is conventionally `:env` (the same name the
+    # lambdalifting pass uses for the hidden parameter). We intern it
+    # once via the writer's name pool and reuse the id for every
+    # closure call thereafter.
+    let envVarRes = tracer.writer.registerVarname(":env")
+    let envVarId: uint64 =
+      if envVarRes.isErr: 0'u64
+      else: envVarRes.get()
+    var seen = initHashSet[uint64]()
+    let envVal = serializeNode(envNode, envNode.typ, 0, seen)
+    args.add(CallArg(varnameId: envVarId, value: encodeValue(envVal)))
+  let res = tracer.writer.registerCall(funcId, args)
   if res.isErr:
     discard
   tracer.depth += 1

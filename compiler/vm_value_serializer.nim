@@ -133,13 +133,18 @@ proc activeFieldNamesForVariant(typ: PType, discValue: BiggestInt): seq[string] 
             result.add recList.sym.name.s
           else: discard
 
-proc serializeNode(node: PNode, typ: PType, depth: int,
-                   seen: var HashSet[uint64]): ValueRecord
+proc serializeNode*(node: PNode, typ: PType, depth: int,
+                    seen: var HashSet[uint64]): ValueRecord
   ## Forward declaration — recursive walker that, given a PNode plus a
   ## (possibly nil) PType hint, produces a structured ValueRecord. The
   ## `seen` set carries the addresses of ref-allocated nodes that are
   ## currently being walked, so cyclic ref graphs short-circuit at the
   ## back-edge.
+  ##
+  ## Exported for callers that already hold a PNode they want to render
+  ## (e.g. CTFS-M-Closures emits the closure's env PNode as a call
+  ## argument). Top-level register-shaped serialization should go
+  ## through `serializeVmValue` instead.
 
 proc childType(node: PNode, fallback: PType): PType =
   if node != nil and node.typ != nil: node.typ else: fallback
@@ -413,8 +418,8 @@ proc serializeRef(node: PNode, typ: PType, depth: int,
   ValueRecord(kind: vrkReference, dereferenced: @[inner],
               address: address, mutable: true, refTypeId: NoneTypeId)
 
-proc serializeNode(node: PNode, typ: PType, depth: int,
-                   seen: var HashSet[uint64]): ValueRecord =
+proc serializeNode*(node: PNode, typ: PType, depth: int,
+                    seen: var HashSet[uint64]): ValueRecord =
   ## Recursive PNode → ValueRecord walker. Used both as the top-level
   ## entry (from `serializeVmValue` when `reg.kind == rkNode`) and to
   ## recurse into aggregate sub-values.

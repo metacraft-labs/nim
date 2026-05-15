@@ -1675,7 +1675,17 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
           # tracer can classify by the function's defining-file path
           # and suppress Call/Return events for stdlib-defined helpers
           # (`addInt`, `addChars`, `$`, ...).
-          traceCall(cast[ptr VmTracer](c.vmTracer)[], prc, c.debug[pc])
+          #
+          # CTFS-M-Closures: when the call goes through an `nkTupleConstr`
+          # (the VM-level shape of a closure value: `(prc, env)`), pass
+          # the env PNode as `envNode` so the tracer can serialise the
+          # captured lexical state into the call_entry's args[]. Without
+          # this hook the closure body appears to execute from thin air —
+          # the env is reachable only as the synthetic last-slot
+          # parameter, but it carries no surface-visible binding.
+          let envNode = if isClosure: bb[1] else: nil
+          traceCall(cast[ptr VmTracer](c.vmTracer)[], prc, c.debug[pc],
+                    envNode)
         var newFrame = PStackFrame(prc: prc, comesFrom: pc, next: tos)
         newSeq(newFrame.slots, procInfo.usedRegisters+ord(isClosure))
         # setup slot for proc result:
