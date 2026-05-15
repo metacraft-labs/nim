@@ -13,15 +13,24 @@
 ## emission via the trace writer. CTFS-M1 update: compiles unconditionally
 ## into `bin/nim`; runtime emission is gated by `--trace:<path>`.
 ##
-## CTFS-M-ComplexTypes (this revision): aggregate values (seq, array,
+## CTFS-M-ComplexTypes (prior revision): aggregate values (seq, array,
 ## tuple, object, variant, set, ref) are walked recursively into nested
 ## ValueRecord variants (vrkSequence, vrkTuple, vrkStruct, vrkVariant,
 ## vrkReference) instead of being flattened into opaque renderTree
 ## strings.  A `depth` counter (capped at `MaxSerializationDepth`)
-## guards against cyclic refs and pathologically nested aggregates —
-## hitting the cap downgrades that sub-value to `vrkRaw` carrying the
-## renderTree fallback.
+## guards against pathologically nested aggregates — hitting the cap
+## downgrades that sub-value to `vrkRaw` carrying the renderTree
+## fallback.
+##
+## CTFS-M-Refs (this revision): tyRef / tyPtr dereferencing now uses an
+## explicit per-serialization `seenAddresses` set in addition to the
+## depth cap. When a ref's address is already in the set (or the same
+## address is rediscovered along the recursion stack), the inner
+## `dereferenced` slot is left empty — the leaf vrkReference still
+## carries the address so identity can be correlated, but recursion
+## stops to prevent unbounded walks of cyclic graphs.
 
+import std/sets
 import vmdef, ast, renderer
 import codetracer_trace_types
 
@@ -124,23 +133,29 @@ proc activeFieldNamesForVariant(typ: PType, discValue: BiggestInt): seq[string] 
             result.add recList.sym.name.s
           else: discard
 
-proc serializeNode(node: PNode, typ: PType, depth: int): ValueRecord
+proc serializeNode(node: PNode, typ: PType, depth: int,
+                   seen: var HashSet[uint64]): ValueRecord
   ## Forward declaration — recursive walker that, given a PNode plus a
-  ## (possibly nil) PType hint, produces a structured ValueRecord.
+  ## (possibly nil) PType hint, produces a structured ValueRecord. The
+  ## `seen` set carries the addresses of ref-allocated nodes that are
+  ## currently being walked, so cyclic ref graphs short-circuit at the
+  ## back-edge.
 
 proc childType(node: PNode, fallback: PType): PType =
   if node != nil and node.typ != nil: node.typ else: fallback
 
-proc serializeSequenceLike(node: PNode, typ: PType, depth: int): ValueRecord =
+proc serializeSequenceLike(node: PNode, typ: PType, depth: int,
+                           seen: var HashSet[uint64]): ValueRecord =
   ## Walk an `nkBracket` (seq / array / openArray) into `vrkSequence`.
   let elemTy = if typ != nil and typ.hasElementType: typ.elementType else: nil
   var elems: seq[ValueRecord] = @[]
   for i in 0 ..< node.safeLen:
-    elems.add serializeNode(node[i], childType(node[i], elemTy), depth + 1)
+    elems.add serializeNode(node[i], childType(node[i], elemTy), depth + 1, seen)
   ValueRecord(kind: vrkSequence, seqElements: elems, isSlice: false,
               seqTypeId: NoneTypeId)
 
-proc serializeTupleConstr(node: PNode, typ: PType, depth: int): ValueRecord =
+proc serializeTupleConstr(node: PNode, typ: PType, depth: int,
+                          seen: var HashSet[uint64]): ValueRecord =
   ## Walk an `nkTupleConstr` into `vrkTuple` (positional order).
   var elems: seq[ValueRecord] = @[]
   for i in 0 ..< node.safeLen:
@@ -151,10 +166,11 @@ proc serializeTupleConstr(node: PNode, typ: PType, depth: int): ValueRecord =
     var slotTy: PType = nil
     if typ != nil and typ.kind == tyTuple and i < typ.len:
       slotTy = typ[i]
-    elems.add serializeNode(val, childType(val, slotTy), depth + 1)
+    elems.add serializeNode(val, childType(val, slotTy), depth + 1, seen)
   ValueRecord(kind: vrkTuple, tupleElements: elems, tupleTypeId: NoneTypeId)
 
 proc collectObjFields(node: PNode, depth: int,
+                      seen: var HashSet[uint64],
                       outNames: var seq[string],
                       outVals: var seq[ValueRecord]) =
   ## Walk an `nkObjConstr` and gather `(name, ValueRecord)` pairs in
@@ -173,12 +189,13 @@ proc collectObjFields(node: PNode, depth: int,
         if fieldSym.kind == nkSym: fieldSym.sym.typ
         else: nil
       outNames.add name
-      outVals.add serializeNode(value, childType(value, fieldTy), depth + 1)
+      outVals.add serializeNode(value, childType(value, fieldTy), depth + 1, seen)
     else:
       outNames.add ""
-      outVals.add serializeNode(child, childType(child, nil), depth + 1)
+      outVals.add serializeNode(child, childType(child, nil), depth + 1, seen)
 
-proc serializeObject(node: PNode, typ: PType, depth: int): ValueRecord =
+proc serializeObject(node: PNode, typ: PType, depth: int,
+                     seen: var HashSet[uint64]): ValueRecord =
   ## Emit an `nkObjConstr` as either `vrkStruct` (plain object) or
   ## `vrkVariant` (case object). The materializer pairs vrkStruct field
   ## values with names taken from the TypeRecord; we therefore preserve
@@ -186,7 +203,7 @@ proc serializeObject(node: PNode, typ: PType, depth: int): ValueRecord =
   ## names when needed.
   var names: seq[string] = @[]
   var vals: seq[ValueRecord] = @[]
-  collectObjFields(node, depth, names, vals)
+  collectObjFields(node, depth, seen, names, vals)
 
   if not isCaseObjectType(typ):
     return ValueRecord(kind: vrkStruct, fieldValues: vals,
@@ -304,7 +321,8 @@ proc serializeObject(node: PNode, typ: PType, depth: int): ValueRecord =
   ValueRecord(kind: vrkVariant, discriminator: discText,
               contents: @[payload], variantTypeId: NoneTypeId)
 
-proc serializeSet(node: PNode, typ: PType, depth: int): ValueRecord =
+proc serializeSet(node: PNode, typ: PType, depth: int,
+                  seen: var HashSet[uint64]): ValueRecord =
   ## Walk an `nkCurly` set literal. Each element is either a bare
   ## literal or an `nkRange(a, b)`. We flatten ranges into their
   ## member values for `vrkSequence` representation; for large ranges
@@ -325,11 +343,11 @@ proc serializeSet(node: PNode, typ: PType, depth: int): ValueRecord =
         # Synthesize a literal node of the matching kind so
         # serializeNode picks vrkChar/vrkInt correctly.
         let synth = newIntTypeNode(v, childType(child[0], elemTy))
-        elems.add serializeNode(synth, childType(synth, elemTy), depth + 1)
+        elems.add serializeNode(synth, childType(synth, elemTy), depth + 1, seen)
         inc v
         inc n
     else:
-      elems.add serializeNode(child, childType(child, elemTy), depth + 1)
+      elems.add serializeNode(child, childType(child, elemTy), depth + 1, seen)
   # vrkSequence is the closest match — there is no vrkSet variant in
   # the current format-library ValueRecord enum. The materializer
   # treats it the same as a sequence; the TypeRecord-side type id
@@ -337,26 +355,66 @@ proc serializeSet(node: PNode, typ: PType, depth: int): ValueRecord =
   ValueRecord(kind: vrkSequence, seqElements: elems, isSlice: false,
               seqTypeId: NoneTypeId)
 
-proc serializeRef(node: PNode, typ: PType, depth: int): ValueRecord =
-  ## tyRef: either nil (vrkNone) or an aggregate-allocating wrapper.
+proc serializeRef(node: PNode, typ: PType, depth: int,
+                  seen: var HashSet[uint64]): ValueRecord =
+  ## tyRef / tyPtr: either nil (vrkNone) or an aggregate-allocating
+  ## wrapper. The "address" is the node-pointer cast (stable within a
+  ## single VM run). To keep cyclic graphs from spinning the walker,
+  ## we maintain a `seen` set of addresses currently on the recursion
+  ## stack: if a back-edge points at an address we're already inside,
+  ## we emit a leaf `vrkReference` (address only, empty `dereferenced`)
+  ## and stop.
   if node.isNil or node.kind == nkNilLit:
     return ValueRecord(kind: vrkNone, noneTypeId: NoneTypeId)
-  # In the VM, an allocated ref is represented as the underlying
-  # PNode with `nfIsRef` set on its flags. The "address" is best
-  # represented by the node's pointer cast (stable within a run).
   let address = cast[uint64](node)
   # The dereferenced sub-value carries the underlying type without the
   # ref wrapper.
   var derefTy = typ
   if derefTy != nil:
     derefTy = derefTy.skipTypes(abstractInst)
-    if derefTy != nil and derefTy.kind == tyRef and derefTy.hasElementType:
+    if derefTy != nil and (derefTy.kind == tyRef or derefTy.kind == tyPtr) and
+       derefTy.hasElementType:
       derefTy = derefTy.elementType
-  let inner = serializeNode(node, childType(node, derefTy), depth + 1)
+  if address in seen or depth >= MaxSerializationDepth:
+    # Cycle (or depth cutoff). The wire format always materialises a
+    # one-element `dereferenced` seq on the read side (the CBOR writer
+    # encodes a `vrkNone` placeholder when the source seq is empty),
+    # so the on-disk shape for a cycle-broken ref is
+    # `vrkReference{address=X, dereferenced=[vrkNone]}` — identity
+    # preserved, body short-circuited.
+    return ValueRecord(kind: vrkReference, dereferenced: @[],
+                       address: address, mutable: true, refTypeId: NoneTypeId)
+  seen.incl(address)
+  # Dispatch the dereferenced body directly to the matching aggregate
+  # walker. We deliberately do *not* call back into `serializeNode`
+  # here: that would re-enter the ref path because `nfIsRef` is still
+  # set on the inner node, and we'd build an infinite chain of
+  # vrkReference{vrkReference{...}} for a single allocation.
+  let innerTy = childType(node, derefTy)
+  var inner: ValueRecord
+  case node.kind
+  of nkObjConstr:
+    inner = serializeObject(node, innerTy, depth + 1, seen)
+  of nkTupleConstr:
+    inner = serializeTupleConstr(node, innerTy, depth + 1, seen)
+  of nkBracket:
+    inner = serializeSequenceLike(node, innerTy, depth + 1, seen)
+  of nkCurly:
+    inner = serializeSet(node, innerTy, depth + 1, seen)
+  else:
+    # Fall back to renderTree-style raw rendering for shapes we don't
+    # recognise as one of the standard aggregate constructors.
+    inner = rawFromNode(node)
+  # Pop the address so sibling sub-trees that legitimately share a
+  # referent (no cycle) still get fully expanded. Cycles are detected
+  # by the *back-edge* — i.e. the address being on the active path —
+  # not by any-prior-visit equivalence.
+  seen.excl(address)
   ValueRecord(kind: vrkReference, dereferenced: @[inner],
               address: address, mutable: true, refTypeId: NoneTypeId)
 
-proc serializeNode(node: PNode, typ: PType, depth: int): ValueRecord =
+proc serializeNode(node: PNode, typ: PType, depth: int,
+                   seen: var HashSet[uint64]): ValueRecord =
   ## Recursive PNode → ValueRecord walker. Used both as the top-level
   ## entry (from `serializeVmValue` when `reg.kind == rkNode`) and to
   ## recurse into aggregate sub-values.
@@ -407,17 +465,31 @@ proc serializeNode(node: PNode, typ: PType, depth: int): ValueRecord =
                        intTypeId: NoneTypeId)
   else: discard
 
+  # Ref-first dispatch: in the VM, an allocated `ref` is represented
+  # by the inner aggregate PNode with `nfIsRef` set on its flags, or
+  # by a non-allocated PNode whose static type is tyRef / tyPtr. We
+  # check both signals here, *before* the by-kind aggregate dispatch
+  # below — otherwise an `nkObjConstr`-shaped ref would be silently
+  # unwrapped into a plain vrkStruct, losing identity and dropping
+  # the cycle-protection contract.
+  if nfIsRef in node.flags:
+    return serializeRef(node, typ, depth, seen)
+  if typ != nil:
+    let tForRef = typ.skipTypes(abstractInst)
+    if tForRef != nil and tForRef.kind in {tyRef, tyPtr}:
+      return serializeRef(node, typ, depth, seen)
+
   # Aggregate-shaped nodes: dispatch on node.kind directly. Falling
   # back to the type hint when the node kind is generic.
   case node.kind
   of nkBracket:
-    return serializeSequenceLike(node, typ, depth)
+    return serializeSequenceLike(node, typ, depth, seen)
   of nkTupleConstr:
-    return serializeTupleConstr(node, typ, depth)
+    return serializeTupleConstr(node, typ, depth, seen)
   of nkObjConstr:
-    return serializeObject(node, typ, depth)
+    return serializeObject(node, typ, depth, seen)
   of nkCurly:
-    return serializeSet(node, typ, depth)
+    return serializeSet(node, typ, depth, seen)
   else: discard
 
   # Type-driven dispatch for nodes whose kind alone doesn't reveal the
@@ -429,16 +501,16 @@ proc serializeNode(node: PNode, typ: PType, depth: int): ValueRecord =
       # Defensive: if the node happens to be a string-shaped node
       # we didn't catch above (rare), fall through to renderTree.
       discard
-    of tyRef:
-      return serializeRef(node, typ, depth)
+    of tyRef, tyPtr:
+      return serializeRef(node, typ, depth, seen)
     of tySequence, tyArray, tyOpenArray:
-      return serializeSequenceLike(node, typ, depth)
+      return serializeSequenceLike(node, typ, depth, seen)
     of tyTuple:
-      return serializeTupleConstr(node, typ, depth)
+      return serializeTupleConstr(node, typ, depth, seen)
     of tyObject:
-      return serializeObject(node, typ, depth)
+      return serializeObject(node, typ, depth, seen)
     of tySet:
-      return serializeSet(node, typ, depth)
+      return serializeSet(node, typ, depth, seen)
     else: discard
 
   rawFromNode(node)
@@ -478,7 +550,8 @@ proc serializeVmValue*(reg: TFullReg, typ: PType = nil): ValueRecord =
     result = ValueRecord(kind: vrkFloat, floatVal: float64(reg.floatVal),
                          floatTypeId: NoneTypeId)
   of rkNode:
-    result = serializeNode(reg.node, typ, 0)
+    var seen = initHashSet[uint64]()
+    result = serializeNode(reg.node, typ, 0, seen)
   of rkRegisterAddr, rkNodeAddr:
     result = ValueRecord(kind: vrkRaw, rawStr: "<address>",
                          rawTypeId: NoneTypeId)
