@@ -1564,13 +1564,23 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
     of opcEcho:
       let rb = instr.regB
       template fn(s) = msgWriteln(c.config, s, {msgStdout, msgNoUnitSep})
-      if rb == 1: fn(regs[ra].node.strVal)
+      var ioPayload = ""
+      if rb == 1:
+        ioPayload = regs[ra].node.strVal
+        fn(ioPayload)
       else:
-        var outp = ""
         for i in ra..ra+rb-1:
           #if regs[i].kind != rkNode: debug regs[i]
-          outp.add(regs[i].node.strVal)
-        fn(outp)
+          ioPayload.add(regs[i].node.strVal)
+        fn(ioPayload)
+      # CTFS-M-IO: record the echo as an `ioStdout` event in the trace.
+      # `msgWriteln` appends a trailing newline (writeLine to stdout) so
+      # we mirror that here — the recorded payload matches what the
+      # user actually saw on the terminal.
+      if c.vmTracer != nil:
+        ioPayload.add('\n')
+        traceIO(cast[ptr VmTracer](c.vmTracer)[], ioStdout, c.debug[pc],
+                ioPayload)
     of opcContainsSet:
       decodeBC(rkInt)
       regs[ra].intVal = ord(inSet(regs[rb].node, regs[rc].regToNode))

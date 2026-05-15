@@ -47,6 +47,21 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   var errorMsg: string
   var vthisDir = scriptName.splitFile.dir
 
+  # CTFS-M-IO: capture a reference to the EvalContext for the callbacks
+  # so they can reach `vmTracer` to emit IO events at the call site. The
+  # callbacks already close over `result` via `{.dirty.}` templates, but
+  # an explicit alias keeps the trace hook readable and avoids depending
+  # on dirty-template name capture for non-template code.
+  let ctx = result
+  template traceIoOp(a: VmArgs, kindArg: IOEventKind, payload: string) =
+    ## Emit an IO event from a NimScript callback. No-op when tracing
+    ## is disabled (most common case). The event's source position is
+    ## the line of the callsite that invoked the callback
+    ## (`a.currentLineInfo`, populated by vm.nim's opcIndCall dispatch).
+    if ctx.vmTracer != nil:
+      traceIO(cast[ptr VmTracer](ctx.vmTracer)[], kindArg,
+              a.currentLineInfo, payload)
+
   template cbconf(name, body) {.dirty.} =
     result.registerCallback "stdlib.system." & astToStr(name),
       proc (a: VmArgs) =
@@ -74,42 +89,62 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      os.removeDir(getString(a, 0), getBool(a, 1))
+      let path = getString(a, 0)
+      os.removeDir(path, getBool(a, 1))
+      traceIoOp(a, ioFileOp, "removeDir: " & path)
   cbos removeFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      os.removeFile getString(a, 0)
+      let path = getString(a, 0)
+      os.removeFile path
+      traceIoOp(a, ioFileOp, "removeFile: " & path)
   cbos createDir:
-    os.createDir getString(a, 0)
+    let path = getString(a, 0)
+    os.createDir path
+    traceIoOp(a, ioFileOp, "createDir: " & path)
 
   result.registerCallback "stdlib.system.getError",
     proc (a: VmArgs) = setResult(a, errorMsg)
 
   cbos setCurrentDir:
-    os.setCurrentDir getString(a, 0)
+    let path = getString(a, 0)
+    os.setCurrentDir path
+    traceIoOp(a, ioFileOp, "setCurrentDir: " & path)
   cbos getCurrentDir:
     setResult(a, os.getCurrentDir())
   cbos moveFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      os.moveFile(getString(a, 0), getString(a, 1))
+      let src = getString(a, 0)
+      let dst = getString(a, 1)
+      os.moveFile(src, dst)
+      traceIoOp(a, ioFileOp, "moveFile: " & src & " -> " & dst)
   cbos moveDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      os.moveDir(getString(a, 0), getString(a, 1))
+      let src = getString(a, 0)
+      let dst = getString(a, 1)
+      os.moveDir(src, dst)
+      traceIoOp(a, ioFileOp, "moveDir: " & src & " -> " & dst)
   cbos copyFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      os.copyFile(getString(a, 0), getString(a, 1))
+      let src = getString(a, 0)
+      let dst = getString(a, 1)
+      os.copyFile(src, dst)
+      traceIoOp(a, ioFileOp, "copyFile: " & src & " -> " & dst)
   cbos copyDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      os.copyDir(getString(a, 0), getString(a, 1))
+      let src = getString(a, 0)
+      let dst = getString(a, 1)
+      os.copyDir(src, dst)
+      traceIoOp(a, ioFileOp, "copyDir: " & src & " -> " & dst)
   cbos getLastModificationTime:
     setResult(a, getLastModificationTime(getString(a, 0)).toUnix)
   cbos findExe:
@@ -119,16 +154,23 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
-      setResult(a, osproc.execCmd getString(a, 0))
+      let cmd = getString(a, 0)
+      traceIoOp(a, ioFileOp, "exec: " & cmd)
+      setResult(a, osproc.execCmd cmd)
 
   cbconf getEnv:
     setResult(a, os.getEnv(a.getString 0, a.getString 1))
   cbconf existsEnv:
     setResult(a, os.existsEnv(a.getString 0))
   cbconf putEnv:
-    os.putEnv(a.getString 0, a.getString 1)
+    let key = a.getString 0
+    let val = a.getString 1
+    os.putEnv(key, val)
+    traceIoOp(a, ioFileOp, "putEnv: " & key & "=" & val)
   cbconf delEnv:
-    os.delEnv(a.getString 0)
+    let key = a.getString 0
+    os.delEnv(key)
+    traceIoOp(a, ioFileOp, "delEnv: " & key)
   cbconf dirExists:
     setResult(a, os.dirExists(a.getString 0))
   cbconf fileExists:

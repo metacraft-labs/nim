@@ -79,6 +79,7 @@ import ast
 import results
 export results
 import codetracer_trace_writer/multi_stream_writer
+export multi_stream_writer.IOEventKind
 import codetracer_trace_writer/value_stream
 import codetracer_trace_writer/cbor
 import codetracer_trace_writer/path_filter
@@ -1326,6 +1327,74 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
     ),
     info: info,
   ))
+
+proc traceIO*(tracer: var VmTracer, kind: IOEventKind, info: TLineInfo,
+              payload: string) =
+  ## CTFS-M-IO: emit an IO event into the trace's io_event stream.
+  ##
+  ## Hooked from:
+  ##   * `opcEcho` in vm.nim — `kind = ioStdout`, `payload` = the joined
+  ##     argument string with a trailing newline (matching what
+  ##     `msgWriteln` actually writes).
+  ##   * NimScript callbacks in scriptconfig.nim (`rawExec`, `removeDir`,
+  ##     `removeFile`, `createDir`, `setCurrentDir`, `moveFile`,
+  ##     `moveDir`, `copyFile`, `copyDir`, `putEnv`, `delEnv`) —
+  ##     `kind = ioFileOp`, `payload` = a short human-readable
+  ##     description of the operation ("exec: <cmd>", "createDir:
+  ##     <path>", ...). `ioFileOp` is the format library's
+  ##     general-purpose "filesystem / process" kind; we encode the
+  ##     specific operation in the payload prefix since the wire enum
+  ##     has only four kinds (ioStdout, ioStderr, ioFileOp, ioError).
+  ##
+  ## CTFS-M-CompileTimeFilter: skipped while the VM is executing
+  ## compile-time code. NimScript callbacks fire only at runtime
+  ## (`emRepl`) — `opcEcho` could in principle fire from a macro body
+  ## (`static: echo "x"` / `echo` inside a macro), and the trace must
+  ## not record those as runtime IO.
+  ##
+  ## Path filtering: unlike steps / values / call events, IO events are
+  ## NOT gated on `shouldSkipPath(info.fileIndex)`. IO is anchored to
+  ## the most recently emitted step (`stepCount - 1`), and the step
+  ## stream already represents user-traceable code only — frames whose
+  ## source is filtered never emit a step. NimScript builtins like
+  ## `exec` and `copyFile` reach the recorder via stdlib helpers
+  ## (`lib/system/nimscript.nim`), so the callback's
+  ## `info.fileIndex` typically points into a filtered subtree even
+  ## though the *observable* IO belongs to the surrounding user-source
+  ## step. Filtering by `info` here would drop those events and defeat
+  ## the milestone's purpose ("the trace shows what happens at
+  ## runtime"). The `info` argument is retained for future telemetry
+  ## (e.g. column-level attribution within the materializer) but does
+  ## not currently gate emission.
+  ##
+  ## CTFS-M-ValueAttribution: any buffered pending values are flushed
+  ## at their own writing sites BEFORE the IO event is recorded. The
+  ## writer attaches the new event to `stepCount - 1` (i.e. the most
+  ## recently emitted step). Without the flush, values whose
+  ## attributed step had not yet been emitted would get displaced onto
+  ## the wrong step when the next user-visible step arrived after the
+  ## IO write.
+  if inCompileTimeContext(tracer):
+    return
+  discard info  # currently informational only; see "Path filtering" above
+
+  # No step has ever been emitted in this trace yet (`haveLastEmitted`
+  # is set by the first successful `registerStep` and never cleared).
+  # The writer would otherwise anchor the event to a phantom step 0,
+  # which materializes as an orphan in the JSON output. Drop the event
+  # rather than poison the snapshot — in practice this branch fires
+  # only for IO that occurs before the first user-visible line of the
+  # script (i.e. essentially never; the module-prologue setup runs
+  # before any echo / exec the user wrote).
+  if not tracer.haveLastEmitted:
+    return
+
+  flushPendingValuesAsStep(tracer)
+
+  let payloadBytes = cast[seq[byte]](payload)
+  let res = tracer.writer.registerIOEvent(kind, payloadBytes)
+  if res.isErr:
+    discard
 
 proc syncVmTracer*(tracer: ptr VmTracer) =
   ## Flush trace data to disk for concurrent readers.
