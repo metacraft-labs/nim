@@ -67,7 +67,7 @@
       "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
       "step_kind": "sekRaise",
       "exception_type_id": 0,
-      "exception_message": "",
+      "exception_message": "out of range",
       "vars": []
     },
     {
