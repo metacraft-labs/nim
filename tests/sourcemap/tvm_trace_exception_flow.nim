@@ -76,6 +76,7 @@ type
     idx: uint64
     kind: StepEventKind
     line: uint64
+    message: string
 
 proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
   ## Walk the exec stream and record (idx, kind, line) for every event.
@@ -95,7 +96,10 @@ proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
     doAssert absRes.isOk,
       "stepAbsoluteGlobalLineIndex[" & $i & "] failed: " & absRes.error
     let (_, line) = resolveGli(gli, absRes.get())
-    result.add(EventInfo(idx: i, kind: ev.kind, line: line))
+    var msg = ""
+    if ev.kind == sekRaise:
+      msg = cast[string](ev.message)
+    result.add(EventInfo(idx: i, kind: ev.kind, line: line, message: msg))
 
 proc renderEvents(events: seq[EventInfo]): string =
   result = ""
@@ -196,6 +200,23 @@ proc main() =
   doAssert outerRaiseIdx < outerCatchIdx,
     "expected outer sekRaise (line 6) before outer sekCatch (line 7) " &
     "in event order; got idx " & $outerRaiseIdx & " vs " & $outerCatchIdx &
+    "\n" & renderEvents(events)
+
+  # --- (7b) CTFS-M3.1: each sekRaise carries its exception's .msg field.
+  # Inner raise on line 4 raises `newException(ValueError, "inner")`;
+  # outer raise on line 6 raises `newException(IndexDefect, "outer")`.
+  var innerRaiseMsg = ""
+  var outerRaiseMsg = ""
+  for e in events:
+    if e.kind == sekRaise and e.line == 4 and innerRaiseMsg.len == 0:
+      innerRaiseMsg = e.message
+    if e.kind == sekRaise and e.line == 6 and outerRaiseMsg.len == 0:
+      outerRaiseMsg = e.message
+  doAssert innerRaiseMsg == "inner",
+    "expected inner sekRaise message 'inner', got " & innerRaiseMsg.repr &
+    "\n" & renderEvents(events)
+  doAssert outerRaiseMsg == "outer",
+    "expected outer sekRaise message 'outer', got " & outerRaiseMsg.repr &
     "\n" & renderEvents(events)
 
   # --- (8) no backwards-jump in the user-script line range. Walk the

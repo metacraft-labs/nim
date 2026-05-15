@@ -1801,14 +1801,25 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       # call at the top of this iteration has already updated the line
       # cursor to `c.debug[pc]` (the raise statement), so the marker
       # inherits the right GLI from the preceding step.
+      #
+      # CTFS-M3.1: extract the `msg` field from the exception object so
+      # the marker carries it through to the trace. Nim's Exception layout
+      # places `msg` at child index 3 (parent=0, name=2, msg=3, trace=4...),
+      # mirroring `bailOut`'s `c.currentExceptionA[3].skipColon.strVal`
+      # access pattern. Missing/non-string children fall back to "".
       if c.vmTracer != nil:
         let excTypeName =
           if raised.typ != nil and raised.typ.sym != nil:
             raised.typ.sym.name.s
           else:
             ""
+        var excMsg = ""
+        if raised.safeLen > 3:
+          let msgNode = raised[3].skipColon
+          if msgNode.kind in {nkStrLit..nkTripleStrLit}:
+            excMsg = msgNode.strVal
         traceRaise(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc],
-                   excTypeName)
+                   excTypeName, excMsg)
 
       var frame = tos
       var jumpTo = findExceptionHandler(c, frame, raised)
