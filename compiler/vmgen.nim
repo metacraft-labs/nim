@@ -2582,6 +2582,14 @@ proc genProc(c: PCtx; s: PSym): VmProcInfo =
     # procs easily:
     let body = transformBody(c.graph, c.idgen, s, if isCompileTimeProc(s): {} else: {useCache})
     let procStart = c.xjmp(body, opcJmp, 0)
+    # CTFS-M-TrailingProcDefScan: tag this skip-over `opcJmp` with
+    # `unknownLineInfo` so the VM's dispatch-loop `traceStep` ignores
+    # it. In normal execution this jump is never reached (callers use
+    # `opcIndCall` to enter the body directly past the jump), but
+    # after the last top-level statement the dispatch loop falls
+    # through onto this instruction and would otherwise emit a
+    # trailing trace step at the proc-definition line.
+    c.debug[procStart.int] = unknownLineInfo
     var p = PProc(blocks: @[], sym: s)
     let oldPrc = c.prc
     c.prc = p

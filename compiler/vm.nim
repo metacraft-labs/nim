@@ -621,7 +621,8 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       let info = c.debug[pc]
       # other useful variables: c.loopIterations
       echo "$# [$#] $#" % [c.config$info, $instr.opcode, c.config.sourceLine(info)]
-    if c.vmTracer != nil and instr.opcode != opcEof:
+    if c.vmTracer != nil and instr.opcode != opcEof and
+       c.debug[pc] != unknownLineInfo:
       # CTFS-M-TrailingStep: skip the dispatch-loop `traceStep` for
       # `opcEof`. The end-of-frame marker is a synthetic opcode that
       # never corresponds to user-source intent; its `c.debug[pc]`
@@ -632,6 +633,16 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
       # `opcRet`, `flushPendingValuesAsStep` in `closeVmTracer`)
       # already handle real frame-exit semantics, so suppressing the
       # `opcEof` step here loses no information.
+      #
+      # CTFS-M-TrailingProcDefScan: skip dispatch-loop `traceStep`
+      # for any instruction whose `c.debug[pc]` is `unknownLineInfo`
+      # — those are synthetic opcodes vmgen emits as scaffolding
+      # (e.g. the proc-body skip-over `opcJmp` in `genProc`) that
+      # have no corresponding user-source position. They appear at
+      # the tail of a module's compiled code, after the last user
+      # statement, when the dispatch loop falls through past the
+      # last `opcRet` of the top-level frame onto the skip-jumps
+      # one by one before finally hitting `opcEof`.
       traceStep(cast[ptr VmTracer](c.vmTracer)[], c.debug[pc])
     c.profiler.enter(c, tos)
     case instr.opcode
