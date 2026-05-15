@@ -202,17 +202,19 @@ proc collectObjFields(node: PNode, depth: int,
 proc serializeObject(node: PNode, typ: PType, depth: int,
                      seen: var HashSet[uint64]): ValueRecord =
   ## Emit an `nkObjConstr` as either `vrkStruct` (plain object) or
-  ## `vrkVariant` (case object). The materializer pairs vrkStruct field
-  ## values with names taken from the TypeRecord; we therefore preserve
-  ## construction order so external type-side metadata can re-attach
-  ## names when needed.
+  ## `vrkVariant` (case object).
+  ##
+  ## CTFS-M-TypeSchema: the constructor field names are captured into
+  ## the parallel-indexed `fieldNames` slot of `vrkStruct`, so the
+  ## materializer can render `[("x", Int(1)), ("y", Int(2))]` directly
+  ## without needing to look up the TypeRecord at decode time.
   var names: seq[string] = @[]
   var vals: seq[ValueRecord] = @[]
   collectObjFields(node, depth, seen, names, vals)
 
   if not isCaseObjectType(typ):
     return ValueRecord(kind: vrkStruct, fieldValues: vals,
-                       structTypeId: NoneTypeId)
+                       fieldNames: names, structTypeId: NoneTypeId)
 
   # Case object — locate the discriminator (a field whose type is
   # tyEnum / tyBool / tyChar / int-ish AND is the discriminator-side of
@@ -244,10 +246,13 @@ proc serializeObject(node: PNode, typ: PType, depth: int,
   var discText = ""
   case disc.kind
   of vrkInt: discText = $disc.intVal
+  of vrkEnum:
+    # CTFS-M-TypeSchema: dedicated enum variant carries the symbolic
+    # name directly.
+    discText = disc.enumName
   of vrkRaw:
-    # The format library has no dedicated vrkEnum variant; the top-
-    # level enum path emits `vrkRaw` carrying the symbol name. If the
-    # discriminator already arrived in that shape, use it verbatim.
+    # Legacy fallback — the discriminator may have arrived as vrkRaw if
+    # the inner serializer couldn't recover the enum name.
     discText = disc.rawStr
   of vrkString: discText = disc.text
   of vrkChar: discText = $disc.charVal
@@ -273,6 +278,9 @@ proc serializeObject(node: PNode, typ: PType, depth: int,
   case disc.kind
   of vrkInt:
     discOrdinal = disc.intVal
+    haveOrdinal = true
+  of vrkEnum:
+    discOrdinal = BiggestInt(disc.enumOrdinal)
     haveOrdinal = true
   else: discard
 
@@ -312,16 +320,20 @@ proc serializeObject(node: PNode, typ: PType, depth: int,
               else: discard
 
   var payloadVals: seq[ValueRecord] = @[]
+  var payloadNames: seq[string] = @[]
   for i, n in names:
     if i == discIdx: continue
     if n in discNames: continue
     if n in allCaseFieldNames and n notin activeBranchFields:
       continue  # branch-local field belonging to an inactive branch
     payloadVals.add vals[i]
+    payloadNames.add n
 
-  # `vrkVariant.contents` is exactly one ValueRecord — wrap the payload
-  # in a vrkStruct (the materializer can decode it).
+  # `vrkVariant.contents` is exactly one ValueRecord — wrap the active-
+  # branch payload in a vrkStruct, carrying the field names so the
+  # materializer can render the active branch's `(name, value)` pairs.
   let payload = ValueRecord(kind: vrkStruct, fieldValues: payloadVals,
+                            fieldNames: payloadNames,
                             structTypeId: NoneTypeId)
   ValueRecord(kind: vrkVariant, discriminator: discText,
               contents: @[payload], variantTypeId: NoneTypeId)
@@ -330,7 +342,7 @@ proc serializeSet(node: PNode, typ: PType, depth: int,
                   seen: var HashSet[uint64]): ValueRecord =
   ## Walk an `nkCurly` set literal. Each element is either a bare
   ## literal or an `nkRange(a, b)`. We flatten ranges into their
-  ## member values for `vrkSequence` representation; for large ranges
+  ## member values for `vrkSet` representation; for large ranges
   ## we cap at a defensive limit to avoid explosion.
   const RangeExpandCap = 1024
   let elemTy = if typ != nil and typ.hasElementType: typ.elementType else: nil
@@ -353,12 +365,10 @@ proc serializeSet(node: PNode, typ: PType, depth: int,
         inc n
     else:
       elems.add serializeNode(child, childType(child, elemTy), depth + 1, seen)
-  # vrkSequence is the closest match — there is no vrkSet variant in
-  # the current format-library ValueRecord enum. The materializer
-  # treats it the same as a sequence; the TypeRecord-side type id
-  # disambiguates set vs seq for renderers that care.
-  ValueRecord(kind: vrkSequence, seqElements: elems, isSlice: false,
-              seqTypeId: NoneTypeId)
+  # CTFS-M-TypeSchema: dedicated vrkSet variant. The materializer
+  # renders `{kind:"Set", members:[...]}` directly without leaning on
+  # TypeRecord-side disambiguation.
+  ValueRecord(kind: vrkSet, setMembers: elems, setTypeId: NoneTypeId)
 
 proc serializeRef(node: PNode, typ: PType, depth: int,
                   seen: var HashSet[uint64]): ValueRecord =
@@ -460,11 +470,12 @@ proc serializeNode*(node: PNode, typ: PType, depth: int,
                            charVal: chr(node.intVal and 0xFF),
                            charTypeId: NoneTypeId)
       of tyEnum:
-        # Encode enum-as-int; consumers map ordinal back through the
-        # TypeRecord. The discriminator path in serializeObject does
-        # its own symbol-name lookup.
-        return ValueRecord(kind: vrkInt, intVal: int64(node.intVal),
-                           intTypeId: NoneTypeId)
+        # CTFS-M-TypeSchema: dedicated vrkEnum variant carries both
+        # the symbolic name and the integer ordinal.
+        return ValueRecord(kind: vrkEnum,
+                           enumName: enumSymbolName(nodeTy, node.intVal),
+                           enumOrdinal: int64(node.intVal),
+                           enumTypeId: NoneTypeId)
       else: discard
     return ValueRecord(kind: vrkInt, intVal: int64(node.intVal),
                        intTypeId: NoneTypeId)
@@ -536,15 +547,14 @@ proc serializeVmValue*(reg: TFullReg, typ: PType = nil): ValueRecord =
         result = ValueRecord(kind: vrkChar, charVal: chr(reg.intVal and 0xFF),
                              charTypeId: NoneTypeId)
       of tyEnum:
-        # Enums in registers carry the ordinal in `intVal`. We surface
-        # the *symbolic* name in `vrkRaw.rawStr` (the format library
-        # has no vrkEnum variant) so downstream consumers and the
-        # existing tests can read it directly. The numeric ordinal is
-        # recoverable via the TypeRecord.
+        # CTFS-M-TypeSchema: dedicated vrkEnum carries the symbolic
+        # name and the ordinal. Replaces the prior vrkRaw fallback
+        # used while the format-library lacked a dedicated variant.
         let t = typ.skipTypes(abstractInst)
-        result = ValueRecord(kind: vrkRaw,
-                             rawStr: enumSymbolName(t, reg.intVal),
-                             rawTypeId: NoneTypeId)
+        result = ValueRecord(kind: vrkEnum,
+                             enumName: enumSymbolName(t, reg.intVal),
+                             enumOrdinal: int64(reg.intVal),
+                             enumTypeId: NoneTypeId)
       else:
         result = ValueRecord(kind: vrkInt, intVal: int64(reg.intVal),
                              intTypeId: NoneTypeId)

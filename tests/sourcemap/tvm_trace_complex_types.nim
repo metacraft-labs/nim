@@ -88,6 +88,10 @@ proc main() =
   var structValues: seq[ValueRecord]
   var variantValues: seq[ValueRecord]
   var rawValues: seq[string]
+  # CTFS-M-TypeSchema: dedicated buckets for the new variants. Sets
+  # used to surface as vrkSequence; enums as vrkRaw.
+  var setValues: seq[ValueRecord]
+  var enumValues: seq[ValueRecord]
 
   for event in reader.events:
     if event.kind == tleValue:
@@ -100,6 +104,8 @@ proc main() =
       of vrkStruct: structValues.add(v)
       of vrkVariant: variantValues.add(v)
       of vrkRaw: rawValues.add(v.rawStr)
+      of vrkSet: setValues.add(v)
+      of vrkEnum: enumValues.add(v)
       else: discard
 
   # primInt → vrkInt 42
@@ -152,15 +158,15 @@ proc main() =
   doAssert foundAPoint,
     "expected Point(x:1,y:2) as vrkStruct; structs seen: " & $structValues.len
 
-  # aColor=cGreen → vrkRaw "cGreen" (the format library lacks vrkEnum;
-  # the serializer surfaces the symbolic name in vrkRaw.rawStr).
+  # CTFS-M-TypeSchema: aColor=cGreen → vrkEnum{name:"cGreen", ordinal:1}.
   var foundColor = false
-  for s in rawValues:
-    if s == "cGreen":
+  for v in enumValues:
+    if v.enumName == "cGreen" and v.enumOrdinal == 1:
       foundColor = true
       break
   doAssert foundColor,
-    "expected aColor=cGreen as vrkRaw \"cGreen\"; raws seen: " & $rawValues
+    "expected aColor=cGreen as vrkEnum{name:\"cGreen\", ordinal:1}; " &
+    "enums seen: " & $enumValues.len
 
   # aShape → vrkVariant with discriminator "cBlue" and a vrkStruct payload
   # whose single field is the string "azure".
@@ -177,19 +183,18 @@ proc main() =
     "expected aShape=Shape(kind:cBlue, blue_val:\"azure\") as vrkVariant; " &
     "variants seen: " & $variantValues.len
 
-  # aSet={1,3,5} → vrkSequence with three int members (sets share the
-  # vrkSequence variant; TypeRecord-side metadata disambiguates).
+  # CTFS-M-TypeSchema: aSet={1,3,5} → dedicated vrkSet with three
+  # int members.
   var foundASet = false
-  for sv in sequenceValues:
-    if sv.seqElements.len == 3 and
-       sv.seqElements[0].kind == vrkInt and sv.seqElements[0].intVal == 1 and
-       sv.seqElements[1].kind == vrkInt and sv.seqElements[1].intVal == 3 and
-       sv.seqElements[2].kind == vrkInt and sv.seqElements[2].intVal == 5:
+  for sv in setValues:
+    if sv.setMembers.len == 3 and
+       sv.setMembers[0].kind == vrkInt and sv.setMembers[0].intVal == 1 and
+       sv.setMembers[1].kind == vrkInt and sv.setMembers[1].intVal == 3 and
+       sv.setMembers[2].kind == vrkInt and sv.setMembers[2].intVal == 5:
       foundASet = true
       break
   doAssert foundASet,
-    "expected aSet={1,3,5} as vrkSequence; sequences seen: " &
-    $sequenceValues.len
+    "expected aSet={1,3,5} as vrkSet; sets seen: " & $setValues.len
 
   # nested = @[Point(10,20), Point(30,40)] → vrkSequence of two vrkStruct
   # with int field pairs.
@@ -216,6 +221,7 @@ proc main() =
     "ints=" & $intValues.len & ", strs=" & $stringValues.len &
     ", seqs=" & $sequenceValues.len & ", tuples=" & $tupleValues.len &
     ", structs=" & $structValues.len & ", variants=" & $variantValues.len &
-    ", raws=" & $rawValues.len & ")"
+    ", raws=" & $rawValues.len & ", sets=" & $setValues.len &
+    ", enums=" & $enumValues.len & ")"
 
 main()
