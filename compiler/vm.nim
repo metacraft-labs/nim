@@ -1079,8 +1079,12 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         c.globalSymByPc.withValue(pc, gsPtr):
           globalSym = gsPtr[]
         if globalSym != nil:
+          # Forward the binding's static type so `serializeVmValue` can
+          # surface enums / bools / aggregates structurally even when the
+          # incoming register itself lacks a `node.typ` annotation
+          # (CTFS-M-ComplexTypes).
           traceAssignment(cast[ptr VmTracer](c.vmTracer)[],
-                          globalSym, regs[rc], c.debug[pc])
+                          globalSym, regs[rc], c.debug[pc], globalSym.typ)
     of opcAddInt:
       decodeBC(rkInt)
       let
