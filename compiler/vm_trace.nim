@@ -840,11 +840,27 @@ proc encodeValue(v: ValueRecord): seq[byte] =
   enc.encodeCborValueRecord(v)
   enc.getBytes()
 
+proc objectTypeName(t: PType): string =
+  ## CTFS-M-ExceptionTypeRefinement: extract the user-visible name of a
+  ## nominal type (typically an object or distinct), looking through
+  ## `tyAlias` / `tyGenericInst` / `tyGenericBody` wrappers so e.g.
+  ## `tyRef IndexDefect` resolves to `"IndexDefect"` rather than the
+  ## generic instantiation's anonymous wrapper.
+  if t == nil:
+    return ""
+  let resolved = t.skipTypes({tyAlias, tyGenericInst, tyGenericBody})
+  if resolved != nil and resolved.sym != nil:
+    return resolved.sym.name.s
+  if t.sym != nil:
+    return t.sym.name.s
+  return ""
+
 proc typeNameForReg(reg: TFullReg, typ: PType): string =
   ## Pick a reasonable type name for interning. Prefers the explicit `typ`,
   ## falls back to the register kind, finally an empty string.
   if typ != nil:
-    case typ.kind
+    let resolved = typ.skipTypes({tyAlias, tyGenericInst})
+    case resolved.kind
     of tyBool: return "bool"
     of tyChar: return "char"
     of tyString: return "string"
@@ -853,6 +869,22 @@ proc typeNameForReg(reg: TFullReg, typ: PType): string =
     of tyUInt..tyUInt64: return "uint"
     of tyFloat..tyFloat128: return "float"
     of tyEnum: return "enum"
+    of tyRef:
+      # CTFS-M-ExceptionTypeRefinement: `except T as e:` binds `e` with
+      # type `ref T`. Render the underlying object's name so debugger UIs
+      # can show `ref IndexDefect` instead of the generic `node` fallback.
+      let elem = resolved.elementType
+      let inner = objectTypeName(elem)
+      if inner.len > 0: return "ref " & inner
+      return "ref"
+    of tyPtr:
+      let elem = resolved.elementType
+      let inner = objectTypeName(elem)
+      if inner.len > 0: return "ptr " & inner
+      return "ptr"
+    of tyObject, tyDistinct:
+      let name = objectTypeName(resolved)
+      if name.len > 0: return name
     else: discard
   case reg.kind
   of rkInt: return "int"
