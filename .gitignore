@@ -116,3 +116,6 @@ nimdoc.out.css
 !/nimdoc/testproject/expected/*
 pkgs/
 /compiler/compiler/
+
+# Nix-generated pre-commit config
+.pre-commit-config.yaml
