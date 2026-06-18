@@ -66,8 +66,9 @@ const
   lineLet = 4'u64
   lineEcho = 5'u64
 
-# Mirrors writer's DefaultLinesPerFile.
-const DefaultLinesPerFile: uint64 = 100_000
+# Column-Aware-Replay: the Nim VM tracer now always enables column-aware
+# step encoding; GLI is byte-offset based, so we resolve `line` via
+# `decodeGlobalPositionIndex` rather than `gli mod 100_000`.
 
 proc main() =
   let nim = getCurrentCompilerExe()
@@ -107,8 +108,10 @@ proc main() =
     let gliRes = rdr.stepAbsoluteGlobalLineIndex(n)
     doAssert gliRes.isOk,
       "stepAbsoluteGlobalLineIndex(" & $n & ") failed: " & gliRes.error
-    let gli = gliRes.get()
-    let line = int(gli mod DefaultLinesPerFile)
+    let posRes = rdr.decodeGlobalPositionIndex(gliRes.get())
+    doAssert posRes.isOk,
+      "decodeGlobalPositionIndex failed: " & posRes.error
+    let line = int(posRes.get().line)
     doAssert line >= int(lineLet) and line <= int(lineEcho),
       "step " & $n & " at line " & $line &
       " is outside the real user-source range [" & $lineLet & ", " & $lineEcho &

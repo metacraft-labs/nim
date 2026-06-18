@@ -68,12 +68,10 @@ const
   lineC = 3'u64
   lineEcho = 4'u64
 
-# Mirrors the writer's DefaultLinesPerFile (see
-# dist/codetracer-trace-format-nim/src/codetracer_trace_writer/multi_stream_writer.nim).
-# For a single-path trace the global-line-index reduces to
-# `pathId * DefaultLinesPerFile + line`, so `line = gli mod
-# DefaultLinesPerFile`.
-const DefaultLinesPerFile: uint64 = 100_000
+# Column-Aware-Replay: the Nim VM tracer now always enables column-aware
+# step encoding. In that mode the running global_position_index is
+# byte-offset based rather than `pathId * 100k + line`, so we resolve
+# (line, column) via `decodeGlobalPositionIndex` instead of arithmetic.
 
 proc main() =
   let nim = getCurrentCompilerExe()
@@ -124,7 +122,10 @@ proc main() =
     doAssert gliRes.isOk,
       "stepAbsoluteGlobalLineIndex(" & $n & ") failed: " & gliRes.error
     let gli = gliRes.get()
-    let line = int(gli mod DefaultLinesPerFile)
+    let posRes = rdr.decodeGlobalPositionIndex(gli)
+    doAssert posRes.isOk,
+      "decodeGlobalPositionIndex(" & $gli & ") failed: " & posRes.error
+    let line = int(posRes.get().line)
     lastStepLine = line
     if line >= 1 and line <= 4:
       sawAtLine[line] = true

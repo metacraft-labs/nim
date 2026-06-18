@@ -1095,8 +1095,16 @@ proc genItem(d: PDoc, n, nameNode: PNode, k: TSymKind, docFlags: DocFlags, nonEx
       else: nameNode
 
   # we generate anchors automatically for subsequent use in doc comments
+  # Bootstrap compatibility shim: the host nim's rstast.TLineInfo.line is
+  # uint16 while this fork widened compiler/lineinfos.TLineInfo.line to
+  # uint32. We narrow with a saturating clamp so the bootstrap iteration
+  # against the host stdlib compiles.
   let lineinfo = rstast.TLineInfo(
-      line: nameNode.info.line, col: nameNode.info.col,
+      line: when typeof(rstast.TLineInfo.line) is uint16:
+              uint16(min(nameNode.info.line.uint32, uint32(high(uint16))))
+            else:
+              nameNode.info.line,
+      col: nameNode.info.col,
       fileIndex: addRstFileIndex(d, nameNode.info))
   addAnchorNim(d.sharedState, external = false, refn = symbolOrId,
                tooltip = detailedName, langSym = rstLangSymbol,

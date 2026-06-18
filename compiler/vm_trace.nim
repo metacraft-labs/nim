@@ -228,9 +228,20 @@ type
     writer*: MultiStreamTraceWriter
     outputPath*: string                 ## destination .ct path
     lastLine*: uint32
+    lastCol*: int32
+      ## Column-Aware-Replay: last 1-based column the dispatch loop
+      ## emitted a step for, as the dedup key's third dimension. -1
+      ## means "no column ever emitted on the current (file, line)";
+      ## any incoming col then breaks dedup. `int32` rather than
+      ## `int16` so the sentinel `-1` is unambiguously distinct from
+      ## TLineInfo's `col: int16` "unknown" marker after promotion.
     lastFileIndex*: int32
     lastPathId*: uint64                 ## last pathId actually emitted
     lastEmittedLine*: uint64            ## last line actually emitted
+    lastEmittedColumn*: uint32          ## last column actually emitted (1-based)
+      ## Column-Aware-Replay: tracks the writer's logical cursor
+      ## column so `registerColumnStep` can be issued with the right
+      ## signed delta when only the column changes within a line.
     haveLastEmitted*: bool              ## true after the first registerStep
     pathByFileIdx*: seq[PathCacheEntry] ## TF-M4 primary cache: FileIndex-keyed
     pathByCanonical*: Table[string, PathCacheEntry]
@@ -489,6 +500,51 @@ proc shouldSkipPath(tracer: var VmTracer, fileIndex: int32): bool =
   # it on its second probe.
   return false
 
+proc computeLineLengths(path: string): seq[uint32] =
+  ## Column-Aware-Replay: read `path` once and compute the addressable
+  ## column count for every line. Returned table is 0-indexed (line 1
+  ## sits at index 0) and matches the format-spec's per-line `length`
+  ## field semantics (raw byte count of the line, NOT including the
+  ## trailing newline, with `+1` headroom so column = length still maps
+  ## to the position immediately after the last source character —
+  ## that's where an end-of-line cursor sits).
+  ##
+  ## Returns an empty seq when the file is unreadable or empty. The
+  ## writer's `registerPath` then treats it as "no per-line data
+  ## available" and column-aware GLI math falls back to none(uint32)
+  ## for that file (reader.lineLength returns none).
+  result = @[]
+  if path.len == 0 or not fileExists(path):
+    return
+  var content: string = ""
+  try:
+    content = readFile(path)
+  except IOError, OSError:
+    return
+  # Walk byte-by-byte. We deliberately stay byte-aware rather than
+  # rune-aware: the writer's lineLengths and the reader's
+  # `decodeGlobalPositionIndex` both work in bytes, which matches the
+  # parser's `tok.col = bufpos - lineStart` (also bytes). Mixing rune
+  # and byte counts here would surface as ghost columns in the trace.
+  var lineLen: uint32 = 0
+  for ch in content:
+    if ch == '\n':
+      # +1 makes "column == length" a legal "just past the last
+      # character" cursor position, matching the writer's contract
+      # that `registerStep` lands at column 1 and column advances up
+      # to `length` are addressable.
+      result.add(lineLen + 1)
+      lineLen = 0
+    elif ch == '\r':
+      # CRLF: don't count the carriage return; the matching newline
+      # follows and closes the line.
+      discard
+    else:
+      lineLen += 1
+  # Trailing partial line (no terminating newline).
+  if lineLen > 0:
+    result.add(lineLen + 1)
+
 proc ensurePath(tracer: var VmTracer, fileIndex: int32,
                 skip: var bool): uint64 =
   ## TF-M4a: two-level path cache.
@@ -548,7 +604,16 @@ proc ensurePath(tracer: var VmTracer, fileIndex: int32,
     skip = true
     return 0
 
-  let res = tracer.writer.registerPath(canonical)
+  # Column-Aware-Replay: pre-read the source file to populate the
+  # writer's per-line length table. `registerPath` only sees the
+  # supplied `lineLengths` once — there is no late-update API — so
+  # we compute it eagerly on first contact rather than incrementally.
+  # When the file is unreadable (synthesised pseudo-paths, packaged
+  # stdlib that lives outside the workdir, ...) the helper returns
+  # @[] and the writer falls back to the legacy DefaultLinesPerFile
+  # GLI scheme for that single path.
+  let lineLengths = computeLineLengths(canonical)
+  let res = tracer.writer.registerPath(canonical, lineLengths)
   if res.isErr:
     # Path registration failed; cache as skip in both tables to avoid
     # retrying.
@@ -953,9 +1018,12 @@ proc flushPendingValuesByWritingSite(tracer: var VmTracer) =
         # Each synthetic step advances the tracer's emitted cursor so
         # subsequent delta encodings stay correct and a following
         # `traceCall` / `traceReturn` / final flush observes the right
-        # "last known" position.
+        # "last known" position. Column-Aware-Replay: synthetic flushes
+        # use the line-level `registerStep` path and thus reset the
+        # writer's column cursor to 1.
         tracer.lastPathId = pathId
         tracer.lastEmittedLine = uint64(line)
+        tracer.lastEmittedColumn = 1'u32
         tracer.haveLastEmitted = true
     i = j
   tracer.pendingValues.setLen(0)
@@ -1165,9 +1233,11 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     writer: writerRes.get(),
     outputPath: outputPath,
     lastLine: 0,
+    lastCol: -1,
     lastFileIndex: -1,
     lastPathId: 0,
     lastEmittedLine: 0,
+    lastEmittedColumn: 0,
     haveLastEmitted: false,
     pathByFileIdx: @[],
     pathByCanonical: initTable[string, PathCacheEntry](),
@@ -1183,6 +1253,17 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     filter: composed.classifier,
     compileTimeDepth: 0,
   )
+
+  # Column-Aware-Replay: opt the writer into column-aware step
+  # encoding *before* any path / step is registered. This sets bit 4
+  # of `meta.dat`'s flag word at close time, switches `registerPath`
+  # to the extended record format that carries per-line length
+  # tables, and unlocks `registerColumnStep` (sekDeltaColumn) for
+  # advancing the cursor within a line. The Nim VM tracer always
+  # opts in: column data is cheap on this side (it's already in
+  # every TLineInfo via the parser), and traces consumed by
+  # CodeTracer's replay UI expect column-aware navigation.
+  tracer.writer.enableColumnAwareSteps()
 
   # TF-M5-Prep-2 (Blocker 2): hand the composed provenance chain to
   # the writer so meta.dat carries the `FlagHasTraceFilterProvenance`
@@ -1214,8 +1295,21 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   ok(tracer)
 
 proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
-  ## Emit a Step event if the source line changed since last step.
-  ## This avoids flooding on instructions that map to the same line.
+  ## Emit a Step event if the source position (file, line, col) changed
+  ## since the last step. This avoids flooding on instructions that map
+  ## to the same source position.
+  ##
+  ## Column-Aware-Replay: dedup is now three-dimensional. The dispatch
+  ## loop fires this hook per opcode, and a single user source line
+  ## typically generates many opcodes; pre-extension we collapsed all
+  ## of them into one step per line. With column-aware mode, we collapse
+  ## only opcodes that share the same parser column too — so three
+  ## semicolon-separated statements on one line (`var a = 1; var b = 2;
+  ## var c = 3`) surface as three distinct steps, one per `var` token's
+  ## column. When the column dimension is "unknown" (TLineInfo.col == -1,
+  ## set by `unknownLineInfo`) we fall back to one-step-per-line dedup
+  ## so synthesised opcodes don't accidentally break dedup with a
+  ## spurious "column 0" tag.
   ##
   ## CTFS-M-ValueAttribution: any buffered pending values whose
   ## writing site differs from `info`'s (file, line) are flushed first
@@ -1237,12 +1331,26 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
   if fileIdx < 0 or line == 0:
     return
 
-  # Only emit on line/file change
-  if line == tracer.lastLine and fileIdx == tracer.lastFileIndex:
-    return
+  # Column-Aware-Replay: convert the parser's 0-based column (or -1 for
+  # "unknown") to the trace format's 1-based addressable column.
+  # `info.col` is `int16`; we promote to `int32` so the unknown sentinel
+  # (-1) survives unambiguously. `col1 = 1` means "first character on
+  # the line".
+  let col1: int32 =
+    if info.col < 0: -1
+    else: int32(info.col) + 1
+
+  # Only emit on (file, line, col) change. When `col1` is "unknown"
+  # we degrade to (file, line) dedup so that we don't emit a noisy
+  # extra step for every synthesised opcode that landed at
+  # `unknownLineInfo` after a real one.
+  if fileIdx == tracer.lastFileIndex and line == tracer.lastLine:
+    if col1 < 0 or col1 == tracer.lastCol:
+      return
 
   tracer.lastLine = line
   tracer.lastFileIndex = fileIdx
+  tracer.lastCol = col1
 
   var skip = false
   let pathId = tracer.ensurePath(fileIdx, skip)
@@ -1294,19 +1402,66 @@ proc traceStep*(tracer: var VmTracer, info: TLineInfo) =
         emitPendingGroup(tracer, pvPathId, uint64(pvLine), group)
         # Update emitted cursor so the writer's delta encoder stays
         # aligned and subsequent flushes observe the correct "last
-        # emitted" position.
+        # emitted" position. Column-Aware-Replay: a `registerStep`
+        # resets the writer's logical column cursor to 1, so we mirror
+        # that in `lastEmittedColumn` to keep the next column-delta
+        # math correct.
         tracer.lastPathId = pvPathId
         tracer.lastEmittedLine = uint64(pvLine)
+        tracer.lastEmittedColumn = 1'u32
         tracer.haveLastEmitted = true
     i = j
 
-  let res = tracer.writer.registerStep(pathId, uint64(line), matching)
-  if res.isErr:
-    discard
+  # Column-Aware-Replay: pick between the line-level encoding
+  # (`registerStep`, which resets the cursor column to 1) and the
+  # column-only nudge (`registerColumnStep`, which advances within the
+  # current line). The decision matrix is:
+  #
+  #   * never emitted before               -> registerStep
+  #   * different (pathId, line)            -> registerStep
+  #   * same (pathId, line), col1 known    -> registerColumnStep
+  #   * same (pathId, line), col1 unknown  -> (dedup already returned)
+  #
+  # After a `registerStep` we also issue a follow-up `registerColumnStep`
+  # to advance to the actual column if it's > 1, so the value record
+  # binds to the right column.
+  let targetCol: uint32 =
+    if col1 > 0: uint32(col1) else: 1'u32
+  let sameLine = tracer.haveLastEmitted and
+                 tracer.lastPathId == pathId and
+                 tracer.lastEmittedLine == uint64(line)
+  if sameLine:
+    let delta = int64(targetCol) - int64(tracer.lastEmittedColumn)
+    if delta != 0:
+      let res = tracer.writer.registerColumnStep(delta, matching)
+      if res.isErr:
+        discard
+      tracer.lastEmittedColumn = targetCol
+    else:
+      # Same column as last emitted — this can only happen when an
+      # earlier same-line step covered this position via a different
+      # path (e.g. a synthetic value-flush). Drop silently rather than
+      # emit a zero-delta event.
+      discard
+  else:
+    let res = tracer.writer.registerStep(pathId, uint64(line), matching)
+    if res.isErr:
+      discard
+    tracer.lastPathId = pathId
+    tracer.lastEmittedLine = uint64(line)
+    tracer.lastEmittedColumn = 1'u32
+    tracer.haveLastEmitted = true
+    if targetCol > 1'u32:
+      # Nudge the cursor to the actual source column. Values were
+      # already attached to the line-level step above, so this carries
+      # an empty values record (the writer keeps the value stream in
+      # lock-step with the exec stream).
+      let nudge = int64(targetCol) - 1'i64
+      let res2 = tracer.writer.registerColumnStep(nudge, @[])
+      if res2.isErr:
+        discard
+      tracer.lastEmittedColumn = targetCol
   tracer.pendingValues.setLen(0)
-  tracer.lastPathId = pathId
-  tracer.lastEmittedLine = uint64(line)
-  tracer.haveLastEmitted = true
 
 proc traceCall*(tracer: var VmTracer, prc: PSym, info: TLineInfo,
                 envNode: PNode = nil) =
