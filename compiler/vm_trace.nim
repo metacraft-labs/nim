@@ -1265,6 +1265,17 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   # CodeTracer's replay UI expect column-aware navigation.
   tracer.writer.enableColumnAwareSteps()
 
+  # M-capability-flags: the Nim VM tracer carries the full
+  # ``(line, column)`` pair from every TLineInfo, so the per-step
+  # column is a real statement-start (not a synthetic line marker).
+  # Advertise both capability bits so the GUI exposes its M6
+  # Alt+click per-column breakpoint affordance and its sub-statement
+  # step-over / step-in / step-out controls.  Spec:
+  # ``codetracer-trace-format-spec/internal-files.md`` §
+  # "Column-Aware Capability Flags".
+  tracer.writer.enableColumnBreakpointsSupport()
+  tracer.writer.enableColumnMotionsSupport()
+
   # TF-M5-Prep-2 (Blocker 2): hand the composed provenance chain to
   # the writer so meta.dat carries the `FlagHasTraceFilterProvenance`
   # bit and the post-trace materializer surfaces
