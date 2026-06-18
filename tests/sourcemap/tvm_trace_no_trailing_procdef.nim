@@ -73,8 +73,9 @@ const
   lineCallOne = 5'u64      # one() call site
   lineCallTwo = 6'u64      # two() call site
 
-# Mirrors writer's DefaultLinesPerFile.
-const DefaultLinesPerFile: uint64 = 100_000
+# Column-Aware-Replay: the Nim VM tracer now always enables column-aware
+# step encoding; GLI is byte-offset based rather than `path*100k+line`,
+# so we resolve `line` via `decodeGlobalPositionIndex`.
 
 proc main() =
   let nim = getCurrentCompilerExe()
@@ -116,8 +117,10 @@ proc main() =
     let gliRes = rdr.stepAbsoluteGlobalLineIndex(n)
     doAssert gliRes.isOk,
       "stepAbsoluteGlobalLineIndex(" & $n & ") failed: " & gliRes.error
-    let gli = gliRes.get()
-    lines[int(n)] = gli mod DefaultLinesPerFile
+    let posRes = rdr.decodeGlobalPositionIndex(gliRes.get())
+    doAssert posRes.isOk,
+      "decodeGlobalPositionIndex failed: " & posRes.error
+    lines[int(n)] = uint64(posRes.get().line)
 
   # Sanity-bound: a 6-line program with 2 calls + 2 echo bodies
   # should have ~4-6 real steps. Pre-milestone we'd have 6 steps

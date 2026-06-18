@@ -163,7 +163,11 @@ proc llReadFromStdin(s: PLLStream, buf: pointer, bufLen: int): int =
   inc(s.lineOffset)
   result = min(bufLen, s.s.len - s.rd)
   if result > 0:
-    copyMem(buf, readRawData(s.s, s.rd), result)
+    # Bootstrap compatibility shim: `readRawData` was added to the
+    # stdlib for SSO support but is not present in host nim 2.2.8.
+    # The plain `addr s[i]` form is sufficient when the boot compiler
+    # uses pre-SSO strings.
+    copyMem(buf, addr(s.s[s.rd]), result)
     inc(s.rd, result)
 
 proc llStreamRead*(s: PLLStream, buf: pointer, bufLen: int): int =
@@ -173,7 +177,7 @@ proc llStreamRead*(s: PLLStream, buf: pointer, bufLen: int): int =
   of llsString:
     result = min(bufLen, s.s.len - s.rd)
     if result > 0:
-      copyMem(buf, readRawData(s.s, s.rd), result)
+      copyMem(buf, addr(s.s[s.rd]), result)
       inc(s.rd, result)
   of llsFile:
     result = readBuffer(s.f, buf, bufLen)

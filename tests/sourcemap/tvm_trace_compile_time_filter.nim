@@ -100,7 +100,17 @@ proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
     let absRes = rdr.stepAbsoluteGlobalLineIndex(i)
     doAssert absRes.isOk,
       "stepAbsoluteGlobalLineIndex[" & $i & "] failed: " & absRes.error
-    let (pathId, line) = resolveGli(gli, absRes.get())
+    let (pathId, line) =
+      if rdr.meta.hasColumnAwareSteps:
+        # Column-Aware-Replay: byte-offset GLI; use the spec-defined
+        # decoder rather than the legacy 100k-per-file resolveGli.
+        let posRes = rdr.decodeGlobalPositionIndex(absRes.get())
+        doAssert posRes.isOk,
+          "decodeGlobalPositionIndex failed: " & posRes.error
+        let p = posRes.get()
+        (int(p.file), uint64(p.line))
+      else:
+        resolveGli(gli, absRes.get())
     result.add(EventInfo(idx: i, kind: ev.kind, line: line,
                          pathId: pathId))
 
