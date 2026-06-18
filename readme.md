@@ -6,6 +6,14 @@ This repository contains the Nim compiler, Nim's stdlib, tools, and documentatio
 For more information about Nim, including downloads and documentation for
 the latest release, check out [Nim's website][nim-site] or [bleeding edge docs](https://nim-lang.github.io/Nim/).
 
+## CodeTracer fork
+
+This is the **codetracer-nim** fork of the Nim compiler, maintained by
+Metacraft Labs. It adds the compile-time tracer used by
+[CodeTracer](https://github.com/metacraft-labs/codetracer) to record
+and replay `nim e` / CTFS execution. For a quick tour with runnable
+examples, see [`examples/codetracer/`](examples/codetracer/README.md).
+
 ## Community
 
 [![Join the IRC chat][badge-nim-irc]][nim-irc]
