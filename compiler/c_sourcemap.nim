@@ -437,7 +437,7 @@ proc resolveAnnotations*(sm: V3Sourcemap;
     let origCol = int(ann.info.col)
     let nimPath =
       try: toFullPath(conf, ann.info.fileIndex)
-      except: ""
+      except CatchableError: ""
     if nimPath.len == 0: continue
     let srcIdx = sm.sourceIdx(nimPath)
     result.add (

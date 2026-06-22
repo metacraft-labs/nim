@@ -98,6 +98,29 @@
               echo "[codetracer-nim] dev shell active"
               echo "[codetracer-nim] zstd: $(${pkgs.zstd}/bin/zstd --version 2>&1 | head -1)"
               echo "[codetracer-nim] gcc:  $(${pkgs.gcc}/bin/gcc --version | head -1)"
+
+              # CTFS-M1 column-aware compiler build: `koch boot` compiles
+              # `vm_trace.nim`, which imports the codetracer trace-format library;
+              # `compiler/nim.cfg` resolves it from `$nim/dist/<dep>`. Wire those
+              # dist entries to the workspace sibling checkouts so the build is
+              # reproducible without a manual setup step. nim-stew (status-im) and
+              # nim-results (arnetheduck) are workspace siblings alongside
+              # codetracer-trace-format-nim; the nim-stew checkout must carry the
+              # slim-system `import std/assertions` guard for endians2 et al. (the
+              # nimony bootstrap tools build with -d:nimPreviewSlimSystem).
+              _ctnim_ws="$(cd "$PWD/.." 2>/dev/null && pwd)"
+              if [ -n "$_ctnim_ws" ]; then
+                mkdir -p dist
+                for _dep in codetracer-trace-format-nim nim-stew nim-results; do
+                  if [ -d "$_ctnim_ws/$_dep" ] && [ ! -e "dist/$_dep" ]; then
+                    ln -sfn "../../$_dep" "dist/$_dep"
+                    echo "[codetracer-nim] dist: linked dist/$_dep -> ../../$_dep"
+                  fi
+                done
+                unset _dep
+              fi
+              unset _ctnim_ws
+
               echo "[codetracer-nim] Run 'just' to see available recipes."
             '';
           };
