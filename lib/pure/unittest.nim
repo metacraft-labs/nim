@@ -140,6 +140,22 @@ type
       ## Name of the test case
     status*: TestStatus
 
+  TestMetadata = object
+    suiteName: string
+    testName: string
+    file: string
+    line: int
+    column: int
+    bodyHash: string
+
+  ProtocolMode = enum
+    pmDefault,
+    pmList,
+    pmListJson,
+    pmRun,
+    pmCatalog,
+    pmError
+
   OutputFormatter* = ref object of RootObj
 
   ConsoleOutputFormatter* = ref object of OutputFormatter
@@ -179,12 +195,26 @@ var
   formatters {.threadvar.}: seq[OutputFormatter]
   testsFilters {.threadvar.}: HashSet[string]
   disabledParamFiltering {.threadvar.}: bool
+  protocolInitialized {.threadvar.}: bool
+  protocolExitProcAdded {.threadvar.}: bool
+  protocolMode {.threadvar.}: ProtocolMode
+  protocolTests {.threadvar.}: seq[TestMetadata]
+  protocolRunName {.threadvar.}: string
+  protocolCatalogPath {.threadvar.}: string
+  protocolParseError {.threadvar.}: string
+  protocolRanSelected {.threadvar.}: bool
+  protocolTestStartTime {.threadvar.}: float
+  protocolFailureCheckpoints {.threadvar.}: seq[string]
+  protocolException {.threadvar.}: string
+  protocolSkipReason {.threadvar.}: string
+  protocolResultFile {.threadvar.}: string
 
 const
   outputLevelDefault = PRINT_ALL
   nimUnittestOutputLevel {.strdefine.} = $outputLevelDefault
   nimUnittestColor {.strdefine.} = "auto" ## auto|on|off
   nimUnittestAbortOnError {.booldefine.} = false
+  nimTestResultFileEnv = "NIMTEST_RESULT_FILE"
 
 template deprecateEnvVarHere() =
   # xxx issue a runtime warning to deprecate this envvar.
@@ -433,6 +463,242 @@ proc matchFilter(suiteName, testName, filter: string): bool =
   return glob(suiteName, suiteAndTestFilters[0]) and
          glob(testName, suiteAndTestFilters[1])
 
+macro protocolBodyHash(bodyProc: typed): string =
+  result = newStrLitNode(symBodyHash(bodyProc))
+
+proc protocolFullName(suiteName, testName: string): string =
+  if suiteName.len == 0:
+    result = "::" & testName
+  else:
+    result = suiteName & "::" & testName
+
+proc protocolStatus(status: TestStatus): string =
+  case status
+  of TestStatus.OK: "PASS"
+  of TestStatus.FAILED: "FAIL"
+  of TestStatus.SKIPPED: "SKIP"
+
+proc jsonEscape(s: string): string =
+  result = newStringOfCap(s.len + 2)
+  for c in s:
+    case c
+    of '"': result.add("\\\"")
+    of '\\': result.add("\\\\")
+    of '\b': result.add("\\b")
+    of '\f': result.add("\\f")
+    of '\n': result.add("\\n")
+    of '\r': result.add("\\r")
+    of '\t': result.add("\\t")
+    else:
+      if ord(c) < 32:
+        result.add("\\u00")
+        result.add(toHex(ord(c), 2))
+      else:
+        result.add(c)
+
+proc jsonString(s: string): string =
+  "\"" & jsonEscape(s) & "\""
+
+proc appendMetadataJson(result: var string, test: TestMetadata) =
+  let name = protocolFullName(test.suiteName, test.testName)
+  result.add("{\"name\":")
+  result.add(jsonString(name))
+  result.add(",\"suite\":")
+  result.add(jsonString(test.suiteName))
+  result.add(",\"test\":")
+  result.add(jsonString(test.testName))
+  result.add(",\"file\":")
+  result.add(jsonString(test.file))
+  result.add(",\"line\":")
+  result.add($test.line)
+  result.add(",\"column\":")
+  result.add($test.column)
+  result.add(",\"kind\":\"in-process\",\"group\":\"@global\",\"threadsRequired\":1")
+  result.add(",\"xfail\":null,\"tags\":[],\"bodyHash\":")
+  result.add(jsonString(test.bodyHash))
+  result.add(",\"deterministic\":true}")
+
+proc buildListJson(): string =
+  var suites = initHashSet[string]()
+  result = "{\"tests\":["
+  for i, test in protocolTests:
+    if i > 0:
+      result.add(",")
+    appendMetadataJson(result, test)
+    if test.suiteName.len > 0:
+      suites.incl(test.suiteName)
+  result.add("],\"summary\":{\"total\":")
+  result.add($protocolTests.len)
+  result.add(",\"suites\":")
+  result.add($suites.len)
+  result.add(",\"byKind\":{\"in-process\":")
+  result.add($protocolTests.len)
+  result.add("}}}")
+
+proc buildCatalogJson(): string =
+  result = "{\"version\":1,\"tests\":{"
+  for i, test in protocolTests:
+    if i > 0:
+      result.add(",")
+    result.add(jsonString(protocolFullName(test.suiteName, test.testName)))
+    result.add(":")
+    result.add(jsonString(test.bodyHash))
+  result.add("}}")
+
+proc resetProtocolTestState() =
+  protocolTestStartTime = epochTime()
+  protocolFailureCheckpoints = @[]
+  protocolException = ""
+  protocolSkipReason = ""
+
+proc recordProtocolFailure(checkpoints: seq[string], stackTrace: string) {.gcsafe.} =
+  protocolFailureCheckpoints.add(checkpoints)
+  if stackTrace.len > 0:
+    protocolException = stackTrace
+
+proc writeProtocolResult(testResult: TestResult) =
+  if protocolMode != pmRun or protocolResultFile.len == 0:
+    return
+
+  let durationMs = max(0, int((epochTime() - protocolTestStartTime) * 1000))
+  var content = "{\"status\":"
+  content.add(jsonString(protocolStatus(testResult.status)))
+  if testResult.status == TestStatus.SKIPPED and protocolSkipReason.len > 0:
+    content.add(",\"skipReason\":")
+    content.add(jsonString(protocolSkipReason))
+  content.add(",\"duration_ms\":")
+  content.add($durationMs)
+  content.add(",\"checkpoints\":[")
+  for i, checkpoint in protocolFailureCheckpoints:
+    if i > 0:
+      content.add(",")
+    content.add(jsonString(checkpoint))
+  content.add("],\"exception\":")
+  if protocolException.len == 0:
+    content.add("null")
+  else:
+    content.add(jsonString(protocolException))
+  content.add("}")
+
+  when declared(writeFile):
+    writeFile(protocolResultFile, content)
+
+proc writeMissingProtocolResult() =
+  if protocolResultFile.len == 0:
+    return
+  let content = "{\"status\":\"FAIL\",\"duration_ms\":0,\"checkpoints\":[]," &
+    "\"exception\":" & jsonString("test not found: " & protocolRunName) & "}"
+  when declared(writeFile):
+    writeFile(protocolResultFile, content)
+
+proc finishProtocol() =
+  case protocolMode
+  of pmListJson:
+    echo buildListJson()
+  of pmCatalog:
+    let catalog = buildCatalogJson()
+    if protocolCatalogPath == "-":
+      echo catalog
+    elif protocolCatalogPath.len > 0:
+      when declared(writeFile):
+        writeFile(protocolCatalogPath, catalog)
+    else:
+      echo "unittest: --catalog requires a file path"
+      when declared(setProgramResult):
+        setProgramResult 1
+  of pmRun:
+    if not protocolRanSelected:
+      writeMissingProtocolResult()
+      when declared(setProgramResult):
+        setProgramResult 1
+  of pmError:
+    if protocolParseError.len > 0:
+      echo protocolParseError
+    when declared(setProgramResult):
+      setProgramResult 1
+  else:
+    discard
+
+proc parseProtocolArgs() {.gcsafe.} =
+  if protocolInitialized:
+    return
+  protocolInitialized = true
+  protocolMode = pmDefault
+
+  when declared(paramCount):
+    var positionalFilters: seq[string] = @[]
+    var i = 1
+    while i <= paramCount():
+      let arg = paramStr(i)
+      if arg == "--list":
+        protocolMode = pmList
+      elif arg == "--list-json":
+        protocolMode = pmListJson
+      elif arg == "--run":
+        if i == paramCount():
+          protocolMode = pmError
+          protocolParseError = "unittest: --run requires a test name"
+        else:
+          inc i
+          protocolMode = pmRun
+          protocolRunName = paramStr(i)
+      elif arg.startsWith("--run="):
+        protocolMode = pmRun
+        protocolRunName = arg.substr("--run=".len)
+      elif arg == "--catalog":
+        if i == paramCount():
+          protocolMode = pmError
+          protocolParseError = "unittest: --catalog requires a file path"
+        else:
+          inc i
+          protocolMode = pmCatalog
+          protocolCatalogPath = paramStr(i)
+      elif arg.startsWith("--catalog="):
+        protocolMode = pmCatalog
+        protocolCatalogPath = arg.substr("--catalog=".len)
+      elif not disabledParamFiltering:
+        positionalFilters.add(arg)
+      inc i
+
+    if protocolMode == pmRun:
+      testsFilters.clear()
+      testsFilters.incl(protocolRunName)
+      when declared(setProgramResult):
+        setProgramResult 1
+    elif protocolMode in {pmDefault, pmError}:
+      for filter in positionalFilters:
+        testsFilters.incl(filter)
+
+    if protocolMode == pmError:
+      when declared(setProgramResult):
+        setProgramResult 1
+
+  when declared(existsEnv):
+    protocolResultFile = getEnv(nimTestResultFileEnv)
+
+proc ensureProtocolExitProc() =
+  if not protocolExitProcAdded:
+    protocolExitProcAdded = true
+    addExitProc(finishProtocol)
+
+proc registerProtocolTest(suiteName, testName, file: string;
+                          line, column: int; bodyHash: string) =
+  let name = protocolFullName(suiteName, testName)
+  case protocolMode
+  of pmList:
+    echo name
+  of pmListJson, pmCatalog:
+    protocolTests.add TestMetadata(
+      suiteName: suiteName,
+      testName: testName,
+      file: file,
+      line: line,
+      column: column,
+      bodyHash: bodyHash
+    )
+  else:
+    discard
+
 proc shouldRun(currentSuiteName, testName: string): bool =
   ## Check if a test should be run by matching suiteName and testName against
   ## test filters.
@@ -445,15 +711,23 @@ proc shouldRun(currentSuiteName, testName: string): bool =
 
   return false
 
-proc ensureInitialized() =
-  if formatters.len == 0:
-    formatters = @[OutputFormatter(defaultConsoleFormatter())]
+proc shouldRunProtocolTest(currentSuiteName, testName: string): bool =
+  case protocolMode
+  of pmRun:
+    result = protocolFullName(currentSuiteName, testName) == protocolRunName
+    if result:
+      protocolRanSelected = true
+  of pmList, pmListJson, pmCatalog, pmError:
+    result = false
+  of pmDefault:
+    result = shouldRun(currentSuiteName, testName)
 
-  if not disabledParamFiltering:
-    when declared(paramCount):
-      # Read tests to run from the command line.
-      for i in 1 .. paramCount():
-        testsFilters.incl(paramStr(i))
+proc ensureInitialized() {.gcsafe.} =
+  parseProtocolArgs()
+
+  if formatters.len == 0 and
+      protocolMode notin {pmList, pmListJson, pmRun, pmCatalog, pmError}:
+    formatters = @[OutputFormatter(defaultConsoleFormatter())]
 
 # These two procs are added as workarounds for
 # https://github.com/nim-lang/Nim/issues/5549
@@ -464,6 +738,7 @@ proc suiteEnded() =
 proc testEnded(testResult: TestResult) =
   for formatter in formatters:
     formatter.testEnded(testResult)
+  writeProtocolResult(testResult)
 
 template suite*(name, body) {.dirty.} =
   ## Declare a test suite identified by `name` with optional ``setup``
@@ -493,7 +768,7 @@ template suite*(name, body) {.dirty.} =
   ##     [Suite] test suite for addition
   ##       [OK] 2 + 2 = 4
   ##       [OK] (2 + -2) != 4
-  bind formatters, ensureInitialized, suiteEnded
+  bind formatters, ensureInitialized, ensureProtocolExitProc, suiteEnded
 
   block:
     template setup(setupBody: untyped) {.dirty, used.} =
@@ -507,6 +782,7 @@ template suite*(name, body) {.dirty.} =
     let testSuiteName {.used.} = name
 
     ensureInitialized()
+    ensureProtocolExitProc()
     try:
       for formatter in formatters:
         formatter.suiteStarted(name)
@@ -536,44 +812,70 @@ template test*(name, body) {.dirty.} =
   ## The above code outputs:
   ##
   ##     [OK] roses are red
-  bind shouldRun, checkpoints, formatters, ensureInitialized, testEnded, exceptionTypeName, setProgramResult
+  bind shouldRun, checkpoints, formatters, ensureInitialized, testEnded,
+    exceptionTypeName, setProgramResult, protocolBodyHash, registerProtocolTest,
+    resetProtocolTestState, ensureProtocolExitProc, shouldRunProtocolTest,
+    protocolMode, pmRun
 
   ensureInitialized()
+  ensureProtocolExitProc()
 
-  if shouldRun(when declared(testSuiteName): testSuiteName else: "", name):
-    checkpoints = @[]
-    var testStatusIMPL {.inject.} = TestStatus.OK
-
-    for formatter in formatters:
-      formatter.testStarted(name)
-
-    try:
+  block:
+    let currentSuiteNameIMPL {.used.} =
+      when declared(testSuiteName): testSuiteName else: ""
+    let testLocationIMPL {.used.} = instantiationInfo(-1, false)
+    proc testBodyIMPL(testStatusIMPL: ptr TestStatus) =
       when declared(testSetupIMPLFlag): testSetupIMPL()
       when declared(testTeardownIMPLFlag):
         defer: testTeardownIMPL()
       body
 
-    except Exception:
-      let e = getCurrentException()
-      let eTypeDesc = "[" & exceptionTypeName(e) & "]"
-      checkpoint("Unhandled exception: " & getCurrentExceptionMsg() & " " & eTypeDesc)
-      var stackTrace {.inject.} = e.getStackTrace()
-      fail()
+    let testBodyHashIMPLValue {.used.} = protocolBodyHash(testBodyIMPL)
+    registerProtocolTest(
+      currentSuiteNameIMPL,
+      name,
+      testLocationIMPL.filename,
+      testLocationIMPL.line,
+      testLocationIMPL.column,
+      testBodyHashIMPLValue
+    )
 
-    except:
-      checkpoint("Unhandled exception: " & getCurrentExceptionMsg() & " [<foreign exception>]")
-      fail()
-
-    finally:
-      if testStatusIMPL == TestStatus.FAILED:
-        setProgramResult 1
-      let testResult = TestResult(
-        suiteName: when declared(testSuiteName): testSuiteName else: "",
-        testName: name,
-        status: testStatusIMPL
-      )
-      testEnded(testResult)
+    if shouldRunProtocolTest(currentSuiteNameIMPL, name):
       checkpoints = @[]
+      resetProtocolTestState()
+      var testStatusIMPL {.inject.} = TestStatus.OK
+
+      for formatter in formatters:
+        formatter.testStarted(name)
+
+      try:
+        testBodyIMPL(addr testStatusIMPL)
+
+      except Exception:
+        let e = getCurrentException()
+        let eTypeDesc = "[" & exceptionTypeName(e) & "]"
+        checkpoint("Unhandled exception: " & getCurrentExceptionMsg() & " " & eTypeDesc)
+        var stackTrace {.inject.} = e.getStackTrace()
+        fail()
+
+      except:
+        checkpoint("Unhandled exception: " & getCurrentExceptionMsg() & " [<foreign exception>]")
+        fail()
+
+      finally:
+        if testStatusIMPL == TestStatus.FAILED:
+          setProgramResult 1
+        elif protocolMode == pmRun and testStatusIMPL == TestStatus.SKIPPED:
+          setProgramResult 2
+        elif protocolMode == pmRun:
+          setProgramResult 0
+        let testResult = TestResult(
+          suiteName: currentSuiteNameIMPL,
+          testName: name,
+          status: testStatusIMPL
+        )
+        testEnded(testResult)
+        checkpoints = @[]
 
 proc checkpoint*(msg: string) =
   ## Set a checkpoint identified by `msg`. Upon test failure all
@@ -602,15 +904,23 @@ template fail* =
   ##   ```
   ##
   ## outputs "Checkpoint A" before quitting.
-  bind ensureInitialized, setProgramResult
+  bind ensureInitialized, setProgramResult, recordProtocolFailure
   when declared(testStatusIMPL):
-    testStatusIMPL = TestStatus.FAILED
+    when typeof(testStatusIMPL) is ptr TestStatus:
+      testStatusIMPL[] = TestStatus.FAILED
+    else:
+      testStatusIMPL = TestStatus.FAILED
   else:
     setProgramResult 1
 
   ensureInitialized()
 
     # var stackTrace: string = nil
+  when declared(stackTrace):
+    recordProtocolFailure(checkpoints, stackTrace)
+  else:
+    recordProtocolFailure(checkpoints, "")
+
   for formatter in formatters:
     when declared(stackTrace):
       formatter.failureOccurred(checkpoints, stackTrace)
@@ -621,7 +931,7 @@ template fail* =
 
   checkpoints = @[]
 
-template skip* =
+template skip*(reason = "") =
   ## Mark the test as skipped. Should be used directly
   ## in case when it is not possible to perform test
   ## for reasons depending on outer environment,
@@ -631,9 +941,13 @@ template skip* =
   ##   if not isGLContextCreated():
   ##     skip()
   ##   ```
-  bind checkpoints
+  bind checkpoints, protocolSkipReason
 
-  testStatusIMPL = TestStatus.SKIPPED
+  when typeof(testStatusIMPL) is ptr TestStatus:
+    testStatusIMPL[] = TestStatus.SKIPPED
+  else:
+    testStatusIMPL = TestStatus.SKIPPED
+  protocolSkipReason = reason
   checkpoints = @[]
 
 macro check*(conditions: untyped): untyped =
