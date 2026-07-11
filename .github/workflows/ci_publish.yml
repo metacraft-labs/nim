@@ -7,57 +7,69 @@ on:
 
 jobs:
   build:
+    # Toolchain comes from the repo flake dev shell materialised by
+    # setup-dev-env (env-flavor: nix), replacing the apt-fast dependency
+    # installs. Runs on the incus Nix runner class (linux/x64).
     if: github.event.pull_request.merged == true
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
-        cpu: [amd64]
-    name: '${{ matrix.os }}'
-    runs-on: ${{ matrix.os }}
+        include:
+          - target: linux
+            runner: incus
+            cpu: amd64
+    name: '${{ matrix.target }}'
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v6
         with:
           fetch-depth: 2
 
-      - name: 'Install node.js'
-        uses: actions/setup-node@v6
+      - name: 'Mint installation token for cross-repo sibling clones'
+        id: ci_token
+        uses: actions/create-github-app-token@v2
         with:
-          node-version: 24
+          app-id: ${{ secrets.CI_TOKEN_PROVIDER_APP_ID }}
+          private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
+          owner: metacraft-labs
 
-      - name: 'Install dependencies (Linux amd64)'
-        if: runner.os == 'Linux' && matrix.cpu == 'amd64'
+      # Clones .github/sibling-repos (codetracer-trace-format-nim,
+      # nim-stew) at workspace-lock-pinned revisions and installs Nix +
+      # the `dev-exec` wrapper (`nix develop --command`).
+      - name: 'Setup dev env (nix flavor)'
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@main
+        with:
+          env-flavor: nix
+          gh-token: ${{ steps.ci_token.outputs.token }}
+
+      # nim-results is on github.com/arnetheduck (not metacraft-labs);
+      # clone it explicitly adjacent to the checkout so the flake
+      # shellHook can link it into dist/nim-results.
+      - name: 'Clone nim-results sibling (arnetheduck upstream)'
+        shell: bash
+        env:
+          NIM_RESULTS_REV: b319652e98a198fa881ca70a76754c2dd6f09804
         run: |
-          sudo apt-fast update -qq
-          DEBIAN_FRONTEND='noninteractive' \
-            sudo apt-fast install --no-install-recommends -yq \
-              libcurl4-openssl-dev libgc-dev libsdl1.2-dev libsfml-dev \
-              valgrind libc6-dbg libblas-dev xorg-dev
+          set -euo pipefail
+          dest="$(cd "$GITHUB_WORKSPACE/.." && pwd)/nim-results"
+          rm -rf "$dest"
+          git clone --no-checkout https://github.com/arnetheduck/nim-results.git "$dest"
+          git -C "$dest" fetch --depth 1 origin "$NIM_RESULTS_REV"
+          git -C "$dest" checkout --detach FETCH_HEAD
 
-      - name: 'Add build binaries to PATH'
+      - name: 'Build csources + koch + Nim, run action (inside nix dev shell)'
         shell: bash
-        run: echo "${{ github.workspace }}/bin" >> "${GITHUB_PATH}"
-
-      - name: 'System information'
-        shell: bash
-        run: . ci/funs.sh && nimCiSystemInfo
-
-      - name: 'Build csourcesAny'
-        shell: bash
-        run: . ci/funs.sh && nimBuildCsourcesIfNeeded CC=gcc ucpu='${{ matrix.cpu }}'
-
-      - name: 'Build koch'
-        shell: bash
-        run: nim c koch
-
-      - name: 'Build Nim'
-        shell: bash
-        run: ./koch boot -d:release -d:nimStrictMode --lib:lib
-
-      - name: 'Action'
-        shell: bash
-        run: nim c -r -d:release ci/action.nim
+        run: |
+          dev-exec bash -euo pipefail -c '
+            . ci/funs.sh
+            nimCiSystemInfo
+            nimBuildCsourcesIfNeeded CC=gcc ucpu=${{ matrix.cpu }}
+            export PATH="$PWD/bin:$PATH"
+            nim c koch
+            ./koch boot -d:release -d:nimStrictMode --lib:lib
+            nim c -r -d:release ci/action.nim
+          '
 
       - name: 'Comment'
         uses: actions/github-script@v9
@@ -76,4 +88,3 @@ jobs:
             } catch (err) {
               console.error(err);
             }
-

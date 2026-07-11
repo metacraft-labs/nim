@@ -1,0 +1,17 @@
+# Cross-repo siblings cloned by setup-dev-env (clone-siblings) at the
+# workspace-lock-pinned revisions (see
+# codetracer-specs/Testing/Cross-Repo-CI-Integration.md).
+#
+# The dev shell's shellHook (flake.nix) symlinks each sibling into
+# dist/<name>, which compiler/nim.cfg puts on the Nim search path so
+# `./koch boot` can link the CTFS trace-format writer (CTFS-M1 made
+# libzstd + the trace-format library a link-time requirement for bin/nim
+# itself). nim-stew must carry the slim-system `import std/assertions`
+# guard, which the metacraft-labs fork's pinned revision provides.
+#
+# NOTE: nim-results is NOT listed here. It lives under
+# github.com/arnetheduck (not metacraft-labs), and clone-siblings
+# resolves every sibling under the metacraft-labs org. The workflows
+# clone it with an explicit step at its manifest-pinned revision.
+codetracer-trace-format-nim
+nim-stew

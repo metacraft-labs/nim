@@ -35,20 +35,31 @@ concurrency:
 
 jobs:
   build:
+    # Toolchain comes from the repo flake dev shell materialised by
+    # setup-dev-env (env-flavor: nix), not GitHub-hosted apt/brew: the
+    # flake provides gcc/make + the CTFS link-time deps (libzstd et al.)
+    # required by `./koch boot`. Runs on the Nix runner classes only
+    # (incus = linux/x64, macos-tart = macOS/arm64).
+    #
+    # HOLD (Windows docs coverage pending): the upstream `windows` docs
+    # job is intentionally not carried here yet. Docs output is
+    # platform-independent and is published only from the linux job, and
+    # after CTFS-M1 `./koch boot` itself links the trace-format writer +
+    # libzstd, for which there is no Windows provisioning path today (the
+    # flake is unix-only and the repo has no env.ps1) — a Windows job
+    # would fail at boot. Restore a `windows-latest` docs job once the
+    # Windows CTFS dev-env (sibling checkout + libzstd) is wired up.
     strategy:
       fail-fast: false
       matrix:
-        target: [linux, windows, osx]
         include:
           - target: linux
-            os: ubuntu-22.04
-          - target: windows
-            os: windows-latest
+            runner: incus
           - target: osx
-            os: macos-15
+            runner: macos-tart
 
     name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60 # refs bug #18178
 
     steps:
@@ -57,53 +68,57 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: 'Install build dependencies (macOS)'
-        if: runner.os == 'macOS'
-        run: brew install make
+      # Mint a GitHub App installation token so the cross-repo sibling
+      # clones (private metacraft-labs repos + the workspace-lock
+      # manifest) can authenticate.
+      - name: 'Mint installation token for cross-repo sibling clones'
+        id: ci_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_TOKEN_PROVIDER_APP_ID }}
+          private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
+          owner: metacraft-labs
 
-      - name: 'Install build dependencies (Windows)'
-        if: runner.os == 'Windows'
+      # Clones the siblings listed in .github/sibling-repos
+      # (codetracer-trace-format-nim, nim-stew) at the workspace-lock
+      # pinned revisions and installs Nix + the `dev-exec` wrapper
+      # (`nix develop --command`). The flake shellHook symlinks the
+      # cloned siblings into dist/ for `./koch boot`.
+      - name: 'Setup dev env (nix flavor)'
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@main
+        with:
+          env-flavor: nix
+          gh-token: ${{ steps.ci_token.outputs.token }}
+
+      # nim-results lives under github.com/arnetheduck, which
+      # clone-siblings (metacraft-labs org) cannot resolve, so clone it
+      # explicitly adjacent to the checkout at its manifest-pinned
+      # revision. The flake shellHook links ../nim-results into
+      # dist/nim-results (compiler/nim.cfg puts it on the search path).
+      - name: 'Clone nim-results sibling (arnetheduck upstream)'
+        shell: bash
+        env:
+          NIM_RESULTS_REV: b319652e98a198fa881ca70a76754c2dd6f09804
+        run: |
+          set -euo pipefail
+          dest="$(cd "$GITHUB_WORKSPACE/.." && pwd)/nim-results"
+          rm -rf "$dest"
+          git clone --no-checkout https://github.com/arnetheduck/nim-results.git "$dest"
+          git -C "$dest" fetch --depth 1 origin "$NIM_RESULTS_REV"
+          git -C "$dest" checkout --detach FETCH_HEAD
+
+      - name: 'Build docs (csources bootstrap + koch, inside nix dev shell)'
         shell: bash
         run: |
-          set -e
-          . ci/funs.sh
-          nimInternalInstallDepsWindows
-          echo "${{ github.workspace }}/dist/mingw64/bin" >> "${GITHUB_PATH}"
-
-      - name: 'Add build binaries to PATH'
-        shell: bash
-        run: echo "${{ github.workspace }}/bin" >> "${GITHUB_PATH}"
-
-      - name: 'System information'
-        shell: bash
-        run: . ci/funs.sh && nimCiSystemInfo
-
-      - name: 'Build csourcesAny (posix)'
-        # this would work on windows and other CI use this on windows,
-        # but we ensure here that `ci/build_autogen.bat` keeps working on windows.
-        if: runner.os != 'Windows'
-        shell: bash
-        run: . ci/funs.sh && nimBuildCsourcesIfNeeded CC=gcc
-          # was previously using caching via `actions/cache@v1` but this wasn't
-          # used in other CI pipelines and it's unclear the added complexity
-          # was worth the saving; can be revisited if needed.
-
-      - name: 'Build csourcesAny (windows)'
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: ci/build_autogen.bat
-
-      - name: 'Build koch'
-        shell: bash
-        run: nim c koch
-
-      - name: 'Build the real compiler'
-        shell: bash
-        run: ./koch boot -d:release
-
-      - name: 'Build documentation'
-        shell: bash
-        run: ./koch doc --git.commit:devel
+          dev-exec bash -euo pipefail -c '
+            . ci/funs.sh
+            nimCiSystemInfo
+            nimBuildCsourcesIfNeeded CC=gcc
+            export PATH="$PWD/bin:$PATH"
+            nim c koch
+            ./koch boot -d:release
+            ./koch doc --git.commit:devel
+          '
 
       - name: 'Publish documentation to Github Pages'
         if: |

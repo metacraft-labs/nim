@@ -15,18 +15,30 @@ concurrency:
 
 jobs:
   build:
+    # Toolchain + testament system libraries (curl, boehmgc, openssl,
+    # pcre, blas/lapack, SDL, sfml, valgrind, node, ...) come from the
+    # repo flake dev shell materialised by setup-dev-env (env-flavor:
+    # nix), replacing the apt-get/brew dependency installs. Runs on the
+    # Nix runner classes: incus (linux/x64) and macos-tart (macOS/arm64).
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14]
         batch: ["allowed_failures", "0_3", "1_3", "2_3"] # list of `index_num`
+        target: [linux, osx]
+        # `target` is a base matrix dimension (not include-only) so the
+        # per-target runner/cpu below merge onto every batch combination:
+        # an include entry that omits the base key would otherwise be
+        # applied to every combination in list order, with `osx`
+        # overwriting `linux` and dropping the Linux jobs entirely.
         include:
-          - os: ubuntu-latest
+          - target: linux
+            runner: incus
             cpu: amd64
-          - os: macos-14
+          - target: osx
+            runner: macos-tart
             cpu: arm64
-    name: '${{ matrix.os }} (batch: ${{ matrix.batch }})'
-    runs-on: ${{ matrix.os }}
+    name: '${{ matrix.target }} (batch: ${{ matrix.batch }})'
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60 # refs bug #18178
     env:
       NIM_TEST_PACKAGES: "1"
@@ -37,44 +49,45 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: 'Install node.js'
-        uses: actions/setup-node@v6
+      - name: 'Mint installation token for cross-repo sibling clones'
+        id: ci_token
+        uses: actions/create-github-app-token@v2
         with:
-          node-version: 24
+          app-id: ${{ secrets.CI_TOKEN_PROVIDER_APP_ID }}
+          private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
+          owner: metacraft-labs
 
-      - name: 'Install dependencies (Linux amd64)'
-        if: runner.os == 'Linux' && matrix.cpu == 'amd64'
+      # Clones .github/sibling-repos (codetracer-trace-format-nim,
+      # nim-stew) at workspace-lock-pinned revisions and installs Nix +
+      # the `dev-exec` wrapper (`nix develop --command`).
+      - name: 'Setup dev env (nix flavor)'
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@main
+        with:
+          env-flavor: nix
+          gh-token: ${{ steps.ci_token.outputs.token }}
+
+      # nim-results is on github.com/arnetheduck (not metacraft-labs);
+      # clone it explicitly adjacent to the checkout so the flake
+      # shellHook can link it into dist/nim-results.
+      - name: 'Clone nim-results sibling (arnetheduck upstream)'
+        shell: bash
+        env:
+          NIM_RESULTS_REV: b319652e98a198fa881ca70a76754c2dd6f09804
         run: |
-          sudo apt-get update -qq
-          DEBIAN_FRONTEND='noninteractive' \
-            sudo apt-get install --no-install-recommends -yq \
-              libcurl4-openssl-dev libgc-dev libsdl1.2-dev libsfml-dev \
-              valgrind libc6-dbg libblas-dev liblapack-dev libpcre3 xorg-dev
-      - name: 'Install dependencies (macOS)'
-        if: runner.os == 'macOS'
-        run: brew install boehmgc make sfml gtk+3
-        # XXX can't find boehm and gtk on macos 13
-      - name: 'Install dependencies (Windows)'
-        if: runner.os == 'Windows'
+          set -euo pipefail
+          dest="$(cd "$GITHUB_WORKSPACE/.." && pwd)/nim-results"
+          rm -rf "$dest"
+          git clone --no-checkout https://github.com/arnetheduck/nim-results.git "$dest"
+          git -C "$dest" fetch --depth 1 origin "$NIM_RESULTS_REV"
+          git -C "$dest" checkout --detach FETCH_HEAD
+
+      - name: 'Build csources + koch, run packages CI (inside nix dev shell)'
         shell: bash
         run: |
-          set -e
-          . ci/funs.sh
-          nimInternalInstallDepsWindows
-          echo_run echo "${{ github.workspace }}/dist/mingw64/bin" >> "${GITHUB_PATH}"
-
-      - name: 'Add build binaries to PATH'
-        shell: bash
-        run: echo "${{ github.workspace }}/bin" >> "${GITHUB_PATH}"
-
-      - name: 'System information'
-        shell: bash
-        run: . ci/funs.sh && nimCiSystemInfo
-
-      - name: 'Build csourcesAny'
-        shell: bash
-        run: . ci/funs.sh && nimBuildCsourcesIfNeeded CC=gcc ucpu='${{ matrix.cpu }}'
-
-      - name: 'koch, Run CI'
-        shell: bash
-        run: . ci/funs.sh && nimInternalBuildKochAndRunCI
+          dev-exec bash -euo pipefail -c '
+            . ci/funs.sh
+            nimCiSystemInfo
+            nimBuildCsourcesIfNeeded CC=gcc ucpu=${{ matrix.cpu }}
+            export PATH="$PWD/bin:$PATH"
+            nimInternalBuildKochAndRunCI
+          '
