@@ -19,7 +19,7 @@ jobs:
     # pcre, blas/lapack, SDL, sfml, valgrind, node, ...) come from the
     # repo flake dev shell materialised by setup-dev-env (env-flavor:
     # nix), replacing the apt-get/brew dependency installs. Runs on the
-    # Nix runner classes: incus (linux/x64) and macos-tart (macOS/arm64).
+    # Nix runner classes: eph-linux-x64 (linux/x64) and eph-macos-arm64 (macOS/arm64).
     strategy:
       fail-fast: false
       matrix:
@@ -32,10 +32,10 @@ jobs:
         # overwriting `linux` and dropping the Linux jobs entirely.
         include:
           - target: linux
-            runner: incus
+            runner: eph-linux-x64
             cpu: amd64
           - target: osx
-            runner: macos-tart
+            runner: eph-macos-arm64
             cpu: arm64
     name: '${{ matrix.target }} (batch: ${{ matrix.batch }})'
     runs-on: ${{ matrix.runner }}

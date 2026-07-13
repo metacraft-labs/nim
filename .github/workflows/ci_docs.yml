@@ -39,7 +39,7 @@ jobs:
     # setup-dev-env (env-flavor: nix), not GitHub-hosted apt/brew: the
     # flake provides gcc/make + the CTFS link-time deps (libzstd et al.)
     # required by `./koch boot`. Runs on the Nix runner classes only
-    # (incus = linux/x64, macos-tart = macOS/arm64).
+    # (eph-linux-x64 = linux/x64, eph-macos-arm64 = macOS/arm64).
     #
     # HOLD (Windows docs coverage pending): the upstream `windows` docs
     # job is intentionally not carried here yet. Docs output is
@@ -54,9 +54,9 @@ jobs:
       matrix:
         include:
           - target: linux
-            runner: incus
+            runner: eph-linux-x64
           - target: osx
-            runner: macos-tart
+            runner: eph-macos-arm64
 
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}

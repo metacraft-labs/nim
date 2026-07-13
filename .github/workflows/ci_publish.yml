@@ -9,14 +9,14 @@ jobs:
   build:
     # Toolchain comes from the repo flake dev shell materialised by
     # setup-dev-env (env-flavor: nix), replacing the apt-fast dependency
-    # installs. Runs on the incus Nix runner class (linux/x64).
+    # installs. Runs on the eph-linux-x64 Nix runner class (linux/x64).
     if: github.event.pull_request.merged == true
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: linux
-            runner: incus
+            runner: eph-linux-x64
             cpu: amd64
     name: '${{ matrix.target }}'
     runs-on: ${{ matrix.runner }}
