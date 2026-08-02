@@ -112,6 +112,7 @@ when defined(nimPreviewSlimSystem):
   import std/[assertions, syncio]
 
 import std/[macros, strutils, streams, times, sets, sequtils]
+import std/compilesettings
 
 when declared(stdout):
   import std/os
@@ -681,6 +682,59 @@ proc ensureProtocolExitProc() =
     protocolExitProcAdded = true
     addExitProc(finishProtocol)
 
+const protocolProjectDir* = querySetting(SingleValueSetting.projectPath)
+  ## Directory of the main module being compiled, resolved once at compile time.
+  ## The project is a property of the COMPILATION, so evaluating it here rather
+  ## than per test instantiation is both cheaper and more obviously correct —
+  ## and it keeps `querySetting` out of the `test` template's expansion site,
+  ## where the user's module would have to import `std/compilesettings` itself.
+
+func protocolRelativeFile*(absolute, projectDir: string): string =
+  ## Render `absolute` relative to `projectDir` for the protocol's ``file``
+  ## field, falling back to `absolute` when it lies outside the project.
+  ##
+  ## The field has to be BOTH resolvable and reproducible. A bare basename (what
+  ## `instantiationInfo(-1, false)` yields) is neither: it discards the
+  ## directory, so two same-named test files in different directories are
+  ## indistinguishable and neither can be opened. An absolute path (what
+  ## `instantiationInfo(-1, true)` yields, with or without `--listFullPaths`)
+  ## resolves but embeds the build machine's layout, which defeats diffing two
+  ## catalogs produced on different hosts.
+  ##
+  ## Anchoring on the project directory gives both properties without a new
+  ## compiler flag or `-d:` define — deliberately, since this surface is
+  ## intended for an upstream proposal and every added knob is a cost there.
+  ## The comparison is a plain prefix strip rather than `os.relativePath` so
+  ## this stays usable from every backend `unittest` supports; `std/os` is only
+  ## imported here `when declared(stdout)`.
+  ##
+  ## A body OUTSIDE the project — `projectPath` is the main module's directory,
+  ## so a test defined in a sibling directory qualifies — falls back to its
+  ## basename rather than its absolute path. Emitting the absolute path there
+  ## would buy resolvability at the cost of reproducibility, and reproducibility
+  ## is the property the catalog workflow cannot do without. The basename is
+  ## exactly what such a test reported before, so this is a strict improvement:
+  ## paths inside the project gain their directory, and nothing regresses.
+  proc basename(path: string): string =
+    var start = 0
+    for i in countdown(path.high, 0):
+      if path[i] == '/' or path[i] == '\\':
+        start = i + 1
+        break
+    if start >= path.len: path else: path[start .. ^1]
+
+  if projectDir.len == 0 or absolute.len <= projectDir.len:
+    return basename(absolute)
+  if not absolute.startsWith(projectDir):
+    return basename(absolute)
+  var cut = projectDir.len
+  # Tolerate a project dir recorded with or without its trailing separator.
+  while cut < absolute.len and (absolute[cut] == '/' or absolute[cut] == '\\'):
+    inc cut
+  if cut >= absolute.len:
+    return basename(absolute)
+  absolute[cut .. ^1]
+
 proc registerProtocolTest(suiteName, testName, file: string;
                           line, column: int; bodyHash: string) =
   let name = protocolFullName(suiteName, testName)
@@ -823,7 +877,11 @@ template test*(name, body) {.dirty.} =
   block:
     let currentSuiteNameIMPL {.used.} =
       when declared(testSuiteName): testSuiteName else: ""
-    let testLocationIMPL {.used.} = instantiationInfo(-1, false)
+    # `fullPaths = true` so the directory survives; `protocolRelativeFile` then
+    # anchors it on the project directory so the emitted path is reproducible
+    # across hosts. See `protocolRelativeFile` for why neither the bare
+    # basename nor the raw absolute path is usable on its own.
+    let testLocationIMPL {.used.} = instantiationInfo(-1, true)
     proc testBodyIMPL(testStatusIMPL: ptr TestStatus) =
       when declared(testSetupIMPLFlag): testSetupIMPL()
       when declared(testTeardownIMPLFlag):
@@ -834,7 +892,7 @@ template test*(name, body) {.dirty.} =
     registerProtocolTest(
       currentSuiteNameIMPL,
       name,
-      testLocationIMPL.filename,
+      protocolRelativeFile(testLocationIMPL.filename, protocolProjectDir),
       testLocationIMPL.line,
       testLocationIMPL.column,
       testBodyHashIMPLValue
