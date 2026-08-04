@@ -678,6 +678,17 @@ proc parseProtocolArgs() {.gcsafe.} =
     protocolResultFile = getEnv(nimTestResultFileEnv)
 
 proc ensureProtocolExitProc() =
+  ## Register the exit hook that emits the `--list-json`/`--catalog` payload
+  ## once every test has registered itself.
+  ##
+  ## A run with NO protocol flag emits nothing at exit, so it must not register
+  ## anything either. `addExitProc` is a side effect stock `unittest` never had,
+  ## and on the JS backend `std/exitprocs` reaches for `window.onbeforeunload`
+  ## unless `-d:nodejs` is set — which throws `ReferenceError: window is not
+  ## defined` under a plain `node`, before a single test has run. Gating on the
+  ## mode keeps the default path exactly as it was.
+  if protocolMode == pmDefault:
+    return
   if not protocolExitProcAdded:
     protocolExitProcAdded = true
     addExitProc(finishProtocol)
