@@ -326,9 +326,9 @@ decide whether a routine changed between two compilations, so the hash must
 depend on the meaning of the code and on nothing else -- in particular not on
 where the sources happen to sit on disk.
 
-Two properties of the implementation make that easy to get wrong, and both bite
-silently: the result is still a perfectly good hash, it just answers a
-different question than the caller thinks.
+Three properties of the implementation make that easy to get wrong, and all
+three bite silently: the result is still a perfectly good hash, it just answers
+a different question than the caller thinks.
 
 ### What reaches the hash
 
@@ -361,6 +361,57 @@ Only the last two are safe, and they are safe for the same reason: an
 uninitialised global has no initializer expression for `hashVarSymBody`:nim: to
 descend into, and the module-init assignment is not part of any routine the
 hashed body reaches.
+
+### Local names, and the hygiene suffix
+
+`hashVarSymBody`:nim: identifies a non-global local by its **name**, which is
+right for a local the author wrote: renaming `x` to `y` is a change to the body
+and must move the hash.
+
+It is not right for a hygienic template local. `evaltempl`:nim: renames one to
+``<base>`gensym<N>``, where `N` comes from `PContext.templInstCounter`:nim: --
+a counter created fresh per module and bumped on every template expansion in
+it. `N` therefore records how many expansions preceded this one *in the
+module*, and nothing about the local. Hashing it verbatim made a body's hash
+depend on its neighbours: adding or removing a template expansion anywhere
+above it in the file moved it.
+
+That reaches further than it sounds. `unittest.check`:nim:, `require`:nim: and
+`expect`:nim: all expand `fail`:nim:, whose `for formatter in formatters`:nim:
+is a hygienic local, so every test using an assertion macro was affected by
+every test above it.
+
+`hashLocalSymName`:nim: therefore hashes the base name -- the part the author
+wrote, in the template -- followed by an ordinal counting distinct hygienic
+locals within *this* body, in traversal order, rather than the module counter.
+Ordinals are handed out from a table that `symBodyDigest`:nim: creates empty
+per body, including for the nested digests it computes for callees, so they
+cannot pick up an ordering from the rest of the compilation.
+
+The ordinal, rather than dropping the suffix outright, keeps the scheme no less
+discriminating than hashing the full name was: two distinct symbols get
+distinct ordinals even when their base names collide, so no pair that used to
+hash apart can be brought together.
+
+Only the compiler-generated part of the name is normalised. Symbols from
+`macros.genSym`:nim: are untouched: those carry `sfGenSym`:nim: but keep the
+name the macro asked for, which is stable and meaningful.
+
+This removes one of **two** ways a body's hash can move without the body
+changing; the other is below and is deliberate. Measured, for a `unittest` test
+whose text does not change:
+
+| edit above it in the file          | uses `check` | hash moves? |
+| ---------------------------------- | ------------ | ----------- |
+| adds a template expansion, same line count | yes  | no (was yes) |
+| shifts it down a line              | yes          | yes         |
+| shifts it down a line              | no           | no          |
+
+Line numbering still reaches the hash, because `check` plants its own line and
+column into the body as a string literal -- see below. A hash consumer should
+expect an edit that shifts lines to invalidate everything under it, and should
+read this change as removing a dependency on a compiler-internal counter rather
+than as making bodies insertion-proof.
 
 ### Paths written into the tree
 
