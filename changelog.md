@@ -86,6 +86,15 @@ errors.
 - `system.substr` implementation now uses `copymem` (wrapped C `memcpy`) for copying data, if available at compilation.
 - `system.newStringUninit` is now considered free of side-effects allowing it to be used with `--experimental:strictFuncs`.
 
+- `unittest.check`, `unittest.require` and `unittest.expect`, and the location
+  `std/assertions` puts in the message of a failed `assert`/`doAssert`, now
+  render the canonical module path instead of an absolute one. The location
+  stays resolvable but no longer varies with the checkout directory or with the
+  prefix the standard library is installed under, so `macros.symBodyHash` of a
+  routine containing them is reproducible. Stack traces and `#line` directives
+  are unchanged. See `doc/intern.md`, "Symbol body hashes", for the anchoring
+  a package must provide for this rendering to keep its directory component.
+
 ## Language changes
 
 - An experimental option `--experimental:typeBoundOps` has been added that
