@@ -352,23 +352,76 @@ proc sigHash*(s: PSym; conf: ConfigRef): SigHash =
 
 proc symBodyDigest*(graph: ModuleGraph, sym: PSym): SigHash
 
-proc hashBodyTree(graph: ModuleGraph, c: var MD5Context, n: PNode)
+proc hashBodyTree(graph: ModuleGraph, c: var MD5Context, n: PNode,
+                  gensyms: var Table[ItemId, int])
 
-proc hashVarSymBody(graph: ModuleGraph, c: var MD5Context, s: PSym) =
+const gensymMarker = "`gensym"
+
+proc gensymSuffixPos(name: string): int =
+  ## Index of the hygiene suffix in `name`, or -1 when `name` carries none.
+  ##
+  ## `evaltempl` renames a hygienic template local to ``<base>`gensym<N>``,
+  ## where `N` is the enclosing module's template instantiation counter. That
+  ## counter is a module-wide sequence number: it says how many template
+  ## expansions preceded this one in the module, and nothing about the local
+  ## itself. A name can only acquire a backtick this way, so the shape is an
+  ## exact witness of a compiler-generated identity.
+  result = -1
+  if name.len <= gensymMarker.len: return
+  for start in 0 .. name.len - gensymMarker.len - 1:
+    if name[start] != gensymMarker[0]: continue
+    var matches = true
+    for j in 1 ..< gensymMarker.len:
+      if name[start + j] != gensymMarker[j]:
+        matches = false
+        break
+    if not matches: continue
+    # The marker must be followed by the counter and nothing else. Anything
+    # else is a name this proc does not recognise, and an unrecognised name is
+    # hashed verbatim rather than guessed at.
+    if start + gensymMarker.len >= name.len: return -1
+    for j in start + gensymMarker.len ..< name.len:
+      if name[j] notin {'0'..'9'}: return -1
+    return start
+
+proc hashLocalSymName(c: var MD5Context, s: PSym, gensyms: var Table[ItemId, int]) =
+  ## Hash the identity of a local. The name is part of that identity when the
+  ## author wrote it, so it is hashed verbatim; the instantiation counter that
+  ## `evaltempl` appends to a hygienic local is not, so it is replaced by an
+  ## ordinal that counts distinct hygienic locals within *this* body, in
+  ## traversal order. Two distinct locals therefore still hash differently
+  ## (they get different ordinals even when their base names collide), while a
+  ## body's hash stops depending on how many template expansions happen to
+  ## precede it in the same module.
+  let cut = gensymSuffixPos(s.name.s)
+  if cut < 0:
+    c &= s.name.s
+  else:
+    c &= s.name.s.substr(0, cut - 1)
+    c &= gensymMarker
+    var ordinal = gensyms.getOrDefault(s.itemId, -1)
+    if ordinal < 0:
+      ordinal = gensyms.len
+      gensyms[s.itemId] = ordinal
+    c &= BiggestInt(ordinal)
+
+proc hashVarSymBody(graph: ModuleGraph, c: var MD5Context, s: PSym,
+                    gensyms: var Table[ItemId, int]) =
   assert: s.kind in {skParam, skResult, skVar, skLet, skConst, skForVar}
   if sfGlobal notin s.flags:
     c &= char(s.kind)
-    c &= s.name.s
+    hashLocalSymName(c, s, gensyms)
   else:
     c &= hashNonProc(s)
     # this one works for let and const but not for var. True variables can change value
     # later on. it is user resposibility to hash his global state if required
     if s.ast != nil and s.ast.kind in {nkIdentDefs, nkConstDef}:
-      hashBodyTree(graph, c, s.ast[^1])
+      hashBodyTree(graph, c, s.ast[^1], gensyms)
     else:
-      hashBodyTree(graph, c, s.ast)
+      hashBodyTree(graph, c, s.ast, gensyms)
 
-proc hashBodyTree(graph: ModuleGraph, c: var MD5Context, n: PNode) =
+proc hashBodyTree(graph: ModuleGraph, c: var MD5Context, n: PNode,
+                  gensyms: var Table[ItemId, int]) =
   # hash Nim tree recursing into simply
   if n == nil:
     c &= "nil"
@@ -382,7 +435,7 @@ proc hashBodyTree(graph: ModuleGraph, c: var MD5Context, n: PNode) =
     if n.sym.kind in skProcKinds:
       c &= symBodyDigest(graph, n.sym)
     elif n.sym.kind in {skParam, skResult, skVar, skLet, skConst, skForVar}:
-      hashVarSymBody(graph, c, n.sym)
+      hashVarSymBody(graph, c, n.sym, gensyms)
     else:
       c &= hashNonProc(n.sym)
   of nkProcDef, nkFuncDef, nkTemplateDef, nkMacroDef:
@@ -395,7 +448,7 @@ proc hashBodyTree(graph: ModuleGraph, c: var MD5Context, n: PNode) =
     c &= n.strVal
   else:
     for i in 0..<n.len:
-      hashBodyTree(graph, c, n[i])
+      hashBodyTree(graph, c, n[i], gensyms)
 
 proc symBodyDigest*(graph: ModuleGraph, sym: PSym): SigHash =
   ## compute unique digest of the proc/func/method symbols
@@ -415,7 +468,11 @@ proc symBodyDigest*(graph: ModuleGraph, sym: PSym): SigHash =
   if sym.ast != nil:
     md5Init(c)
     c.md5Update(cast[cstring](result.addr), sizeof(result))
-    hashBodyTree(graph, c, getBody(graph, sym))
+    # The ordinals handed out here are body-local by construction: every
+    # `symBodyDigest` starts from an empty table, including the nested calls
+    # `hashBodyTree` makes for invoked routines.
+    var gensyms = initTable[ItemId, int]()
+    hashBodyTree(graph, c, getBody(graph, sym), gensyms)
     c.md5Final(result.MD5Digest)
     graph.symBodyHashes[sym.id] = result
 
