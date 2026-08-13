@@ -66,6 +66,19 @@ errors.
   Modes include `Nim` (default, fully compatible) and two new experimental modes:
   `Lax` and `Gnu` for different option parsing behaviors.
 
+- `system.InstantiationPath` has been added, along with an
+  `instantiationInfo(index: int, path: InstantiationPath)` overload and a
+  `macros.lineInfo`/`macros.lineInfoObj` overload taking the same enum. Besides
+  the two renderings the existing `fullPaths: bool` can express (`ipBasename`,
+  `ipAbsolute`) it offers `ipCanonical`, which renders the canonical module
+  path, e.g. `tests/t1.nim` or `std/tables`. This is `--filenames:canonical`
+  applied to a single call site. Use it when the location is written into
+  generated code: an absolute path planted in an AST literal is hashed verbatim
+  by `sighashes.symBodyDigest`, which makes the body hash of every routine
+  containing the expansion depend on where the package is checked out. The
+  enum's ordinals match the boolean it generalizes, so existing call sites are
+  unaffected.
+
 [//]: # "Changes:"
 
 - `std/math` The `^` symbol now supports floating-point as exponent in addition to the Natural type.
@@ -116,6 +129,12 @@ errors.
   `when` clause would error with "'sizeof' requires '.importc' types to be '.completeStruct'".
   The issue was that `hasValuelessStatics` in `semtypinst.nim` didn't recognize
   `tyTypeDesc(tyGenericParam)` as an unresolved generic parameter.
+
+- The `InstantiationInfo` magic and `macros`' line-info magic accept the new
+  `system.InstantiationPath` selector; the latter gained a `getCanonicalFile`
+  operation in the VM. Both reuse the existing `foCanonical` rendering from
+  `msgs.toFilenameOption`, so a call site can request exactly what
+  `--filenames:canonical` produces.
 
 ## Tool changes
 

@@ -2365,6 +2365,9 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
         regs[ra].node = newIntNode(nkIntLit, n.info.line.int)
       of 2: # getColumn
         regs[ra].node = newIntNode(nkIntLit, n.info.col.int)
+      of 3: # getCanonicalFile
+        regs[ra].node = newStrNode(nkStrLit,
+          toFilenameOption(c.config, n.info.fileIndex, foCanonical))
       else:
         internalAssert c.config, false
       regs[ra].node.info = n.info

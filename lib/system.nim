@@ -1580,6 +1580,50 @@ else:
       result[i+1] = y[i]
 
 
+type InstantiationPath* = enum
+  ## Selects how `instantiationInfo`_ renders the `filename` field.
+  ##
+  ## The ordinals are chosen so the two-state `fullPaths: bool` overload keeps
+  ## working unchanged: `false` is `ipBasename` and `true` is `ipAbsolute`.
+  ## The new mode is appended rather than inserted in the "natural" order for
+  ## exactly that reason.
+  ipBasename = 0
+    ## just the file name, e.g. `unittest.nim`. Cheap and machine-independent,
+    ## but ambiguous: two same-named files in different directories are
+    ## indistinguishable and neither can be opened from the message.
+  ipAbsolute = 1
+    ## the full path, e.g. `/home/user/proj/tests/unittest.nim`. Resolvable,
+    ## but it embeds the build machine's layout in whatever it is written into
+    ## — including, once it reaches an AST literal, the body hash computed by
+    ## `sighashes.symBodyDigest`.
+  ipCanonical = 2
+    ## the canonical module path, e.g. `tests/t1.nim` for a file in the current
+    ## package and `std/tables` for one in the standard library. Resolvable
+    ## *and* machine-independent.
+    ##
+    ## This is `--filenames:canonical` applied to a single call site, and it
+    ## reuses the compiler's existing `canonicalImportAux`, so the standard
+    ## library is handled by the same rule as everything else rather than by a
+    ## special case — including that rule's quirk of dropping the `.nim`
+    ## extension for standard library modules but keeping it for package files.
+    ##
+    ## The anchor is the PACKAGE root, deliberately not `projectPath`, which is
+    ## the directory of the main module and therefore degenerates to a bare
+    ## basename whenever a file is compiled as its own main module. See
+    ## nim-lang/Nim#7429 for why project-relative paths were removed from
+    ## `macros.lineInfoObj` for exactly that ambiguity.
+    ##
+    ## `canonicalImportAux` finds that root by trying, in order: the standard
+    ## library directories; the search paths (`--path:`, `path=`); the nearest
+    ## enclosing `.nimble` file. If none of them matches it falls back to
+    ## `projectPath`, and the rendering degrades to the `ipBasename` result for
+    ## a file compiled as its own main module. A package that wants stable,
+    ## resolvable renderings must therefore ship a `.nimble` file at its root
+    ## or pass `--path:<root>`; the two give identical results. Note that
+    ## merely having a `config.nims` or `nim.cfg` at the root does *not*
+    ## anchor anything — only an entry that actually adds a search path does.
+    ## See `doc/intern.md`, "Symbol body hashes".
+
 proc instantiationInfo*(index = -1, fullPaths = false): tuple[
   filename: string, line: int, column: int] {.magic: "InstantiationInfo", noSideEffect.}
   ## Provides access to the compiler's instantiation stack line information
@@ -1615,6 +1659,11 @@ proc instantiationInfo*(index = -1, fullPaths = false): tuple[
   ##     testException(IndexDefect, tester(1))
   ##     # --> Test failure at example.nim:20 with 'tester(1)'
   ##   ```
+
+proc instantiationInfo*(index: int, path: InstantiationPath): tuple[
+  filename: string, line: int, column: int] {.magic: "InstantiationInfo", noSideEffect.}
+  ## Same as the `fullPaths` overload, but selects the rendering of `filename`
+  ## explicitly, including the project-relative mode the boolean cannot express.
 
 
 when notJSnotNims:

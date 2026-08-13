@@ -538,6 +538,7 @@ proc `$`*(arg: LineInfo): string =
 proc getLine(arg: NimNode): int {.magic: "NLineInfo", noSideEffect.}
 proc getColumn(arg: NimNode): int {.magic: "NLineInfo", noSideEffect.}
 proc getFile(arg: NimNode): string {.magic: "NLineInfo", noSideEffect.}
+proc getCanonicalFile(arg: NimNode): string {.magic: "NLineInfo", noSideEffect.}
 
 proc copyLineInfo*(arg: NimNode, info: NimNode) {.magic: "NLineInfo", noSideEffect.}
   ## Copy lineinfo from `info`.
@@ -562,9 +563,38 @@ proc lineInfoObj*(n: NimNode): LineInfo =
   ## Returns `LineInfo` of `n`, using absolute path for `filename`.
   result = LineInfo(filename: n.getFile, line: n.getLine, column: n.getColumn)
 
+proc basenameIMPL(path: string): string =
+  ## `os.extractFilename` without importing `std/os` into `macros`.
+  var start = 0
+  for i in countdown(path.len - 1, 0):
+    if path[i] == '/' or path[i] == '\\':
+      start = i + 1
+      break
+  if start >= path.len: path else: path[start .. path.len - 1]
+
+proc lineInfoObj*(n: NimNode, path: InstantiationPath): LineInfo =
+  ## Returns `LineInfo` of `n`, rendering `filename` as `path` selects.
+  ##
+  ## `ipAbsolute` is what the single-argument overload has always returned.
+  ## `ipCanonical` is the rendering to use when the result is written into
+  ## generated code: an absolute path planted in an AST literal reaches
+  ## `sighashes.symBodyDigest`, which makes the body hash of every routine
+  ## containing the expansion depend on where the package happens to sit.
+  let filename =
+    case path
+    of ipBasename: basenameIMPL(n.getFile)
+    of ipAbsolute: n.getFile
+    of ipCanonical: n.getCanonicalFile
+  result = LineInfo(filename: filename, line: n.getLine, column: n.getColumn)
+
 proc lineInfo*(arg: NimNode): string =
   ## Return line info in the form `filepath(line, column)`.
   $arg.lineInfoObj
+
+proc lineInfo*(arg: NimNode, path: InstantiationPath): string =
+  ## Return line info in the form `filepath(line, column)`, rendering
+  ## `filepath` as `path` selects. See `lineInfoObj`_.
+  $arg.lineInfoObj(path)
 
 proc internalParseExpr(s, filename: string): NimNode {.
   magic: "ParseExprToAst", noSideEffect.}

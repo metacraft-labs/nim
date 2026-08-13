@@ -132,15 +132,38 @@ proc expectIntLit(c: PContext, n: PNode): int =
     result = 0
     localError(c.config, n.info, errIntLiteralExpected)
 
+proc expectOrdLit(c: PContext, n: PNode): int =
+  ## `expectIntLit` for a parameter that may be spelled as a bool, an int or an
+  ## enum field. `instantiationInfo`'s second argument is spelled both ways.
+  let x = c.semConstExpr(c, n)
+  case x.kind
+  of nkCharLit..nkUInt64Lit: result = int(x.intVal)
+  of nkSym:
+    if x.sym.kind == skEnumField: result = x.sym.position
+    else:
+      result = 0
+      localError(c.config, n.info, errIntLiteralExpected)
+  else:
+    result = 0
+    localError(c.config, n.info, errIntLiteralExpected)
+
 proc semInstantiationInfo(c: PContext, n: PNode): PNode =
   result = newNodeIT(nkTupleConstr, n.info, n.typ)
   var idx = expectIntLit(c, n[1])
-  let useFullPaths = expectIntLit(c, n[2])
+  # `n[2]` is either the legacy `fullPaths: bool` or an `InstantiationPath`.
+  # `InstantiationPath`'s ordinals agree with the bool (`false`/`ipBasename`
+  # = 0, `true`/`ipAbsolute` = 1), so one read serves both overloads and no
+  # existing call site changes meaning.
+  let pathMode = expectOrdLit(c, n[2])
   if not c.config.macroSourcemap.isNil and n.info.fileIndex == c.config.macroSourcemap.fileIndex:
     idx = 0
   let info = getInfoContext(c.config, idx)
   var filename = newNodeIT(nkStrLit, n.info, getSysType(c.graph, n.info, tyString))
-  filename.strVal = if useFullPaths != 0: toFullPath(c.config, info) else: toFilename(c.config, info)
+  filename.strVal =
+    case pathMode
+    of 1: toFullPath(c.config, info)
+    of 2: toFilenameOption(c.config, info.fileIndex, foCanonical)
+    else: toFilename(c.config, info)
   var line = newNodeIT(nkIntLit, n.info, getSysType(c.graph, n.info, tyInt))
   line.intVal = toLinenumber(info)
   var column = newNodeIT(nkIntLit, n.info, getSysType(c.graph, n.info, tyInt))

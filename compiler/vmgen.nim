@@ -1450,6 +1450,7 @@ proc genMagic(c: PCtx; n: PNode; dest: var TDest; flags: TGenFlags = {}, m: TMag
   of mNLineInfo:
     case n[0].sym.name.s
     of "getFile": genUnaryABI(c, n, dest, opcNGetLineInfo, 0)
+    of "getCanonicalFile": genUnaryABI(c, n, dest, opcNGetLineInfo, 3)
     of "getLine": genUnaryABI(c, n, dest, opcNGetLineInfo, 1)
     of "getColumn": genUnaryABI(c, n, dest, opcNGetLineInfo, 2)
     of "copyLineInfo":
