@@ -154,3 +154,9 @@ errors.
 ## Documentation changes
 
 - Added documentation for the `completeStruct` pragma in the manual.
+
+- `doc/intern.md` gained a "Symbol body hashes" section describing what
+  `sighashes.symBodyDigest` reaches -- including the initializers of the
+  globals and the bodies of the routines a hashed body transitively touches --
+  and what a macro must do to keep a location it plants in generated code out
+  of the hash.
