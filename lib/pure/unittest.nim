@@ -97,6 +97,84 @@
 ##     echo "suite teardown: run once after the tests"
 ##   ```
 ##
+## Runner protocol
+## ===============
+##
+## A compiled test binary can also be driven from the outside, one test per
+## process, by a runner that does the scheduling itself. Four flags make that
+## possible:
+##
+## ===================== =======================================================
+## flag                  effect
+## ===================== =======================================================
+## `--list`              print one `suite::test` name per line
+## `--list-json`         print the same set as a JSON catalog, with the
+##                       per-test metadata described below
+## `--run "suite::test"` run exactly that one test; exit code 0 for a pass,
+##                       1 for a failure, 2 for a skip
+## `--catalog FILE`      write a `name` to `bodyHash` map to FILE, or to
+##                       stdout when FILE is `-`
+## ===================== =======================================================
+##
+## When the `NIMTEST_RESULT_FILE` environment variable names a file, `--run`
+## writes the status, duration, checkpoints and exception of the test to it.
+##
+## Catalog fields
+## --------------
+##
+## Every row of `--list-json` carries:
+##
+## ================= ==========================================================
+## field             value
+## ================= ==========================================================
+## `name`            `suite::test`, or `::test` outside a suite
+## `suite`           the suite name; empty outside a suite
+## `test`            the test name
+## `file`            the declaring file, relative to the project directory
+## `line`            1-based line of the `test` call
+## `column`          0-based column of the `test` call
+## `kind`            always `"in-process"`; see below
+## `bodyHash`        `macros.symBodyHash` of the test body, taken transitively
+##                   over everything the body calls
+## `group`           the `group` option, else the enclosing `testGroup`, else
+##                   `"@global"`
+## `threadsRequired` the `threadsRequired` option, else `1`
+## `xfail`           the `xfail` reason, or `null` when it is empty
+## `tags`            the `tags` option, else `[]`
+## `deterministic`   the `deterministic` option, else `true`
+## ================= ==========================================================
+##
+## The last five are declared by the test author — see `test` — and mean
+## nothing to `unittest` itself, which runs every test sequentially in one
+## process and so has neither a scheduler to inform nor a previous run to
+## compare against. It transports them for the runner that does.
+##
+## `kind` is the one field with no per-test source. `unittest` registers
+## in-process bodies and nothing else, so `"in-process"` is not a placeholder
+## standing in for something this module declines to compute: it is the whole
+## truth about every row it can emit. It is in the payload because a catalog
+## merged from several producers needs the discriminator.
+##
+## Conforming producers
+## --------------------
+##
+## `unittest` is not the only program that can answer these flags — a project
+## may put its own harness behind them — so what a consumer may assume needs
+## stating. A producer conforms if:
+##
+## * `name`, `suite`, `test`, `file`, `line` and `column` are on every row. A
+##   consumer may rely on all six.
+## * `bodyHash` is present only when the producer can genuinely compute one,
+##   and is OMITTED otherwise. It must never be filled with a placeholder: a
+##   consumer compares hashes to decide what to re-run, an absent hash reads as
+##   "no information" and re-runs, and any placeholder reads as a real digest
+##   and would collide with every other row carrying it.
+## * `kind`, `group`, `threadsRequired`, `xfail`, `tags` and `deterministic`
+##   are optional. A consumer reads an absent field as the default above, and
+##   must not read that default as a declaration: "the producer never mentions
+##   this field" and "the author declared the default" are the same state, and
+##   nothing may depend on telling them apart.
+##
 ## Limitations/Bugs
 ## ================
 ## Since `check` will rewrite some expressions for supporting checkpoints
@@ -148,6 +226,11 @@ type
     line: int
     column: int
     bodyHash: string
+    group: string
+    threadsRequired: int
+    xfail: string
+    tags: seq[string]
+    deterministic: bool
 
   ProtocolMode = enum
     pmDefault,
@@ -216,6 +299,23 @@ const
   nimUnittestColor {.strdefine.} = "auto" ## auto|on|off
   nimUnittestAbortOnError {.booldefine.} = false
   nimTestResultFileEnv = "NIMTEST_RESULT_FILE"
+
+  protocolDefaultGroup = "@global"
+    ## `group` reported for a test that joins no group. Named rather than
+    ## spelled inline so the emitter, the `test` macro and the documentation
+    ## cannot drift apart.
+  protocolDefaultThreadsRequired = 1
+    ## `threadsRequired` reported for a test that declares no weight.
+  protocolDefaultDeterministic = true
+    ## `deterministic` reported for a test that declares nothing: a test is
+    ## assumed to depend only on the code it exercises until its author says
+    ## otherwise. The default has to be the safe direction for a consumer that
+    ## skips unchanged tests, and `true` is that direction only because the
+    ## consumer re-runs on a changed `bodyHash`; a test that reads the clock or
+    ## the network has to say `deterministic = false` to be re-run regardless.
+  protocolNoTags: array[0, string] = []
+    ## The empty `tags` list, as an `array` so passing it costs no allocation
+    ## on the path every test takes whether or not the protocol is in use.
 
 template deprecateEnvVarHere() =
   # xxx issue a runtime warning to deprecate this envvar.
@@ -514,10 +614,36 @@ proc appendMetadataJson(result: var string, test: TestMetadata) =
   result.add($test.line)
   result.add(",\"column\":")
   result.add($test.column)
-  result.add(",\"kind\":\"in-process\",\"group\":\"@global\",\"threadsRequired\":1")
-  result.add(",\"xfail\":null,\"tags\":[],\"bodyHash\":")
+  # `kind` is the one field here with no per-test source. `unittest` registers
+  # in-process bodies and nothing else — it has no `registerExternalTest`, no
+  # `.test` file discovery and no fuzz corpus — so "in-process" is not a
+  # placeholder standing in for a value this module could compute; it is the
+  # complete truth about every test this producer can emit. It stays in the
+  # payload because a catalog merged from several producers needs the
+  # discriminator, and because `summary.byKind` is keyed on it.
+  result.add(",\"kind\":\"in-process\",\"group\":")
+  result.add(jsonString(test.group))
+  result.add(",\"threadsRequired\":")
+  result.add($test.threadsRequired)
+  result.add(",\"xfail\":")
+  # An empty reason is `null`, not `""`: `xfail = when defined(windows): "..."
+  # else: ""` is the documented way to mark a test expected to fail on one
+  # platform, and on the other platforms it must be indistinguishable from a
+  # test that never mentioned `xfail` at all.
+  if test.xfail.len == 0:
+    result.add("null")
+  else:
+    result.add(jsonString(test.xfail))
+  result.add(",\"tags\":[")
+  for i, tag in test.tags:
+    if i > 0:
+      result.add(",")
+    result.add(jsonString(tag))
+  result.add("],\"bodyHash\":")
   result.add(jsonString(test.bodyHash))
-  result.add(",\"deterministic\":true}")
+  result.add(",\"deterministic\":")
+  result.add(if test.deterministic: "true" else: "false")
+  result.add("}")
 
 proc buildListJson(): string =
   var suites = initHashSet[string]()
@@ -747,7 +873,14 @@ func protocolRelativeFile*(absolute, projectDir: string): string =
   absolute[cut .. ^1]
 
 proc registerProtocolTest(suiteName, testName, file: string;
-                          line, column: int; bodyHash: string) =
+                          line, column: int; bodyHash: string;
+                          group: string; threadsRequired: int;
+                          xfail: string; tags: openArray[string];
+                          deterministic: bool) =
+  ## `tags` is an `openArray` rather than a `seq` because this proc is called
+  ## once per test in EVERY mode, including a plain `nim c -r`, where the
+  ## metadata is discarded. The `seq` is materialized only in the two modes
+  ## that go on to serialize it.
   let name = protocolFullName(suiteName, testName)
   case protocolMode
   of pmList:
@@ -759,7 +892,12 @@ proc registerProtocolTest(suiteName, testName, file: string;
       file: file,
       line: line,
       column: column,
-      bodyHash: bodyHash
+      bodyHash: bodyHash,
+      group: group,
+      threadsRequired: threadsRequired,
+      xfail: xfail,
+      tags: @tags,
+      deterministic: deterministic
     )
   else:
     discard
@@ -865,22 +1003,48 @@ when not declared(setProgramResult):
   template setProgramResult(a: int) =
     discard
 
-template test*(name, body) {.dirty.} =
-  ## Define a single test case identified by `name`.
+template testGroup*(name: string; body: untyped) {.dirty.} =
+  ## Declare that every test in `body` belongs to the group `name`.
   ##
   ##   ```nim
-  ##   test "roses are red":
-  ##     let roses = "red"
-  ##     check(roses == "red")
+  ##   suite "database":
+  ##     testGroup "db-access":
+  ##       test "insert record":
+  ##         check db.insert(record)
+  ##
+  ##       test "delete record":
+  ##         check db.delete(id)
   ##   ```
   ##
-  ## The above code outputs:
+  ## A group is the unit a scheduler serializes: tests that share a port, a
+  ## database or a working directory name the same group, and a runner that
+  ## reads `--list-json` can then keep them off each other. `unittest` itself
+  ## runs tests sequentially and so has nothing to schedule — it reports the
+  ## membership and nothing more. See `test`'s `group` option to name a group
+  ## for a single test, which takes precedence over an enclosing `testGroup`.
   ##
-  ##     [OK] roses are red
+  ## The declaration is block-level because group membership is a property of a
+  ## SET of tests: the interesting case is a whole suite sharing one resource,
+  ## and repeating `group = "db-access"` on each test invites the typo that
+  ## silently splits the set in two.
+  block:
+    let testGroupName {.used.} = name
+    body
+
+template testImpl(name: untyped; xfail: string; tags: openArray[string];
+                  group: string; threadsRequired: int; deterministic: bool;
+                  body: untyped) {.dirty.} =
+  ## The body of `test`, with the declared metadata already separated out by
+  ## that macro. Kept a `{.dirty.}` template rather than folded into the macro
+  ## so the expansion stays readable and, more importantly, so
+  ## `instantiationInfo(-1, true)` below still names the user's `test` call
+  ## site: `getAst` on a template preserves the instantiation stack, and the
+  ## emitted `line`/`column` are byte-identical to what the plain template
+  ## reported before this macro existed.
   bind shouldRun, checkpoints, formatters, ensureInitialized, testEnded,
     exceptionTypeName, setProgramResult, protocolBodyHash, registerProtocolTest,
     resetProtocolTestState, ensureProtocolExitProc, shouldRunProtocolTest,
-    protocolMode, pmRun
+    protocolMode, pmRun, protocolDefaultGroup
 
   ensureInitialized()
   ensureProtocolExitProc()
@@ -888,6 +1052,15 @@ template test*(name, body) {.dirty.} =
   block:
     let currentSuiteNameIMPL {.used.} =
       when declared(testSuiteName): testSuiteName else: ""
+    let currentGroupIMPL {.used.} =
+      # A per-test `group` wins over an enclosing `testGroup`; with neither,
+      # the test is in the default group. The empty string is the "said
+      # nothing" marker rather than a legal group name, so a test cannot land
+      # in a nameless group by accident.
+      if group.len > 0: group
+      else:
+        when declared(testGroupName): testGroupName
+        else: protocolDefaultGroup
     # `fullPaths = true` so the directory survives; `protocolRelativeFile` then
     # anchors it on the project directory so the emitted path is reproducible
     # across hosts. See `protocolRelativeFile` for why neither the bare
@@ -906,7 +1079,12 @@ template test*(name, body) {.dirty.} =
       protocolRelativeFile(testLocationIMPL.filename, protocolProjectDir),
       testLocationIMPL.line,
       testLocationIMPL.column,
-      testBodyHashIMPLValue
+      testBodyHashIMPLValue,
+      currentGroupIMPL,
+      threadsRequired,
+      xfail,
+      tags,
+      deterministic
     )
 
     if shouldRunProtocolTest(currentSuiteNameIMPL, name):
@@ -945,6 +1123,120 @@ template test*(name, body) {.dirty.} =
         )
         testEnded(testResult)
         checkpoints = @[]
+
+macro test*(args: varargs[untyped]): untyped =
+  ## Define a single test case identified by `name`, optionally declaring what
+  ## a runner needs to know about it.
+  ##
+  ##   ```nim
+  ##   test "roses are red":
+  ##     let roses = "red"
+  ##     check(roses == "red")
+  ##   ```
+  ##
+  ## The above code outputs:
+  ##
+  ##     [OK] roses are red
+  ##
+  ## Declared properties
+  ## -------------------
+  ##
+  ## Between the name and the body, a test may declare any of five properties.
+  ## Each is optional and each reaches the outside world through the
+  ## `--list-json` catalog described in this module's documentation; `unittest`
+  ## itself does not act on any of them, because it runs tests sequentially in
+  ## one process and so has neither a scheduler to inform nor a previous run to
+  ## compare against.
+  ##
+  ## ================== ============================== ==========================
+  ## option             meaning                        default
+  ## ================== ============================== ==========================
+  ## `xfail`            reason the test is expected    `""`, reported as `null`
+  ##                    to fail
+  ## `tags`             free-form labels a runner can  `[]`
+  ##                    filter on
+  ## `group`            name of a set of tests that    the enclosing
+  ##                    must not run concurrently      `testGroup`, else
+  ##                                                   `"@global"`
+  ## `threadsRequired`  concurrency slots the test     `1`
+  ##                    consumes
+  ## `deterministic`    whether the outcome depends    `true`
+  ##                    only on the code under test
+  ## ================== ============================== ==========================
+  ##
+  ##   ```nim
+  ##   test "known overflow", xfail = "bug #1234":
+  ##     check largeComputation() == expected
+  ##
+  ##   test "fetches the index", tags = ["slow", "network"],
+  ##       deterministic = false:
+  ##     check fetch("http://example.com").code == 200
+  ##
+  ##   test "saturates the machine", threadsRequired = countProcessors():
+  ##     check heavyComputation() == expected
+  ##   ```
+  ##
+  ## An `xfail` reason is a string rather than a `bool` so the annotation
+  ## carries WHY, and so a platform-conditional annotation has somewhere to go:
+  ##
+  ##   ```nim
+  ##   test "win32 path handling",
+  ##       xfail = (when defined(windows): "not implemented" else: ""):
+  ##     check crossPlatformFeature()
+  ##   ```
+  ##
+  ## An empty reason means the same thing as saying nothing at all.
+  ##
+  ## `test` is a macro rather than a template only because Nim binds a trailing
+  ## block to the next unfilled parameter in order: with the options declared as
+  ## defaulted parameters, `test "x": body` binds the body to the first option
+  ## and `test "x", xfail = "y": body` does not compile at all. Everything the
+  ## macro does is separate the options from the name and the body; the code it
+  ## produces is the `testImpl` template above, which is what `test` always was.
+  if args.len < 2:
+    error("'test' takes a name and a body", args)
+
+  let
+    name = args[0]
+    body = args[^1]
+  var
+    xfail = newLit("")
+    tags = bindSym"protocolNoTags"
+    group = newLit("")
+    threadsRequired = newLit(protocolDefaultThreadsRequired)
+    deterministic = newLit(protocolDefaultDeterministic)
+    seen: seq[string] = @[]
+
+  proc claim(seen: var seq[string]; option: NimNode; canonical: string) =
+    ## Record that `canonical` has been given, rejecting a second mention.
+    ## Keyed on the canonical spelling rather than on what the author typed,
+    ## because `eqIdent` is style-insensitive: `xfail` and `xFail` select the
+    ## same option and so must collide as one.
+    if canonical in seen:
+      error("duplicate 'test' option: " & canonical, option[0])
+    seen.add canonical
+
+  for i in 1 ..< args.len - 1:
+    let option = args[i]
+    if option.kind != nnkExprEqExpr:
+      error("a 'test' option is written 'name = value'; expected one of " &
+        "xfail, tags, group, threadsRequired, deterministic", option)
+    if option[0].eqIdent("xfail"):
+      claim(seen, option, "xfail"); xfail = option[1]
+    elif option[0].eqIdent("tags"):
+      claim(seen, option, "tags"); tags = option[1]
+    elif option[0].eqIdent("group"):
+      claim(seen, option, "group"); group = option[1]
+    elif option[0].eqIdent("threadsRequired"):
+      claim(seen, option, "threadsRequired"); threadsRequired = option[1]
+    elif option[0].eqIdent("deterministic"):
+      claim(seen, option, "deterministic"); deterministic = option[1]
+    else:
+      error("unknown 'test' option: " & repr(option[0]) & "; expected one of " &
+        "xfail, tags, group, threadsRequired, deterministic", option[0])
+
+  result = getAst(testImpl(name, xfail, tags, group, threadsRequired,
+                           deterministic, body))
 
 proc checkpoint*(msg: string) =
   ## Set a checkpoint identified by `msg`. Upon test failure all
