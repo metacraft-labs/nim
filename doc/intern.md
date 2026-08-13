@@ -317,6 +317,112 @@ for the type definitions. The [macros](macros.html) module contains many
 examples how the AST represents each syntactic structure.
 
 
+Symbol body hashes
+------------------
+
+`sighashes.symBodyDigest`:nim: computes a hash that identifies *what a routine
+does*, which `macros.symBodyHash`:nim: exposes to macros. Tooling uses it to
+decide whether a routine changed between two compilations, so the hash must
+depend on the meaning of the code and on nothing else -- in particular not on
+where the sources happen to sit on disk.
+
+Two properties of the implementation make that easy to get wrong, and both bite
+silently: the result is still a perfectly good hash, it just answers a
+different question than the caller thinks.
+
+### What reaches the hash
+
+`hashBodyTree`:nim: walks the routine's body and hashes literals *verbatim*:
+string literals contribute their exact bytes. It also recurses:
+
+* through every routine the body calls, so the callee's body is part of the
+  caller's hash;
+* through every global it reaches, via `hashVarSymBody`:nim:, which for a
+  global spelled as `nkIdentDefs`/`nkConstDef` hashes the **initializer
+  expression**.
+
+The second point is the surprising one. Putting a value behind a runtime
+indirection does not hide it: reaching it through a proc call, or through a
+global, still pulls it into the transitive closure. The value has to be absent
+from that closure entirely.
+
+Measured, for a module-level `const theConst`:
+
+| how the routine reaches the value            | in the hash? |
+| -------------------------------------------- | ------------ |
+| const inlined at the call site                | yes          |
+| proc that names the global const              | yes          |
+| global `let x = theConst`                     | yes          |
+| global `var x = theConst` (initialised)       | yes          |
+| global `var x: string`, assigned in module init | no         |
+| proc calling a proc that reads that bare var  | no           |
+
+Only the last two are safe, and they are safe for the same reason: an
+uninitialised global has no initializer expression for `hashVarSymBody`:nim: to
+descend into, and the module-init assignment is not part of any routine the
+hashed body reaches.
+
+### Paths written into the tree
+
+A macro or template that plants a location into the code it expands -- as
+`unittest.check`:nim: and `assertions.assert`:nim: do, so a failure message can
+name its source -- writes a string literal into the caller's body, and that
+literal is hashed verbatim. If it holds an absolute path, the body hash of
+every routine containing such an expansion tracks the checkout directory, and
+the same source hashes differently in two working copies, or after the
+toolchain is reinstalled elsewhere.
+
+Rendering the location is therefore a deliberate choice, spelled with
+`system.InstantiationPath`:nim: -- `instantiationInfo(-1, ipCanonical)`:nim: and
+`macros.lineInfo(n, ipCanonical)`:nim:. Two constraints apply at once and only
+the canonical rendering satisfies both:
+
+* **reproducible**: the same source must hash identically wherever it is
+  checked out and whatever prefix the standard library is installed under.
+  `ipAbsolute` fails this.
+* **resolvable**: two same-named files in different directories must stay
+  distinguishable, so the message can be traced back to a file. `ipBasename`
+  fails this, and so does any rendering anchored on `conf.projectPath`, because
+  `projectPath` is the directory of the *main module*: a test file compiled as
+  its own main module renders as a bare basename again. That is the ambiguity
+  that removed project-relative paths from `macros.lineInfoObj`:nim: in
+  nim-lang/Nim#7429.
+
+Note that `{.line.}`:nim: has the same hazard in its argument form. Bare
+`{.line.}`:nim: takes the instantiation site from the compiler's context and
+writes nothing into the tree; `{.line: (file, line, col).}`:nim: plants the
+filename as an ordinary literal. Prefer the bare form in macros whose output
+lands in hashed bodies.
+
+### Anchoring
+
+`ipCanonical` resolves through `options.canonicalImportAux`:nim:, which looks
+for a root in this order: the standard library directories, then the search
+paths, then the nearest enclosing `.nimble` file; failing all of those it falls
+back to `conf.projectPath`. Measured, compiling `tests/a/t.nim` and
+`tests/b/t.nim` as their own main modules:
+
+| marker at the package root | `ipCanonical` renders | distinguishes `a` from `b`? |
+| -------------------------- | --------------------- | --------------------------- |
+| `pkg.nimble`               | `tests/a/t.nim`       | yes                         |
+| `--path:<root>`            | `tests/a/t.nim`       | yes                         |
+| `config.nims`              | `t.nim`               | no                          |
+| `nim.cfg`                  | `t.nim`               | no                          |
+| none                       | `t.nim`               | no                          |
+
+`.nimble` and `--path:<root>` are interchangeable and produce identical hashes.
+A bare `config.nims` or `nim.cfg` anchors nothing on its own -- only a
+directive that actually adds a search path does. **A consumer that relies on
+reproducible, resolvable body hashes must provide one of the two anchors**;
+without one the rendering silently degrades to a basename, which is still
+reproducible and so still passes any stability-only check, while losing the
+directory that made the hash identify a file.
+
+Standard library modules render without the `.nim` extension (`std/tables`),
+package files render with it (`tests/a/t.nim`). That asymmetry comes from
+`canonicalImportAux`:nim: and is shared with `--filenames:canonical`.
+
+
 Runtimes
 ========
 

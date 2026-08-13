@@ -1096,24 +1096,28 @@ macro check*(conditions: untyped): untyped =
   of nnkCallKinds:
 
     let (assigns, check, printOuts) = inspectArgs(checked)
-    let lineinfo = newStrLitNode(checked.lineInfo)
+    # `ipCanonical`, not the default absolute rendering: this literal is
+    # planted in the caller's AST, and `sighashes.hashBodyTree` hashes string
+    # literals verbatim, so an absolute path here makes `macros.symBodyHash`
+    # (and therefore the runner protocol's `bodyHash`) depend on where the
+    # package is checked out. Canonical rather than project-relative because
+    # `projectPath` is the main module's directory: a test file compiled as its
+    # own main module would render as a bare basename, so two same-named test
+    # files in different directories would become indistinguishable.
+    let lineinfo = newStrLitNode(checked.lineInfo(ipCanonical))
     let callLit = checked.toStrLit
 
-    # Wrap assigns in a line pragma block to preserve stack trace location
+    # Wrap assigns in a line pragma block to preserve stack trace location.
+    # Bare `{.line.}` rather than `{.line: (file, line, col).}`: the argument
+    # form plants the filename in the body AST as an ordinary string literal,
+    # and `sighashes.hashBodyTree` hashes string literals verbatim, so every
+    # test containing a `check` would hash differently in a different checkout.
+    # The bare form takes the instantiation site from the compiler's own
+    # context instead, so the stack trace this pragma exists to fix is
+    # unchanged and nothing is written into the tree.
     let pragmaBlock = newNimNode(nnkPragmaBlock)
     let pragma = newNimNode(nnkPragma)
-    let exprColonExpr = newNimNode(nnkExprColonExpr)
-    exprColonExpr.add newIdentNode("line")
-
-    # Create a tuple literal with (filename, line, column) from checked
-    let lineInfoObj = checked.lineInfoObj
-    let tupleLit = newNimNode(nnkTupleConstr)
-    tupleLit.add newLit(lineInfoObj.filename)
-    tupleLit.add newLit(lineInfoObj.line.int)
-    tupleLit.add newLit(lineInfoObj.column.int)
-    exprColonExpr.add tupleLit
-
-    pragma.add exprColonExpr
+    pragma.add newIdentNode("line")
     pragmaBlock.add pragma
     pragmaBlock.add assigns
 
@@ -1134,7 +1138,7 @@ macro check*(conditions: untyped): untyped =
         result.add(newCall(newIdentNode("check"), node))
 
   else:
-    let lineinfo = newStrLitNode(checked.lineInfo)
+    let lineinfo = newStrLitNode(checked.lineInfo(ipCanonical))
     let callLit = checked.toStrLit
 
     result = quote do:
@@ -1198,9 +1202,11 @@ macro expect*(exceptions: varargs[typed], body: untyped): untyped =
     errorTypes.add(exp)
 
   if hasException:
-    result = getAst(expectException(errorTypes, errorTypes.lineInfo, body))
+    result = getAst(expectException(errorTypes,
+                                    errorTypes.lineInfo(ipCanonical), body))
   else:
-    result = getAst(expectBody(errorTypes, errorTypes.lineInfo, body))
+    result = getAst(expectBody(errorTypes,
+                               errorTypes.lineInfo(ipCanonical), body))
 
 proc disableParamFiltering* =
   ## disables filtering tests with the command line params

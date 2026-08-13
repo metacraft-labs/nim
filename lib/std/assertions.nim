@@ -47,11 +47,26 @@ proc failedAssertImpl*(msg: string) {.raises: [], tags: [].} =
 template assertImpl(cond: bool, msg: string, expr: string, enabled: static[bool]) =
   when enabled:
     const
-      loc = instantiationInfo(fullPaths = compileOption("excessiveStackTrace"))
+      # `ipCanonical` rather than `ipAbsolute`: this location is folded into
+      # the AST as a string literal, so an absolute path here makes the
+      # `symBodyDigest` of every routine containing an `assert` depend on where
+      # the package is checked out AND on where the toolchain is installed.
+      # The canonical rendering is just as resolvable and is reproducible
+      # across machines. Only the MESSAGE is affected: the bare `{.line.}`
+      # below carries the location for `#line` directives and stack traces, so
+      # those are unchanged.
+      loc = instantiationInfo(-1,
+        if compileOption("excessiveStackTrace"): ipCanonical
+        else: ipBasename)
       ploc = $loc
     bind instantiationInfo
     mixin failedAssertImpl
-    {.line: loc.}:
+    # Bare `{.line.}` rather than `{.line: loc.}`: it takes the instantiation
+    # site straight from the compiler's context, so no filename string is
+    # planted in the AST for `sighashes.hashBodyTree` to hash, and the path
+    # rendering chosen for the *message* cannot affect `#line` directives or
+    # stack traces.
+    {.line.}:
       if not cond:
         failedAssertImpl(ploc & " `" & expr & "` " & msg)
 
