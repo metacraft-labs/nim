@@ -474,6 +474,183 @@ package files render with it (`tests/a/t.nim`). That asymmetry comes from
 `canonicalImportAux`:nim: and is shared with `--filenames:canonical`.
 
 
+What `unittest`'s runner protocol changed for an existing suite
+---------------------------------------------------------------
+
+`lib/pure/unittest.nim` here carries a runner protocol upstream's does not:
+four command line flags (`--list`, `--list-json`, `--run`, `--catalog`), five
+per-test metadata options, and a `test`:nim: that is a `macro`:nim: rather than
+a `{.dirty.}`:nim: template. Everything else is meant to behave exactly as
+upstream does, so that a suite written against upstream keeps compiling and
+keeps printing the same bytes.
+
+That is a claim about behaviour, no test in this repository enforces it, and it
+is not true in full: two of the differences below have been in the module since
+the protocol first landed and were not noticed at the time. So the claim has to
+be measured, and re-measured after anything that edits the module. This section
+records the method, so it can be repeated, and the result, so the next edit
+knows what is supposed to stay fixed and what has already moved.
+
+### Method
+
+The measurement is a differential, and the only thing that may differ between
+the two arms is the file under test. Concretely: one compiler binary built from
+this branch, one `lib` tree copied twice, and `lib/pure/unittest.nim` replaced
+in the second copy by the version at 62751cacf -- which is byte-identical to
+upstream's at cc4c7377b, the last upstream commit to touch the module. Each
+fixture is then compiled twice with `--lib:` pointing at one copy and then the
+other, run with identical arguments, and standard output, standard error and
+the exit status are compared byte for byte.
+
+Building two whole compilers instead, or diffing against a checkout of the base
+commit, would let the compiler changes on this branch leak into the comparison
+and answer a different question. `--skipUserCfg --skipParentCfg` and a fixture
+directory outside any package keep a stray configuration file out of it.
+
+Coverage, at e06a98881: ten fixtures over four rows -- C with `--mm:refc`,
+C with `--mm:orc`, JavaScript, and JavaScript with `-d:nodejs` -- and, on each
+row, twelve argument vectors covering the filter shapes the module documents
+(bare name, `suite::`, `suite::test`, `::test`, `*`, `*::*`, globs on either
+side, several filters at once, one that matches nothing, the empty string) plus
+a run under `disableParamFiltering`. 88 runs; 76 byte-identical; the 12 that
+differ are three causes, each reproducing on all four rows.
+
+Four further properties do not reduce to a single run of that A/B -- three of
+them because the thing to compare against is not upstream -- and are checked
+separately:
+
+* A trailing block still binds for every call shape that worked before:
+  `test "n": body`, `test("n"): body`, `test expr & expr: body`,
+  `test identifier: body`, `test("n", body)`, multi-statement bodies, and
+  bodies containing nested control flow. All seven compile and run. `skip`:nim:
+  written without parentheses still compiles too, despite gaining a defaulted
+  parameter.
+* The five options do not change the meaning of a call that omits them. A
+  fixture and its copy annotated with all five produce byte-identical console
+  output, and the un-annotated copy is byte-identical to the upstream arm.
+* `instantiationInfo(-1, true)`:nim: inside the expansion still names the
+  user's call site. Against the immediately preceding template implementation
+  of `test`:nim: (4e93a8a42), the `file`, `line` and `column` of all fifteen
+  test call sites in the fixtures are unchanged. `getAst`:nim: on a template
+  preserves the instantiation stack, so routing through a macro costs nothing
+  here -- but that is the property, not an argument for skipping the check.
+* The `bodyHash` a test reports is NOT stable across that change: every test's
+  hash moved when `test`:nim: became a macro, because the expansion it produces
+  is not the tree the template produced. `file`, `line` and `column` did not
+  move. A consumer caching hashes across a toolchain upgrade re-runs
+  everything, once.
+
+### The intended difference: the reported location
+
+`check`:nim:, `require`:nim: and `expect`:nim: render the location in their
+failure message canonically rather than absolutely, for the reason the previous
+section gives: the literal is planted in the caller's body and would otherwise
+put the checkout directory into every containing routine's body hash. In a
+package with a `.nimble` file at its root:
+
+    - /home/u/pkg/tests/t.nim(7, 12): Check failed: x == y
+    + tests/t.nim(7, 12): Check failed: x == y
+
+Line and column are unchanged, and so is every other byte of the output. This
+is the whole of the difference in the default console output of a failing
+suite. Without one of the two anchors, the rendering degrades to the bare
+basename, as "Anchoring" above describes.
+
+### Reserved argument spellings
+
+`--list`, `--list-json`, `--run`, `--run=`, `--catalog` and `--catalog=` are
+now read as flags. Upstream added every argument to the filter set, so a suite
+that was passed one of these six got a filter that matched nothing; it now
+selects a mode. This is what the protocol is for, but it is a change in the
+meaning of an argument vector, and a test whose name is literally one of those
+six can no longer be selected by name.
+
+The flags need an argument vector, so on the JavaScript backend they do nothing
+-- as does filtering itself, in both arms, exactly as upstream. The JavaScript
+rows of the matrix therefore prove the output formatting and not the filtering.
+
+### Not intended: `result` cannot be assigned from a test body
+
+A test body is compiled into a nested `testBodyIMPL`:nim: procedure so that
+`macros.symBodyHash`:nim: has a routine to hash. Upstream's template left the
+body inline in the enclosing scope, so a `test`:nim: inside a procedure with a
+return type could assign to that procedure's `result`:nim:. It now cannot:
+
+    proc f(): int =
+      test "assigns to result":
+        result = 7        # Error: 'result' is of type <int> which cannot be
+                          # captured as it would violate memory safety
+
+This is a compile-time break of a shape that compiled before. It is not caused
+by the macro conversion: it dates from 3bf7c586f, the commit that first
+introduced `testBodyIMPL`:nim:, and it is present in every revision since. It
+is recorded here rather than fixed because the fix is not local -- the hash
+needs a routine -- and because the shape is rare. Anyone relying on it has to
+lift the assignment out of the test body.
+
+### Not intended: an extra stack frame
+
+For the same reason, the traceback of an exception escaping a test body carries
+one frame more than upstream's:
+
+    - t.nim(5) t
+    + t.nim(4) t
+    + t.nim(5) testBodyIMPL
+
+Also from 3bf7c586f. The macro conversion improved the outer frame -- it named
+a line inside `unittest.nim` before, and names the user's `test`:nim: call now
+-- without removing the frame. The message and the `[FAILED]` line are
+unchanged; only the traceback grows.
+
+### Repeating the measurement
+
+Copy `lib` twice, replace `lib/pure/unittest.nim` in one copy with
+`git show 62751cacf:lib/pure/unittest.nim`, and compile each fixture against
+both with the same `bin/nim`, comparing all three of stdout, stderr and exit
+status. Verify first that the replaced file still matches the upstream commit
+it is supposed to be, since a later merge from upstream will move that baseline:
+
+    git show cc4c7377b:lib/pure/unittest.nim | cmp - <copy>/pure/unittest.nim
+
+### How the divergence splits
+
+Everything the two sections above describe arrived together, but it does not
+have to travel together, and a change that treats it as one lump is harder to
+review than it needs to be. Measured at e06a98881 against 62751cacf, the whole
+divergence is 23 files, +2748/-204, and it separates into four parts that share
+no code:
+
+| part | size | touches |
+| ---- | ---- | ------- |
+| `InstantiationPath` and its two consumers | 10 files, +505/-21 | `system`, `macros`, `assertions`, `unittest`, 3 compiler files |
+| the `symBodyDigest` hygiene-counter fix | 3 files, +420/-13 | `sighashes` only |
+| the `unittest` runner protocol | 8 files, +1660/-63 | `unittest` only |
+| this fork's CI wiring | 4 files, +188/-132 | `.github` only |
+
+The first two stand alone. `InstantiationPath` is a language feature -- a call
+site asking for what `--filenames:canonical` produces -- and the compiler side
+of it is 29 added lines across `semmagic`, `vm` and `vmgen`, reusing the
+existing `foCanonical` rendering rather than adding one. It carries a visible
+behaviour change with it, since `assert`'s message under
+`--excessiveStackTrace`:option: and `check`'s message move from an absolute
+path to a canonical one; that is the part that needs agreement, not the
+mechanism. The hygiene-counter fix touches one compiler file and changes no
+interface at all, but it does change the value of `macros.symBodyHash`:nim: for
+any body containing a hygienic template local, which is the kind of change that
+has to be announced rather than slipped in.
+
+The protocol is the part that is genuinely a proposal rather than a fix: it
+adds a command line surface and a JSON schema to a standard library module, and
+it carries the two unintended differences recorded above. The CI wiring is
+fork-only by construction.
+
+The parts are also unevenly documented. `changelog.md` describes
+`InstantiationPath` and the canonical rendering and nothing else -- not the
+protocol, not the `test`:nim: macro and its five options, not the
+`skip(reason)`:nim: signature change, not the `symBodyHash`:nim: values moving.
+All four are user-visible.
+
+
 Runtimes
 ========
 
