@@ -119,6 +119,38 @@
 ## When the `NIMTEST_RESULT_FILE` environment variable names a file, `--run`
 ## writes the status, duration, checkpoints and exception of the test to it.
 ##
+## What lands on standard output
+## -----------------------------
+##
+## In the three modes whose document goes to standard output — `--list`,
+## `--list-json` and `--catalog -` — the document is the ONLY thing there. The
+## program's own output, whether from a `suite` body, from a C library writing
+## to `stdout` directly, or from a child process that inherits the descriptor,
+## is redirected to standard error for the duration of the run.
+##
+## This is not tidiness. A `suite` body executes when the suite is declared,
+## which is long before the document is written, so without the redirection an
+## `echo` in one would be interleaved with the document on the same descriptor.
+## For `--list` that is unrecoverable rather than merely untidy: a write with no
+## trailing newline does not add a spurious line, it prefixes itself to a real
+## test name, and no consumer can tell the result from a genuine name.
+##
+## Nothing is discarded — the author's output still appears on standard error —
+## and nothing is added to standard output. A consumer that merges the two
+## streams itself (`prog --list >file 2>&1`) opts back into the ambiguity.
+##
+## `--catalog FILE` and `--run` are untouched, since neither writes a document
+## to standard output; under `--run`, standard output belongs to the test.
+##
+## Backends
+## --------
+##
+## The protocol needs the argument vector, so it exists only on backends that
+## have one. On the JavaScript backend `unittest` cannot read command line
+## arguments at all: every flag above is ignored there and a test binary always
+## behaves as if it had been run with none. A runner must not drive a
+## JavaScript-compiled test binary through these flags.
+##
 ## Catalog fields
 ## --------------
 ##
@@ -326,6 +358,120 @@ when declared(stdout):
   if existsEnv("NIMTEST_ABORT_ON_ERROR"):
     deprecateEnvVarHere()
     abortOnError = true
+
+# ---------------------------------------------------------------------------
+# Keeping the protocol document off the same channel as the program's own output
+# ---------------------------------------------------------------------------
+#
+# `--list`, `--list-json` and `--catalog -` put a machine-readable document on
+# standard output, but they also RUN the module: a `suite` body executes when
+# the suite is declared, long before the document is written, and anything it
+# prints lands on the very same descriptor. A single `echo` in a suite body is
+# therefore enough to make the document unparseable, and a `write(stdout, ...)`
+# with no newline is worse than unparseable — it splices itself onto the front
+# of a real payload line:
+#
+#     $ prog --list
+#     debugging... suite::first case          # a case name, silently mangled
+#
+# No consumer can undo that, because nothing in the byte stream distinguishes
+# the noise from the name. The only component that knows a document-bearing
+# mode is active BEFORE user code runs, and that owns the descriptor, is this
+# module. So it takes the descriptor: at module initialization — which precedes
+# the body of every module that imports this one — the real standard output is
+# saved aside and the process's own file descriptor 1 is pointed at standard
+# error for the rest of the run. See `protocolClaimsStdout`.
+#
+# Consequences, all deliberate:
+#
+# * The document is written to the saved descriptor and is the ONLY thing on it,
+#   byte for byte identical to what a noise-free run produced before.
+# * The author's `echo` is not discarded — it is still printed, on standard
+#   error, where a human debugging a test can still read it.
+# * The redirection is done at the descriptor level rather than by reassigning
+#   `stdout`, so it also covers C code writing to `stdout` directly and child
+#   processes that inherit descriptor 1. That is the same hazard in its general
+#   form: a helper process's chatter can no longer reach a consumer's parser.
+# * `--catalog FILE` and `--run` are left alone; neither puts a document on
+#   standard output, and `--run` is expected to show the test's own output.
+#
+# A stream a consumer merges by hand (`prog --list >f 2>&1`) is outside what
+# this can fix, and always was.
+
+when declared(stdout):
+  when defined(windows):
+    proc protocolDupFd(fd: cint): cint {.importc: "_dup", header: "<io.h>".}
+    proc protocolDup2Fd(oldFd, newFd: cint): cint {.
+      importc: "_dup2", header: "<io.h>".}
+    proc protocolCloseFd(fd: cint): cint {.importc: "_close", header: "<io.h>".}
+  else:
+    proc protocolDupFd(fd: cint): cint {.importc: "dup", header: "<unistd.h>".}
+    proc protocolDup2Fd(oldFd, newFd: cint): cint {.
+      importc: "dup2", header: "<unistd.h>".}
+    proc protocolCloseFd(fd: cint): cint {.
+      importc: "close", header: "<unistd.h>".}
+
+  var protocolStdout: File
+    ## The program's real standard output, held aside for the document while
+    ## descriptor 1 is pointed at standard error.
+  var protocolStdoutRedirected = false
+    ## Deliberately NOT a `threadvar`: the redirection is a property of the
+    ## process, done once by the thread that initializes this module, and every
+    ## other thread has to see it.
+
+  proc protocolRedirectStdout() =
+    ## Point descriptor 1 at standard error and keep the original for the
+    ## document. A failure at any step leaves the process exactly as it was and
+    ## the protocol falls back to writing on the shared descriptor, which is no
+    ## worse than the behaviour this replaces.
+    if protocolStdoutRedirected:
+      return
+    let outFd = cint(getFileHandle(stdout))
+    let errFd = cint(getFileHandle(stderr))
+    flushFile(stdout)
+    let saved = protocolDupFd(outFd)
+    if saved < 0:
+      return
+    if saved == errFd:
+      # `dup` returns the lowest free descriptor, so getting standard error's
+      # number back means standard error was closed. Redirecting into it would
+      # then point the program's output at the descriptor now holding the
+      # document — the very confusion being fixed, with the two streams
+      # separately buffered on top. There is nowhere to move the output to, so
+      # nothing moves.
+      discard protocolCloseFd(saved)
+      return
+    var restored: File
+    if not open(restored, FileHandle(saved), fmWrite):
+      discard protocolCloseFd(saved)
+      return
+    if protocolDup2Fd(errFd, outFd) < 0:
+      close(restored)
+      return
+    protocolStdout = restored
+    protocolStdoutRedirected = true
+
+  proc protocolEcho(line: string) =
+    ## `echo`, except that once the redirection is in place it addresses the
+    ## saved descriptor. Same bytes, same order, same per-line flush.
+    if protocolStdoutRedirected:
+      protocolStdout.write(line)
+      protocolStdout.write("\n")
+      flushFile(protocolStdout)
+    else:
+      echo line
+
+  proc protocolFlushStdout() =
+    if protocolStdoutRedirected:
+      flushFile(protocolStdout)
+
+else:
+  # A backend without `stdout` has no protocol either: the argument vector is
+  # unreachable there, so no mode but `pmDefault` can ever be selected. See the
+  # `Backends` section of this module's documentation.
+  proc protocolRedirectStdout() = discard
+  proc protocolEcho(line: string) = echo line
+  proc protocolFlushStdout() = discard
 
 method suiteStarted*(formatter: OutputFormatter, suiteName: string) {.base, gcsafe.} =
   discard
@@ -721,16 +867,16 @@ proc writeMissingProtocolResult() =
 proc finishProtocol() =
   case protocolMode
   of pmListJson:
-    echo buildListJson()
+    protocolEcho buildListJson()
   of pmCatalog:
     let catalog = buildCatalogJson()
     if protocolCatalogPath == "-":
-      echo catalog
+      protocolEcho catalog
     elif protocolCatalogPath.len > 0:
       when declared(writeFile):
         writeFile(protocolCatalogPath, catalog)
     else:
-      echo "unittest: --catalog requires a file path"
+      protocolEcho "unittest: --catalog requires a file path"
       when declared(setProgramResult):
         setProgramResult 1
   of pmRun:
@@ -740,13 +886,83 @@ proc finishProtocol() =
         setProgramResult 1
   of pmError:
     if protocolParseError.len > 0:
-      echo protocolParseError
+      protocolEcho protocolParseError
     when declared(setProgramResult):
       setProgramResult 1
   else:
     discard
+  protocolFlushStdout()
+
+proc protocolClaimsStdout(): bool =
+  ## Whether the command line selects a mode whose document is written to
+  ## standard output, decided WITHOUT touching any protocol state.
+  ##
+  ## This is the question `protocolRedirectStdout` has to answer at module
+  ## initialization, before the importing module's body — and therefore before
+  ## any `suite` body — has run. `parseProtocolArgs` cannot answer it there,
+  ## for two reasons that both come down to it running too early:
+  ##
+  ## * `disableParamFiltering` is a runtime call the user makes from their own
+  ##   module body, so a parse that ran before that body would decide the
+  ##   meaning of the positional arguments before being told.
+  ## * `macros.symBodyHash` reaches `parseProtocolArgs` from every test body
+  ##   that uses `check`, by way of `fail` -> `ensureInitialized`. Editing it at
+  ##   all would change the `bodyHash` this module reports for every such test
+  ##   in every program — a full re-run for every consumer that uses the hash to
+  ##   skip unchanged tests, in exchange for nothing they asked for.
+  ##
+  ## So the two stay separate, and this one is deliberately the smaller: it
+  ## reads the argument vector and returns a `bool`. It mirrors the flag
+  ## spellings and the last-flag-wins precedence of `parseProtocolArgs` below,
+  ## and a new document-bearing flag has to be added in both places. Missing it
+  ## here costs the new flag the protection and nothing else.
+  when declared(paramCount):
+    var i = 1
+    while i <= paramCount():
+      let arg = paramStr(i)
+      if arg == "--list" or arg == "--list-json":
+        result = true
+      elif arg == "--run":
+        # A trailing `--run` is a usage error, which prints a diagnostic rather
+        # than a document; either way standard output is not claimed.
+        result = false
+        inc i
+      elif arg.startsWith("--run="):
+        result = false
+      elif arg == "--catalog":
+        if i == paramCount():
+          result = false
+        else:
+          inc i
+          result = paramStr(i) == "-"
+      elif arg.startsWith("--catalog="):
+        result = arg.substr("--catalog=".len) == "-"
+      inc i
+
+proc initProtocolStdout() =
+  ## Claim standard output for the document before the importing module's body
+  ## runs. This is the earliest moment this module gets control, and it precedes
+  ## every `suite` declaration in every module that imports it.
+  ##
+  ## It does not precede the initialization of a module imported BEFORE
+  ## `unittest`; such a module's own start-up output still reaches standard
+  ## output. That window is far smaller than a suite body and closing it
+  ## entirely would need help from the compiler.
+  when nimvm:
+    # A module used at compile time initializes inside the VM, which has no
+    # argument vector and no file descriptors.
+    discard
+  else:
+    if protocolClaimsStdout():
+      protocolRedirectStdout()
+
+initProtocolStdout()
 
 proc parseProtocolArgs() {.gcsafe.} =
+  # Whether the flags parsed here put their document on standard output is
+  # decided a second time, and earlier, by `protocolClaimsStdout` above; see
+  # there for why the two are not shared. Adding a document-bearing flag here
+  # means adding it there too.
   if protocolInitialized:
     return
   protocolInitialized = true
@@ -884,7 +1100,7 @@ proc registerProtocolTest(suiteName, testName, file: string;
   let name = protocolFullName(suiteName, testName)
   case protocolMode
   of pmList:
-    echo name
+    protocolEcho name
   of pmListJson, pmCatalog:
     protocolTests.add TestMetadata(
       suiteName: suiteName,
