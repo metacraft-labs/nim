@@ -1,0 +1,91 @@
+# Quarantined stdlib tests — Linux.
+#
+# Read by `testament --skipFrom:` from `.github/workflows/ci_stdlib.yml`.
+# Format: one entry per line, exactly as testament names a test —
+#
+#     <path-with-forward-slashes> <target> [options]
+#
+# e.g. `tests/stdlib/tfoo.nim c` or `tests/stdlib/tfoo.nim c --mm:refc`.
+# The name must match `testName()` in testament/testament.nim; a typo does
+# not error, it silently fails to match and the test runs anyway.
+#
+# TO CHECK AN ENTRY, USE `pat` (or `cat`), NEVER `r`:
+#
+#     testament --skipFrom:testament/quarantine/stdlib-linux.txt pat "tests/stdlib/tfoo.nim"
+#
+# `testament r` is the ONE action that never calls `loadSkipFrom` — `all`,
+# `cat`, `pcat` and `pat` all do, `r` does not. So `testament r --skipFrom:...`
+# accepts the flag, ignores the list, and runs the test anyway. Verifying an
+# entry that way makes a correct entry look broken, which is how this comment
+# came to exist. A correct entry reports `SKIP: <name>` and exits 0.
+#
+# WHY THIS FILE EXISTS, AND WHY IT IS NOT A NARROWED GLOB
+#
+# The stdlib category had no CI coverage at all until the workflow that reads
+# this file. Establishing that coverage means confronting whatever is already
+# failing. There were two ways to get a green job on day one:
+#
+#   1. Select only the tests that currently pass.
+#   2. Run the whole category and name each pre-existing failure here.
+#
+# (1) produces the same green tick with no record of what it stopped covering,
+# and re-creates in miniature the exact problem the workflow exists to fix — a
+# check that reports accurately about the wrong thing. (2) makes the debt
+# explicit: every line below is a test someone can fix and delete, the list
+# shows up in a diff when it grows, and nothing is suppressed silently.
+#
+# So: adding a line here is a deliberate, reviewable act, and it must carry a
+# reason. A line without a reason above it should be treated as a bug in this
+# file.
+#
+# Entries are quarantined, not disabled: testament counts them as `skipped`,
+# they are still listed in the run, and they cannot mask a regression in any
+# other test.
+#
+# ---------------------------------------------------------------------------
+# Entries
+# ---------------------------------------------------------------------------
+#
+# Baseline: a full `testament cat stdlib` run on `codetracer` @ 0aceda824 gave
+# 525 total / 514 passed / 7 skipped / 4 failed. The 4 failures are the two
+# tests below, each on `--mm:refc` and `--mm:orc`. Both were then re-run
+# INDIVIDUALLY on an idle host to establish that they fail on their own rather
+# than as a side effect of the parallel run, and both did.
+
+# tos.nim:641 asserts that with `TMPDIR` deleted, `getTempDir()` falls back to
+# "/tmp/". The flake dev shell — which this job runs inside, via `dev-exec` —
+# sets ALL FOUR temp variables to a per-session directory:
+#
+#     TMPDIR=TMP=TEMP=TEMPDIR=/tmp/nix-shell.XXXXXX
+#
+# and `getTempDir()` consults TMPDIR, TEMP, TMP, TEMPDIR in that order. The
+# test deletes only TMPDIR, so TEMP still answers and the assertion sees the
+# nix-shell path instead of "/tmp/".
+#
+# This is a test that assumes an unmanaged environment, not a defect in this
+# fork: upstream CI runs it without a nix shell, where the fallback holds. It
+# would fail in this job for the same reason on every run, deterministically.
+#
+# To fix rather than skip: have the test clear TEMP/TMP/TEMPDIR alongside
+# TMPDIR for the duration of that assertion, and restore them after.
+tests/stdlib/tos.nim c --mm:refc
+tests/stdlib/tos.nim c --mm:orc
+
+# tssl.nim fails in its threaded client/server handshake:
+#
+#     tssl.nim(73) main -> net.nim(1763) send -> net.nim(567) raiseSSLError
+#     Error: unhandled exception: error:80000020:system library::Broken pipe [SslError]
+#
+# Reproduced in isolation on an idle host under both memory managers, so this
+# is NOT the parallel-load flakiness it initially resembled — the first
+# observation came from a run sharing a host at load average ~130, which is
+# exactly the condition that makes a peer close early, so it was re-checked
+# before being written down here.
+#
+# Root cause NOT diagnosed. The dev shell provides OpenSSL 3.6.1; the test is
+# disabled upstream on the BSDs (refs nim-lang/Nim#15713) but is expected to
+# pass on Linux. Whether this is an OpenSSL 3.6 behaviour change, a race in the
+# test's own thread shutdown, or something in this fork is unestablished, and
+# guessing in this file would be worse than saying so.
+tests/stdlib/tssl.nim c --mm:refc
+tests/stdlib/tssl.nim c --mm:orc
