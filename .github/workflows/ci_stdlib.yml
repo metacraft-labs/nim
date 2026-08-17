@@ -1,0 +1,136 @@
+# Runs the `stdlib` testament category — the tests under `tests/stdlib`.
+#
+# Why this exists. This fork's principal modifications are to the standard
+# library, `lib/pure/unittest.nim` above all: it carries the test-runner
+# protocol, the `symBodyHash`-derived `bodyHash`, the per-case result documents
+# and the stdout-claiming logic. Until this workflow, NO CI check ran the tests
+# that cover any of it.
+#
+# The absence was easy to miss rather than obvious, which is the part worth
+# recording. `Packages CI` sets `NIM_TEST_PACKAGES: "1"`, and that variable
+# routes `koch runCI` down the `testament pcat nimble-packages` branch — third
+# party packages — instead of the `testament all` branch that includes this
+# category. A reader who saw a job named after the test framework, matrixed
+# into batches, going green on a stdlib change had every reason to believe the
+# stdlib tests had run. They had not. A check that reports accurately about the
+# wrong thing is worse than a missing one, because it is trusted.
+#
+# Scope. Linux only for now. The category is platform-sensitive in places and a
+# macOS job would need its own quarantine list; adding one is worth doing, and
+# is deliberately not bundled into the change that establishes the coverage.
+#
+# Path filter. This runs when anything that can change a stdlib test outcome
+# changes — the library, the tests, the compiler, testament itself, koch, or
+# this file. It is NOT an always-on job, so "no stdlib check on this PR" means
+# the PR touched none of those, not that the category passed.
+name: Stdlib Tests CI
+
+on:
+  push:
+    paths:
+      - 'lib/**.nim'
+      - 'tests/stdlib/**'
+      - 'compiler/**.nim'
+      - 'testament/**.nim'
+      - 'testament/quarantine/**'
+      - 'koch.nim'
+      - '.github/workflows/ci_stdlib.yml'
+
+  pull_request:
+    paths:
+      - 'lib/**.nim'
+      - 'tests/stdlib/**'
+      - 'compiler/**.nim'
+      - 'testament/**.nim'
+      - 'testament/quarantine/**'
+      - 'koch.nim'
+      - '.github/workflows/ci_stdlib.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stdlib:
+    # Same toolchain provisioning as the docs and packages jobs: the repo flake
+    # dev shell via setup-dev-env, not apt/brew, because `./koch boot` links the
+    # CTFS trace-format writer and libzstd.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+            runner: eph-linux-x64
+
+    name: 'stdlib category (${{ matrix.target }})'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: 'Mint installation token for cross-repo sibling clones'
+        id: ci_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_TOKEN_PROVIDER_APP_ID }}
+          private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
+          owner: metacraft-labs
+
+      - name: 'Setup dev env (nix flavor)'
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@main
+        with:
+          env-flavor: nix
+          gh-token: ${{ steps.ci_token.outputs.token }}
+
+      # nim-results lives under github.com/arnetheduck, which clone-siblings
+      # (metacraft-labs org) cannot resolve. Mirrors the docs workflow.
+      - name: 'Clone nim-results sibling (arnetheduck upstream)'
+        shell: bash
+        env:
+          NIM_RESULTS_REV: b319652e98a198fa881ca70a76754c2dd6f09804
+        run: |
+          set -euo pipefail
+          dest="$(cd "$GITHUB_WORKSPACE/.." && pwd)/nim-results"
+          rm -rf "$dest"
+          git clone --no-checkout https://github.com/arnetheduck/nim-results.git "$dest"
+          git -C "$dest" fetch --depth 1 origin "$NIM_RESULTS_REV"
+          git -C "$dest" checkout --detach FETCH_HEAD
+
+      # `--skipFrom` names each quarantined test individually and is read from a
+      # file that carries the reason next to the name. Narrowing the selection
+      # to whatever currently passes would have produced a green job with no
+      # record of what it stopped covering; a named list is a debt that can be
+      # paid down and that shows up in a diff when it grows.
+      #
+      # No `continue-on-error`, and nothing piped: testament exits non-zero when
+      # a test fails and that exit code is the result of this job.
+      - name: 'Run the stdlib testament category (csources bootstrap + koch)'
+        shell: bash
+        run: |
+          dev-exec bash -euo pipefail -c '
+            . ci/funs.sh
+            nimCiSystemInfo
+            nimBuildCsourcesIfNeeded CC=gcc
+            export PATH="$PWD/bin:$PATH"
+            nim c koch
+            ./koch boot -d:release
+            nim c -r testament/testament \
+              --skipFrom:testament/quarantine/stdlib-linux.txt \
+              cat stdlib
+          '
+
+      # Testament prints a one-line summary on failure; this prints the failing
+      # cases with their expected/given output, so a red job is diagnosable from
+      # the log alone.
+      - name: 'Report failing tests'
+        if: failure()
+        shell: bash
+        run: |
+          dev-exec bash -euo pipefail -c '
+            export PATH="$PWD/bin:$PATH"
+            nim r tools/ci_testresults.nim
+          '
