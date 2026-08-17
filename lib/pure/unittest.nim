@@ -325,6 +325,26 @@ var
   protocolSkipReason {.threadvar.}: string
   protocolResultFile {.threadvar.}: string
 
+  runningTestStatus {.threadvar.}: ptr TestStatus
+    ## The status variable of the test currently executing on this thread, or
+    ## `nil` when no test is running here.
+    ##
+    ## `fail` normally reaches the enclosing test's status through the
+    ## `testStatusIMPL` symbol that `test` injects, which only resolves inside
+    ## the test body itself. A `check` in a helper `proc` — the ordinary way to
+    ## share assertions between cases — compiles outside that scope, so the
+    ## lookup fails and the failure had nowhere to go but the process exit
+    ## code. That is not a channel the per-case protocol can use: `test`
+    ## rewrites the exit code from the test's own status when it finishes, so
+    ## the failure was overwritten and the case reported `PASS` on both
+    ## channels at once. This pointer is the scope-independent route to the
+    ## same variable.
+    ##
+    ## Thread-local on purpose: it addresses a stack variable owned by the
+    ## thread running the test, so a helper on ANOTHER thread must not reach
+    ## it. There it stays `nil` and `fail` keeps the exit-code behaviour it has
+    ## always had.
+
 const
   outputLevelDefault = PRINT_ALL
   nimUnittestOutputLevel {.strdefine.} = $outputLevelDefault
@@ -1260,7 +1280,7 @@ template testImpl(name: untyped; xfail: string; tags: openArray[string];
   bind shouldRun, checkpoints, formatters, ensureInitialized, testEnded,
     exceptionTypeName, setProgramResult, protocolBodyHash, registerProtocolTest,
     resetProtocolTestState, ensureProtocolExitProc, shouldRunProtocolTest,
-    protocolMode, pmRun, protocolDefaultGroup
+    protocolMode, pmRun, protocolDefaultGroup, runningTestStatus
 
   ensureInitialized()
   ensureProtocolExitProc()
@@ -1307,6 +1327,13 @@ template testImpl(name: untyped; xfail: string; tags: openArray[string];
       checkpoints = @[]
       resetProtocolTestState()
       var testStatusIMPL {.inject.} = TestStatus.OK
+      # Publish the status variable for the duration of the body so a `fail`
+      # compiled outside this scope — every `check` in a helper `proc` — can
+      # still reach it. Saved and restored rather than nilled: the value is
+      # whatever was published when this test started, so a test reached from
+      # inside another test's body cannot strand the outer one.
+      let enclosingTestStatusIMPL = runningTestStatus
+      runningTestStatus = addr testStatusIMPL
 
       for formatter in formatters:
         formatter.testStarted(name)
@@ -1326,6 +1353,9 @@ template testImpl(name: untyped; xfail: string; tags: openArray[string];
         fail()
 
       finally:
+        # Unpublish before anything else in the teardown path: a `fail` from a
+        # formatter or from `testEnded` belongs to no test.
+        runningTestStatus = enclosingTestStatusIMPL
         if testStatusIMPL == TestStatus.FAILED:
           setProgramResult 1
         elif protocolMode == pmRun and testStatusIMPL == TestStatus.SKIPPED:
@@ -1488,7 +1518,18 @@ template fail* =
     else:
       testStatusIMPL = TestStatus.FAILED
   else:
-    setProgramResult 1
+    # No `testStatusIMPL` in scope: this `fail` is compiled outside a test
+    # body, which is where every `check` in a helper `proc` ends up. If a test
+    # is running on this thread, that is still the test that failed, and
+    # `runningTestStatus` reaches its status without needing the symbol.
+    #
+    # The `setProgramResult` fallback is kept for the case it was actually
+    # written for — a `fail` with no test running on this thread at all — and
+    # is unchanged there.
+    if runningTestStatus != nil:
+      runningTestStatus[] = TestStatus.FAILED
+    else:
+      setProgramResult 1
 
   ensureInitialized()
 
