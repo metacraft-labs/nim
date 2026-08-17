@@ -473,6 +473,41 @@ Standard library modules render without the `.nim` extension (`std/tables`),
 package files render with it (`tests/a/t.nim`). That asymmetry comes from
 `canonicalImportAux`:nim: and is shared with `--filenames:canonical`.
 
+### What "stable" means, and where each half is pinned
+
+"Stable" is not one property. It is four things a body hash must ignore and
+three it must not, and the two halves constrain each other: every "must ignore"
+is trivially satisfiable by a hash that has stopped looking, so each is only
+worth anything next to the "must not" that rules that out. The tests are
+written in those pairs.
+
+| a body hash must **ignore**                       | pinned by |
+| ------------------------------------------------- | --------- |
+| where the package is checked out                   | `tunittest_body_hash_paths`, `tbody_hash_instantiation_path` |
+| where the standard library is installed            | `tunittest_body_hash_identity` |
+| how many template expansions precede it in its module | `tunittest_body_hash_position` |
+| the test's own name, and its suite's name          | `tunittest_body_hash_identity` |
+
+| a body hash must **not ignore**                    | pinned by |
+| ------------------------------------------------- | --------- |
+| the body at all                                     | `tunittest_body_hash_identity`, `tunittest_body_hash_position` |
+| the bodies of the routines it calls, transitively    | `tunittest_protocol_body_hash` |
+| the names of the author's own locals                | `tunittest_body_hash_position` |
+| which directory a file is in, when two share a basename | `tunittest_body_hash_paths`, `tbody_hash_instantiation_path` |
+
+The last pair is the one that is easy to lose: a rendering that drops the
+directory satisfies every "must ignore" row above and is therefore accepted by
+any stability-only test, while making two same-named test files
+indistinguishable. `tbody_hash_instantiation_path` runs all three
+`InstantiationPath`:nim: modes against the same fixture for that reason, so the
+file states what each mode costs rather than only asserting the one in use.
+
+**Line numbers are deliberately not in the "must ignore" list.** A body
+containing a planted location rehashes when the location moves, because the
+location is a literal in the body; see the table above. A consumer diffing
+catalogs should expect an insertion to invalidate everything below it in the
+same file.
+
 
 What `unittest`'s runner protocol changed for an existing suite
 ---------------------------------------------------------------
