@@ -1332,7 +1332,11 @@ template testImpl(name: untyped; xfail: string; tags: openArray[string];
       # still reach it. Saved and restored rather than nilled: the value is
       # whatever was published when this test started, so a test reached from
       # inside another test's body cannot strand the outer one.
-      let enclosingTestStatusIMPL = runningTestStatus
+      # Keep declaration and assignment separate. The hot-code-reloading
+      # transform lifts initialized locals behind a guard; on the JS backend
+      # that guard can absorb the following try and leave its finally orphaned.
+      var enclosingTestStatusIMPL: ptr TestStatus
+      enclosingTestStatusIMPL = runningTestStatus
       runningTestStatus = addr testStatusIMPL
 
       for formatter in formatters:
