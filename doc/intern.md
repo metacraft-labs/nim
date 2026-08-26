@@ -618,10 +618,73 @@ return type could assign to that procedure's `result`:nim:. It now cannot:
 
 This is a compile-time break of a shape that compiled before. It is not caused
 by the macro conversion: it dates from 3bf7c586f, the commit that first
-introduced `testBodyIMPL`:nim:, and it is present in every revision since. It
-is recorded here rather than fixed because the fix is not local -- the hash
-needs a routine -- and because the shape is rare. Anyone relying on it has to
-lift the assignment out of the test body.
+introduced `testBodyIMPL`:nim:, and it is present in every revision since --
+re-checked at 0322915eb by the A/B above, where the same fixture prints
+`[OK] ...` and `f() = 7` against the upstream arm and fails to compile against
+this one. Anyone relying on the shape has to lift the assignment out of the
+test body.
+
+The mechanism is `illegalCapture`:nim: in `compiler/lambdalifting.nim`, which
+is `classifyViewType(s.typ) != noView or s.kind == skResult`. `result`:nim: is
+an `skResult`:nim: symbol and may never be captured by a nested routine, for
+the usual reason: depending on the return type and on NRVO it is either a local
+slot or a hidden pointer into the caller's storage, and a closure holding it
+can outlive the call. Any construction that puts the body inside a routine of
+its own runs into that rule, and the body has to be inside a routine of its own
+because `macros.symBodyHash`:nim: takes a symbol -- passing a `template`:nim:
+where a routine symbol is expected expands it instead, so hashing a template
+holding the body and leaving the body inline is not available:
+
+    Error: symBodyHash() requires a symbol. 'discard helper() + 1' is of kind
+    'nkDiscardStmt'
+
+#### Why it stays recorded rather than fixed
+
+There is exactly one mechanism that makes the shape compile without moving the
+body out of a routine: take the address of the enclosing `result`:nim: in the
+scope that encloses `testBodyIMPL`:nim: and alias the name over it, three lines
+in `testImpl`:nim: guarded by `when declared(result)`:nim:. It was written and
+measured, and it does restore the behaviour -- the fixture above and nineteen
+more, covering module scope, `proc`:nim: without a return type, generic
+procedures, iterators, converters, closures, tests reached through a
+`template`:nim:, nested tests, a body that declares its own `result`:nim:,
+`setup`/`teardown`, and `seq`, object, tuple and `var`:nim: results, all
+produce output byte-identical to the upstream arm on C with `--mm:refc`, C with
+`--mm:orc` and JavaScript, with identical compiler diagnostics on nineteen of
+the twenty.
+
+It is still the wrong change, because it does not satisfy the rule above, it
+routes around it. `result`:nim: inside a test body stops being an
+`skResult`:nim: symbol and becomes a dereference of an unchecked `ptr`:nim:,
+and the compiler can no longer see the capture it is supposed to reject. This
+program is refused by upstream and by this fork, with the error quoted above,
+and is accepted by the aliased build, where it writes `12345` into the result
+slot of a call that has already returned:
+
+    var escaped: proc()
+    proc leaks(): int =
+      test "closure captures result":
+        escaped = proc() =
+          result = 12345
+    discard leaks()
+    escaped()
+
+Restricting the alias to bodies that contain no nested routine does not close
+this: the `test`:nim: macro sees the body untyped, so a nested routine arriving
+from a `template`:nim: expanded inside the body is not visible to any check it
+could run. The twentieth fixture is the second cost: taking the address defeats
+the initialisation analysis, so a `proc (): var int`:nim: containing a test
+gains a `ProveInit`:nim: warning that neither arm emits today, on all three
+rows.
+
+So the two candidates are: a library change that trades a compile-time error
+for a silent memory-safety hole in a standard library module, or a compiler
+change that teaches `lambdalifting` an escape analysis strong enough to admit a
+nested routine that provably does not outlive its enclosing call -- a new
+analysis in the compiler, not a scoping decision in `unittest`. Neither is
+proportionate to the shape, which is rare and has a one-line workaround, so the
+difference stays recorded. Should the compiler ever grow that analysis for its
+own reasons, this becomes a two-line follow-up.
 
 ### Not intended: an extra stack frame
 
