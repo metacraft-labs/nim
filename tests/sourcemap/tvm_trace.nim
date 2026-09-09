@@ -83,12 +83,9 @@ proc main() =
   doAssert blockSize >= 64, "invalid block size: " & $blockSize
   doAssert maxRootEntries > 0, "zero max root entries"
 
-  # 4. Verify file entries exist and have expected names.
-  #    The CTFS container carries different internal-file layouts depending
-  #    on which writer the compiler links: the v3 single-stream layout (one
-  #    big `events.log` + sidecar `events.fmt` + JSON meta) or the v4
-  #    multi-stream layout (per-event-kind `.dat`/`.off` pairs + `meta.dat`).
-  #    Accept either.
+  # 4. Verify file entries exist and have expected names. The CTFS container
+  #    carries the multi-stream layout: per-event-kind `.dat`/`.off` pairs
+  #    plus the binary `meta.dat` metadata document.
   var fileNames: seq[string]
   var sizeByName: Table[string, uint64]
   for i in 0 ..< int(maxRootEntries):
@@ -107,23 +104,14 @@ proc main() =
   doAssert fileNames.len >= 3, "expected at least 3 internal files, got " &
     $fileNames.len & " (" & fileNames.join(", ") & ")"
 
-  if "events.log" in fileNames:
-    # v3 single-stream layout
-    doAssert "meta.json" in fileNames,
-      "v3 layout missing meta.json: " & fileNames.join(", ")
-    doAssert "paths.json" in fileNames,
-      "v3 layout missing paths.json: " & fileNames.join(", ")
-    doAssert sizeByName.getOrDefault("events.log", 0'u64) > 0,
-      "events.log is empty — no events emitted"
-  else:
-    # v4 multi-stream layout: require the core streams
-    for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat"]:
-      doAssert required in fileNames,
-        "v4 layout missing stream '" & required & "': " & fileNames.join(", ")
-    doAssert sizeByName.getOrDefault("steps.dat", 0'u64) > 0,
-      "steps.dat is empty — no Step events emitted"
-    doAssert sizeByName.getOrDefault("calls.dat", 0'u64) > 0,
-      "calls.dat is empty — no Call events emitted for add()"
+  # Require the core streams.
+  for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat"]:
+    doAssert required in fileNames,
+      "missing stream '" & required & "': " & fileNames.join(", ")
+  doAssert sizeByName.getOrDefault("steps.dat", 0'u64) > 0,
+    "steps.dat is empty — no Step events emitted"
+  doAssert sizeByName.getOrDefault("calls.dat", 0'u64) > 0,
+    "calls.dat is empty — no Call events emitted for add()"
 
   # 5. Verify trace file is non-trivial for a function call + echo
   doAssert data.len > 128, "trace file suspiciously small: " & $data.len

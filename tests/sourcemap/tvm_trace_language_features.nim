@@ -281,7 +281,7 @@ proc main() =
   let (blockSize, _, entries) = parseCtfsHeader(data)
   doAssert entries.len >= 3, "expected at least 3 internal files, got " & $entries.len
 
-  # Index entries by name; choose v3 or v4 verification path.
+  # Index entries by name and verify the multi-stream layout.
   var byName: Table[string, CtfsFileEntry]
   for entry in entries:
     byName[entry.name] = entry
@@ -290,79 +290,53 @@ proc main() =
                            "makePoint", "makeSeq", "divmod", "greet", "fib",
                            "safeDivide", "identity"]
 
-  if "events.log" in byName:
-    # v3 single-stream layout
-    for required in ["events.log", "meta.json", "paths.json"]:
-      doAssert required in byName,
-        "v3 layout missing '" & required & "': " & entries.mapIt(it.name).join(", ")
+  for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat",
+                   "values.dat", "varnames.dat"]:
+    doAssert required in byName,
+      "missing stream '" & required & "': " &
+      entries.mapIt(it.name).join(", ")
 
-    let metaContent = readFileContent(data, byName["meta.json"], blockSize)
-    doAssert metaContent.len > 0, "meta.json is empty"
-    doAssert "test_lang_features" in metaContent,
-      "meta.json should reference the program path 'test_lang_features'"
+  let metaContent  = readFileContent(data, byName["meta.dat"], blockSize)
+  let pathsContent = readFileContent(data, byName["paths.dat"], blockSize)
+  let funcsContent = readFileContent(data, byName["funcs.dat"], blockSize)
+  let stepsContent = readFileContent(data, byName["steps.dat"], blockSize)
+  let callsContent = readFileContent(data, byName["calls.dat"], blockSize)
+  let valuesContent = readFileContent(data, byName["values.dat"], blockSize)
 
-    let pathsContent = readFileContent(data, byName["paths.json"], blockSize)
-    doAssert pathsContent.len > 0, "paths.json is empty"
-    doAssert "test_lang_features" in pathsContent,
-      "paths.json should contain the script file path"
+  doAssert metaContent.len > 0, "meta.dat is empty"
+  doAssert "test_lang_features" in metaContent,
+    "meta.dat should reference the program path 'test_lang_features'"
 
-    # events.log carries the (zstd-compressed) split-binary stream.
-    # We can't decompress without linking zstd, so just check substantial size.
-    doAssert byName["events.log"].size > 1024,
-      "events.log too small for comprehensive script: " & $byName["events.log"].size & " bytes"
+  doAssert pathsContent.len > 0, "paths.dat is empty"
+  doAssert "test_lang_features" in pathsContent,
+    "paths.dat should contain the script file path"
 
-    echo "PASS: tvm_trace_language_features (v3 single-stream)"
-    echo "  events.log=" & $byName["events.log"].size & "B  meta.json=" & $metaContent.len &
-         "B  paths.json=" & $pathsContent.len & "B"
-  else:
-    # v4 multi-stream layout
-    for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat",
-                     "values.dat", "varnames.dat"]:
-      doAssert required in byName,
-        "v4 layout missing stream '" & required & "': " &
-        entries.mapIt(it.name).join(", ")
+  # TF-M4 made the builtin filter skip the Nim stdlib, so steps.dat now
+  # only contains events from the comprehensive user script — substantially
+  # fewer bytes than the pre-M4 unfiltered baseline. The threshold still
+  # rejects an effectively-empty stream (no user code stepped at all) while
+  # leaving room for the user-code subset's natural size.
+  doAssert stepsContent.len > 64,
+    "steps.dat too small for comprehensive script: " & $stepsContent.len & " bytes"
+  doAssert callsContent.len > 0, "calls.dat is empty — no Call events emitted"
+  doAssert valuesContent.len > 0, "values.dat is empty — no Value events emitted"
 
-    let metaContent  = readFileContent(data, byName["meta.dat"], blockSize)
-    let pathsContent = readFileContent(data, byName["paths.dat"], blockSize)
-    let funcsContent = readFileContent(data, byName["funcs.dat"], blockSize)
-    let stepsContent = readFileContent(data, byName["steps.dat"], blockSize)
-    let callsContent = readFileContent(data, byName["calls.dat"], blockSize)
-    let valuesContent = readFileContent(data, byName["values.dat"], blockSize)
+  # funcs.dat embeds function name records — verify intern hits.
+  var foundFunctions: seq[string] = @[]
+  for fname in expectedFunctions:
+    if findString(funcsContent, fname):
+      foundFunctions.add(fname)
 
-    doAssert metaContent.len > 0, "meta.dat is empty"
-    doAssert "test_lang_features" in metaContent,
-      "meta.dat should reference the program path 'test_lang_features'"
+  doAssert foundFunctions.len >= 5,
+    "expected at least 5 function names interned in funcs.dat, found " &
+    $foundFunctions.len & ": " & foundFunctions.join(", ") &
+    " (missing: " & expectedFunctions.filterIt(it notin foundFunctions).join(", ") & ")"
 
-    doAssert pathsContent.len > 0, "paths.dat is empty"
-    doAssert "test_lang_features" in pathsContent,
-      "paths.dat should contain the script file path"
-
-    # TF-M4 made the builtin filter skip the Nim stdlib, so steps.dat now
-    # only contains events from the comprehensive user script — substantially
-    # fewer bytes than the pre-M4 unfiltered baseline. The threshold still
-    # rejects an effectively-empty stream (no user code stepped at all) while
-    # leaving room for the user-code subset's natural size.
-    doAssert stepsContent.len > 64,
-      "steps.dat too small for comprehensive script: " & $stepsContent.len & " bytes"
-    doAssert callsContent.len > 0, "calls.dat is empty — no Call events emitted"
-    doAssert valuesContent.len > 0, "values.dat is empty — no Value events emitted"
-
-    # funcs.dat embeds function name records — verify intern hits.
-    var foundFunctions: seq[string] = @[]
-    for fname in expectedFunctions:
-      if findString(funcsContent, fname):
-        foundFunctions.add(fname)
-
-    doAssert foundFunctions.len >= 5,
-      "expected at least 5 function names interned in funcs.dat, found " &
-      $foundFunctions.len & ": " & foundFunctions.join(", ") &
-      " (missing: " & expectedFunctions.filterIt(it notin foundFunctions).join(", ") & ")"
-
-    echo "PASS: tvm_trace_language_features (v4 multi-stream)"
-    echo "  meta.dat=" & $metaContent.len & "B  paths.dat=" & $pathsContent.len & "B"
-    echo "  funcs.dat=" & $funcsContent.len & "B  steps.dat=" & $stepsContent.len & "B"
-    echo "  calls.dat=" & $callsContent.len & "B  values.dat=" & $valuesContent.len & "B"
-    echo "  Functions found in funcs.dat: " & foundFunctions.join(", ")
+  echo "PASS: tvm_trace_language_features (multi-stream)"
+  echo "  meta.dat=" & $metaContent.len & "B  paths.dat=" & $pathsContent.len & "B"
+  echo "  funcs.dat=" & $funcsContent.len & "B  steps.dat=" & $stepsContent.len & "B"
+  echo "  calls.dat=" & $callsContent.len & "B  values.dat=" & $valuesContent.len & "B"
+  echo "  Functions found in funcs.dat: " & foundFunctions.join(", ")
 
   removeDir(buildDir)
 

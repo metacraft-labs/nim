@@ -80,7 +80,7 @@ proc main() =
     "expected at least 2 Path events (main script + helper module), got: " &
     $pathEvents.len & " (" & pathEvents.join(", ") & ")"
 
-  # Also verify via the reader.paths field (populated from meta.dat or paths.json)
+  # Also verify via the reader.paths field (populated from meta.dat)
   doAssert reader.paths.len >= 2,
     "expected at least 2 paths in reader.paths, got: " &
     $reader.paths.len & " (" & reader.paths.join(", ") & ")"
