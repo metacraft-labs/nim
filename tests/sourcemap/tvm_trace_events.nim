@@ -6,11 +6,9 @@ discard """
 ## Verify that `nim e --trace` produces traces with correct CTFS structure
 ## and non-trivial stream content for a recursive factorial script.
 ##
-## Accepts either the v3 single-stream layout (`events.log` + `events.fmt` +
-## `meta.json` + `paths.json`) or the v4 multi-stream layout
-## (`steps.dat` + `calls.dat` + `funcs.dat` + `paths.dat` + `meta.dat` …).
-## The compiler chooses which writer to link; both should produce a trace
-## containing the factorial recursion.
+## The trace uses the multi-stream layout (`steps.dat` + `calls.dat` +
+## `funcs.dat` + `paths.dat` + `meta.dat` …) and should contain the
+## factorial recursion.
 
 import std/[os, osproc, assertions, strutils, sequtils, tables]
 
@@ -161,63 +159,37 @@ proc main() =
   let (blockSize, _, entries) = parseCtfsHeader(data)
   doAssert entries.len >= 3, "expected at least 3 internal files, got " & $entries.len
 
-  # 2. Index entries by name; choose v3 or v4 verification path.
+  # 2. Index entries by name and verify the multi-stream layout.
   var byName: Table[string, CtfsFileEntry]
   for entry in entries:
     byName[entry.name] = entry
 
-  if "events.log" in byName:
-    # v3 single-stream layout
-    doAssert "meta.json" in byName,
-      "v3 layout missing meta.json (found: " & entries.mapIt(it.name).join(", ") & ")"
-    doAssert "paths.json" in byName,
-      "v3 layout missing paths.json (found: " & entries.mapIt(it.name).join(", ") & ")"
+  for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat"]:
+    doAssert required in byName,
+      "missing stream '" & required & "': " &
+      entries.mapIt(it.name).join(", ")
 
-    # events.log substantial content for factorial recursion
-    doAssert byName["events.log"].size > 32,
-      "events.log too small for factorial trace: " & $byName["events.log"].size & " bytes"
+  doAssert byName["steps.dat"].size > 32,
+    "steps.dat too small for factorial trace: " & $byName["steps.dat"].size & " bytes"
+  doAssert byName["calls.dat"].size > 0,
+    "calls.dat is empty — no Call events emitted for factorial recursion"
 
-    # meta.json carries the program path
-    let metaContent = readFileContent(data, byName["meta.json"], blockSize)
-    doAssert metaContent.len > 0, "meta.json is empty"
-    doAssert "test_factorial" in metaContent,
-      "meta.json should reference the program path 'test_factorial'"
+  let metaContent = readFileContent(data, byName["meta.dat"], blockSize)
+  doAssert metaContent.len > 0, "meta.dat is empty"
+  doAssert "test_factorial" in metaContent,
+    "meta.dat should reference the program path 'test_factorial'"
 
-    # paths.json includes the script path
-    let pathsContent = readFileContent(data, byName["paths.json"], blockSize)
-    doAssert pathsContent.len > 0, "paths.json is empty"
-    doAssert "test_factorial" in pathsContent,
-      "paths.json should contain the script file path"
+  let pathsContent = readFileContent(data, byName["paths.dat"], blockSize)
+  doAssert pathsContent.len > 0, "paths.dat is empty"
+  doAssert "test_factorial" in pathsContent,
+    "paths.dat should contain the script file path"
 
-    echo "PASS: tvm_trace_events - v3 single-stream structural verification"
-  else:
-    # v4 multi-stream layout
-    for required in ["paths.dat", "funcs.dat", "steps.dat", "calls.dat", "meta.dat"]:
-      doAssert required in byName,
-        "v4 layout missing stream '" & required & "': " &
-        entries.mapIt(it.name).join(", ")
+  let funcsContent = readFileContent(data, byName["funcs.dat"], blockSize)
+  doAssert funcsContent.len > 0, "funcs.dat is empty"
+  doAssert "factorial" in funcsContent,
+    "funcs.dat should contain the 'factorial' function name"
 
-    doAssert byName["steps.dat"].size > 32,
-      "steps.dat too small for factorial trace: " & $byName["steps.dat"].size & " bytes"
-    doAssert byName["calls.dat"].size > 0,
-      "calls.dat is empty — no Call events emitted for factorial recursion"
-
-    let metaContent = readFileContent(data, byName["meta.dat"], blockSize)
-    doAssert metaContent.len > 0, "meta.dat is empty"
-    doAssert "test_factorial" in metaContent,
-      "meta.dat should reference the program path 'test_factorial'"
-
-    let pathsContent = readFileContent(data, byName["paths.dat"], blockSize)
-    doAssert pathsContent.len > 0, "paths.dat is empty"
-    doAssert "test_factorial" in pathsContent,
-      "paths.dat should contain the script file path"
-
-    let funcsContent = readFileContent(data, byName["funcs.dat"], blockSize)
-    doAssert funcsContent.len > 0, "funcs.dat is empty"
-    doAssert "factorial" in funcsContent,
-      "funcs.dat should contain the 'factorial' function name"
-
-    echo "PASS: tvm_trace_events - v4 multi-stream structural verification"
+  echo "PASS: tvm_trace_events - multi-stream structural verification"
 
   removeDir(buildDir)
 

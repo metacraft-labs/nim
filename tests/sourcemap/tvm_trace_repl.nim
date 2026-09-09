@@ -9,9 +9,9 @@ discard """
 ## Verifies:
 ## - Exit code is 0
 ## - Trace file exists with valid CTFS magic
-## - events.log has data (non-zero size in file entry)
+## - The first stream entry has data (non-zero size in file entry)
 ## - The REPL produced expected stdout output ("3" from echo x)
-## - meta.json and events.fmt are present
+## - A per-format event-stream marker is present in the CTFS entries
 
 import std/[os, osproc, streams, assertions, strutils]
 
