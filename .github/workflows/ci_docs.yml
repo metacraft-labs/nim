@@ -85,7 +85,7 @@ jobs:
       # (`nix develop --command`). The flake shellHook symlinks the
       # cloned siblings into dist/ for `./koch boot`.
       - name: 'Setup dev env (nix flavor)'
-        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@main
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@dev
         with:
           env-flavor: nix
           gh-token: ${{ steps.ci_token.outputs.token }}
