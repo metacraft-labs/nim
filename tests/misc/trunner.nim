@@ -10,8 +10,9 @@ discard """
 ## into several independent tests while retaining the common test helpers.
 
 import std/[strformat,os,osproc,unittest,compilesettings]
-from std/sequtils import toSeq,mapIt
-from std/algorithm import sorted
+from std/sequtils import toSeq,mapIt,filterIt
+from std/algorithm import sorted, sort
+from std/times import Time, getTime, initDuration, `-`, `+`, `<`, `==`, `$`
 import stdtest/[specialpaths, unittest_light]
 from std/private/globs import nativeToUnixPath
 from strutils import startsWith, strip, removePrefix
@@ -393,6 +394,70 @@ compiling: v3
 running: v3
 running: v2
 """, ret
+
+  block: # editing a C header must invalidate the cached object file
+    #[
+    A cached `.o` is only sound if its identity covers everything the C
+    compiler read to produce it. It used to cover the generated `.c`, the
+    target and the compile command, but not the transitive header closure, so
+    editing a header left the stale object in place and the program that ran
+    did not correspond to the sources on disk. The compiler now asks the C
+    compiler to record that closure (`-MD -MF`) and consults it.
+    ]#
+    const nimcache2 = buildDir / "D20260918T104500"
+    let incDir = buildDir / "D20260918T104500inc"
+    removeDir nimcache2
+    removeDir incDir
+    createDir incDir
+    let header = incDir / "mheaderdep.h"
+    let file = "misc/mheaderdep.nim"
+    let opt = fmt"-r --nimcache:{nimcache2.quoteShell} --cincludes:{incDir.quoteShell}"
+
+    proc writeHeader(value: int, mtime: Time) =
+      writeFile(header, fmt"#define MHEADERDEP_VALUE {value}" & "\n")
+      # The timestamps are set explicitly rather than left to wall-clock timing,
+      # so that a filesystem with 1s timestamp granularity cannot make this
+      # test flaky in either direction.
+      setLastModificationTime(header, mtime)
+
+    proc objectStamps(): seq[(string, Time)] =
+      result = @[]
+      for path in walkDirRec(nimcache2):
+        if path.splitFile.ext in [".o", ".obj"]:
+          result.add (path, getLastModificationTime(path))
+      result.sort
+
+    # Safely older than any object that will be built from it.
+    writeHeader(111, getTime() - initDuration(minutes = 1))
+    doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 111"
+    let afterFirst = objectStamps()
+    doAssert afterFirst.len > 0
+
+    # A rebuild with nothing changed must still reuse every object; the fix
+    # must not degenerate into "always recompile".
+    doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 111"
+    doAssert objectStamps() == afterFirst, $(objectStamps(), afterFirst)
+
+    # Only now change the header. Nothing else — no `.nim` file is touched.
+    # Stamp it just after the newest object, i.e. unambiguously "edited since
+    # the object was built", while still in the past so that the object the
+    # next build produces is in turn newer than the header.
+    var newestObj = afterFirst[0][1]
+    for (_, t) in afterFirst:
+      if t > newestObj: newestObj = t
+    writeHeader(222, newestObj + initDuration(seconds = 1))
+    let depFiles = toSeq(walkDirRec(nimcache2)).filterIt(it.splitFile.ext == ".d")
+    if depFiles.len > 0:
+      # This C compiler records its header closure, so the stale object must go.
+      doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 222"
+      # ... and the following rebuild must be a no-op again.
+      let afterHeaderEdit = objectStamps()
+      doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 222"
+      doAssert objectStamps() == afterHeaderEdit, $(objectStamps(), afterHeaderEdit)
+    else:
+      # A toolchain without dependency-file support (e.g. MSVC) keeps the
+      # header-blind behaviour it always had; do not assert the fixed outcome.
+      discard runNimCmdChk(file, fmt"{opt} -f")
 
   block: # nim dump
     let cmd = fmt"{nim} dump --dump.format:json -d:D20210428T161003 --hints:off ."
