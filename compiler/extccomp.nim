@@ -615,8 +615,70 @@ proc ccSupportsDepFiles(conf: ConfigRef): bool {.inline.} =
   ## in, which is not a path this compiler run can resolve.
   result = hasGnuDepfiles in CC[conf.cCompiler].props and not noAbsolutePaths(conf)
 
+const
+  depFileTmpExt = ".tmp"
+    ## Suffix of the name a dependency file is written under while the C
+    ## compiler that produces it is still running; see `commitDepFile`.
+  depFileCompleteMark = "# nim-depfile-complete"
+    ## Last line of a dependency file that is known to be whole. It is appended
+    ## only after the C compiler has exited successfully, so everything ahead of
+    ## it is everything the compiler wrote. A make comment, so the file remains
+    ## a legal make fragment.
+
 proc depFileForCompile(conf: ConfigRef; cfile: Cfile): string =
   result = objFileForCompile(conf, cfile).changeFileExt(".d")
+
+proc depFileToWrite(conf: ConfigRef; cfile: Cfile): string =
+  ## The dependency file `cfile`'s compilation is to produce, or "" when this
+  ## toolchain produces none. Paired with `beginDepFile` / `commitDepFile`.
+  if ccSupportsDepFiles(conf): depFileForCompile(conf, cfile) else: ""
+
+proc beginDepFile(depFile: string) =
+  ## Retires the dependency file of an object that is about to be recompiled.
+  ##
+  ## From here until the matching `commitDepFile` there is no file under the
+  ## real name at all, so every state in between — including the one a build
+  ## killed by SIGINT, OOM or ENOSPC leaves behind — is read as "the header
+  ## closure of this object is unknown", i.e. rebuild. In particular the new
+  ## `.o` can never be found beside the *previous* run's `.d`, which would
+  ## describe a header closure that is no longer the object's own.
+  if depFile.len == 0: return
+  discard tryRemoveFile(depFile)
+  discard tryRemoveFile(depFile & depFileTmpExt)
+
+proc commitDepFile(depFile: string) =
+  ## Publishes the dependency file of an object whose compilation has just
+  ## succeeded.
+  ##
+  ## The C compiler wrote it under a temporary name, so a compiler that died
+  ## mid-write left nothing under the real one. Now that it has exited
+  ## successfully the file is whole: mark it as such and rename it into place.
+  ## `moveFile` is `rename(2)` on POSIX and `MoveFileEx` on Windows — the name
+  ## either resolves to the finished file or to nothing, never to a prefix of
+  ## it.
+  ##
+  ## If anything here fails, the temporary is removed and no dependency file
+  ## exists, which is the fail-closed answer.
+  if depFile.len == 0: return
+  let tmp = depFile & depFileTmpExt
+  if not fileExists(tmp): return # the toolchain wrote nothing; claim nothing
+  var ok = false
+  var f: File = default(File)
+  if open(f, tmp, fmAppend):
+    try:
+      f.write("\n" & depFileCompleteMark & "\n")
+      f.flushFile()
+      ok = true
+    except IOError, OSError:
+      ok = false
+    close(f)
+  if ok:
+    try:
+      moveFile(tmp, depFile)
+    except OSError, IOError:
+      ok = false
+  if not ok:
+    discard tryRemoveFile(tmp)
 
 proc getCompileCFileCmd*(conf: ConfigRef; cfile: Cfile,
                          isMainFile = false; produceOutput = false): string =
@@ -698,14 +760,19 @@ proc getCompileCFileCmd*(conf: ConfigRef; cfile: Cfile,
 
   if ccSupportsDepFiles(conf):
     # Ask the C compiler to record the transitive header closure of this
-    # translation unit. The file is written next to the object and is read back
-    # by `footprint` on the next run so that editing a header invalidates the
-    # object. `-MD` (rather than `-MMD`) is deliberate: a header reached through
-    # `#include <...>` can change too, and the cost of covering them is bounded
-    # by `hashOfHeaderFile`'s per-process memoization — the closures of all
-    # translation units in a project overlap almost completely.
+    # translation unit. The file is read back by `footprint` on the next run so
+    # that editing a header invalidates the object. `-MD` (rather than `-MMD`)
+    # is deliberate: a header reached through `#include <...>` can change too,
+    # and the cost of covering them is bounded by `hashOfHeaderFile`'s
+    # per-process memoization — the closures of all translation units in a
+    # project overlap almost completely.
+    #
+    # It is written under a temporary name and moved into place by
+    # `commitDepFile` once this command has succeeded, so that a dependency
+    # file found under the real name is one the C compiler finished writing.
     result.add(' ')
-    result.add("-MD -MF " & dfile)
+    result.add("-MD -MF " &
+      quoteShell(objfile.changeFileExt(".d") & depFileTmpExt))
 
 type
   Footprint = object
@@ -783,8 +850,8 @@ proc parseDepFile(content: string; deps: var seq[string]): bool =
   ## the text distinguishes that subset from the whole, and a caller that
   ## believes a subset will report "up to date" while a header missing from it
   ## has been edited, which is precisely the stale-object bug this machinery
-  ## exists to prevent. Ruling that out needs evidence from outside the text;
-  ## see `readUsableDepFile`.
+  ## exists to prevent. Ruling that out is `readUsableDepFile`'s job, and it is
+  ## why this proc is never called on a file that has not passed through it.
   ##
   ## So: a `true` result means "these prerequisites were recorded for this
   ## translation unit", never "these are all of them".
@@ -859,38 +926,50 @@ proc readUsableDepFile(conf: ConfigRef; cfile: Cfile; content: var string;
   ##
   ## `parseDepFile` can reject text that is not a dependency file; it cannot
   ## detect one that was truncated at a token boundary, because such a prefix
-  ## is valid syntax over a subset of the prerequisites. The missing evidence
-  ## is a timestamp. A C compiler writes the dependency file while
-  ## preprocessing and the object only after code generation, so for every
-  ## object it produced, `mtime(.o) >= mtime(.d)`. A dependency file that is
-  ## *newer* than the object beside it therefore cannot have come from the run
-  ## that produced that object: it is the partial output of a later run that
-  ## died (SIGINT, OOM, ENOSPC) after cpp had flushed some of the `.d` but
-  ## before the compiler replaced the `.o`. That is exactly the situation in
-  ## which a truncated file sits next to a stale-but-plausible object, and it
-  ## is the situation this rejects.
+  ## is valid syntax over a subset of the prerequisites. The evidence that
+  ## settles it is `depFileCompleteMark`, the last line of every dependency
+  ## file this compiler publishes. `commitDepFile` appends it only after the C
+  ## compiler has exited successfully, so its presence at the end of the file
+  ## says that everything the compiler wrote is still there. A file cut short
+  ## — by the writer, or by anything that later mangled it — loses its last
+  ## line first and is refused here.
   ##
-  ## The ordering was measured, not assumed: across a 244-object build of the
-  ## Nim compiler itself, 0 dependency files were newer than their object, the
-  ## narrowest margin being 7 ms. The comparison is `>=` rather than `>` so
-  ## that a filesystem with coarse timestamps, which collapses that margin to
-  ## zero, keeps reusing objects instead of rebuilding them forever.
+  ## That the mark is where it is, rather than being a claim about the file
+  ## made from outside it, is the point. The published file is also produced by
+  ## an atomic rename, so a partially written one is never *reachable* under
+  ## this name; the mark is what lets that be checked rather than assumed, and
+  ## it keeps the check meaningful for a nimcache that some other tool has
+  ## copied, restored or truncated.
+  ##
+  ## `objTime` is reported for `headerDepsUpToDate`, which compares it against
+  ## the prerequisites. Nothing here compares it against the dependency file,
+  ## and nothing may: which of the two a C compiler writes first is a property
+  ## of the toolchain, not a rule. gcc hands the object to a separate assembler
+  ## and so finishes the dependency file first (measured: 0 inversions over 244
+  ## objects); clang assembles in-process and writes the object first (measured:
+  ## 26 inversions over the same 38-object build, margins around 1 ms). A
+  ## `mtime(.o) >= mtime(.d)` precondition therefore rejected sound objects on
+  ## clang, and — because each rejection recompiles and recreates the
+  ## inversion — did so on every build, with a different set each time.
   content = ""
   objTime = default(times.Time)
   let obj = objFileForCompile(conf, cfile)
   let depFile = depFileForCompile(conf, cfile)
-  var depTime: times.Time = default(times.Time)
+  var raw = ""
   try:
     if not fileExists(depFile): return false
-    depTime = getFileInfo(depFile).lastWriteTime
     objTime = getFileInfo(obj).lastWriteTime
+    raw = readFile(depFile)
   except OSError, IOError, ValueError:
     return false
-  if depTime > objTime: return false
-  try:
-    content = readFile(depFile)
-  except OSError, IOError:
-    return false
+  # The completeness mark is the last non-blank line.
+  var last = raw.high
+  while last >= 0 and raw[last] in {' ', '\t', '\r', '\n'}: dec last
+  var start = last + 1
+  while start > 0 and raw[start-1] notin {'\n', '\r'}: dec start
+  if last + 1 - start != depFileCompleteMark.len: return false
+  if raw.substr(start, last) != depFileCompleteMark: return false
+  content = raw.substr(0, start - 1)
   result = true
 
 proc headerClosureHash(conf: ConfigRef; cfile: Cfile; hash: var string): bool =
@@ -1213,12 +1292,18 @@ proc execLinkCmd(conf: ConfigRef; linkCmd: string) =
   tryExceptOSErrorMessage(conf, "invocation of external linker program failed."):
     execExternalProgram(conf, linkCmd, hintLinking)
 
-proc execCmdsInParallel(conf: ConfigRef; cmds: seq[string]; prettyCb: proc (idx: int)) =
+proc execCmdsInParallel(conf: ConfigRef; cmds: seq[string]; prettyCb: proc (idx: int);
+                        onSuccess: proc (idx: int) = nil) =
+  ## `onSuccess` runs for each command that exited 0, as soon as it did, so
+  ## that a command's own post-processing (see `commitDepFile`) is not lost
+  ## when a *later* command fails and aborts the compiler.
   let runCb = proc (idx: int, p: Process) =
     let exitCode = p.peekExitCode
     if exitCode != 0:
       rawMessage(conf, errGenerated, "execution of an external compiler program '" &
         cmds[idx] & "' failed with exit code: " & $exitCode & "\n\n")
+    elif onSuccess != nil:
+      onSuccess(idx)
   if conf.numberOfProcessors == 0: conf.numberOfProcessors = countProcessors()
   var res = 0
   if conf.numberOfProcessors <= 1:
@@ -1228,6 +1313,8 @@ proc execCmdsInParallel(conf: ConfigRef; cmds: seq[string]; prettyCb: proc (idx:
       if res != 0:
         rawMessage(conf, errGenerated, "execution of an external program failed: '$1'" %
           cmds[i])
+      elif onSuccess != nil:
+        onSuccess(i)
   else:
     tryExceptOSErrorMessage(conf, "invocation of external compiler program failed."):
       res = execProcesses(cmds, {poStdErrToStdOut, poUsePath, poParentStreams},
@@ -1320,6 +1407,7 @@ proc callCCompiler*(conf: ConfigRef) =
   var prettyCmds: TStringSeq = default(TStringSeq)
   let prettyCb = proc (idx: int) = writePrettyCmdsStderr(prettyCmds[idx])
 
+  var depFiles: seq[string] = @[] # parallel to `cmds`; "" where there is none
   for idx, it in conf.toCompile:
     # call the C compiler for the .c file:
     if CfileFlag.Cached in it.flags: continue
@@ -1327,15 +1415,21 @@ proc callCCompiler*(conf: ConfigRef) =
     if optCompileOnly notin conf.globalOptions:
       cmds.add(compileCmd)
       prettyCmds.add displayProgressCC(conf, $it.cname, compileCmd)
+      depFiles.add depFileToWrite(conf, it)
     if optGenScript in conf.globalOptions:
       script.add(compileCmd)
       script.add("\n")
 
   if optCompileOnly notin conf.globalOptions:
-    execCmdsInParallel(conf, cmds, prettyCb)
+    # An object is about to be replaced, so the dependency file describing the
+    # one being replaced must go first; see `beginDepFile`.
+    for d in depFiles: beginDepFile(d)
+    let commitCb = proc (idx: int) = commitDepFile(depFiles[idx])
+    execCmdsInParallel(conf, cmds, prettyCb, commitCb)
     # `execCmdsInParallel` aborts the compiler on a failing command, so getting
     # here means every object above was produced together with its dependency
-    # file. Record the now-complete footprints; see `refreshFootprints`.
+    # file, and every dependency file has been committed. Record the
+    # now-complete footprints; see `refreshFootprints`.
     refreshFootprints(conf)
   if optNoLinking notin conf.globalOptions:
     # call the linker:
@@ -1409,12 +1503,17 @@ proc jsonBuildInstructionsFile*(conf: ConfigRef): AbsoluteFile =
   # works out of the box with `hashMainCompilationParams`.
   result = getNimcacheDir(conf) / conf.outFile.changeFileExt("json")
 
-const cacheVersion = "D20260919T090000" # update when `BuildCache` spec changes
+const cacheVersion = "D20260919T120000" # update when `BuildCache` spec changes
 type BuildCache = object
   cacheVersion: string
   outputFile: string
   outputLastModificationTime: string
   compile: seq[(string, string)]
+  compileDepFiles: seq[string]
+    ## Parallel to `compile`: the dependency file each command produces, or ""
+    ## where the toolchain produces none. `--compileOnly` does not run the
+    ## commands, so it is `jsonscript` that must retire and later commit them;
+    ## see `beginDepFile` / `commitDepFile`.
   link: seq[string]
   linkcmd: string
   extraCmds: seq[string]
@@ -1512,6 +1611,8 @@ proc writeJsonBuildInstructions*(conf: ConfigRef; deps: StringTableRef) =
     outputFile: conf.absOutFile.string,
     compile: collect(for i, it in conf.toCompile:
       if CfileFlag.Cached notin it.flags: (it.cname.string, getCompileCFileCmd(conf, it))),
+    compileDepFiles: collect(for i, it in conf.toCompile:
+      if CfileFlag.Cached notin it.flags: depFileToWrite(conf, it)),
     link: linkFiles,
     linkcmd: getLinkCmd(conf, conf.absOutFile, linkFiles.quoteShellCommand),
     extraCmds: getExtraCmds(conf, conf.absOutFile),
@@ -1589,7 +1690,15 @@ proc runJsonBuildInstructions*(conf: ConfigRef; jsonFile: AbsoluteFile) =
   for (name, cmd) in bcache.compile:
     cmds.add cmd
     prettyCmds.add displayProgressCC(conf, name, cmd)
-  execCmdsInParallel(conf, cmds, prettyCb)
+  # These commands recompile the objects, so the dependency files describing
+  # the objects they replace are retired first and republished per command that
+  # succeeds — exactly as in `callCCompiler`. `cacheVersion` above guarantees
+  # `compileDepFiles` lines up with `compile`.
+  let depFiles = bcache.compileDepFiles
+  for d in depFiles: beginDepFile(d)
+  let commitCb = proc (idx: int) =
+    if idx < depFiles.len: commitDepFile(depFiles[idx])
+  execCmdsInParallel(conf, cmds, prettyCb, commitCb)
   preventLinkCmdMaxCmdLen(conf, bcache.linkcmd)
   for cmd in bcache.extraCmds: execExternalProgram(conf, cmd, hintExecuting)
 
