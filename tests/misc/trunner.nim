@@ -15,7 +15,7 @@ from std/algorithm import sorted, sort
 from std/times import Time, getTime, initDuration, `-`, `+`, `<`, `==`, `$`
 import stdtest/[specialpaths, unittest_light]
 from std/private/globs import nativeToUnixPath
-from strutils import startsWith, strip, removePrefix
+from strutils import startsWith, endsWith, strip, removePrefix
 from std/sugar import dup
 import "$lib/../compiler/nimpaths"
 
@@ -455,33 +455,69 @@ running: v2
       doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 222"
       doAssert objectStamps() == afterHeaderEdit, $(objectStamps(), afterHeaderEdit)
 
-      block: # a dependency file that is only a *prefix* of the real one
+      block: # every way a dependency file can be damaged must force a rebuild
         #[
-        A build killed (SIGINT, OOM, ENOSPC) while the C compiler was flushing
-        the dependency file leaves a valid make rule over a subset of the
-        header closure, beside the previous run's still-valid object. Nothing
-        in the text marks it as partial — a compiler wraps every prerequisite
-        as `<path> \` + newline, so a cut at a token boundary is indeed the
-        likely one — so believing it would reuse an object whose headers were
-        never checked. The dependency file is newer than the object it sits
-        next to, which a complete one never is, and that is what gives it away.
+        A dependency file is believed only if it can be shown to be the *whole*
+        one. Syntax alone cannot show that: a file truncated at a token
+        boundary is a valid make rule over a subset of the prerequisites, and a
+        C compiler wraps every prerequisite as `<path> \` + newline, so a cut
+        lands on a token boundary almost every time. Believing such a prefix
+        reports "up to date" over headers that were never looked at.
+
+        What settles it is the completeness mark the compiler appends once the
+        C compiler has exited successfully. Anything cut short loses its last
+        line first, so it no longer carries the mark.
+
+        Every case below is run at both timestamp arrangements, and that is the
+        point of running them twice rather than a detail of the fixture. Which
+        of the object and the dependency file a toolchain writes first is a
+        property of the toolchain — gcc finishes the dependency file first,
+        clang the object — so a timestamp relation between the two says nothing
+        about either file's integrity, in either direction.
         ]#
         var stale = ""
         for path in walkDirRec(nimcache2):
           if path.splitFile.ext == ".d" and "mheaderdep.h" in readFile(path):
             stale = path
         doAssert stale.len > 0
-        let obj = stale.changeFileExt("o")
-        # Keep only the rule's target and its first prerequisite, the generated
-        # `.c`; the header is dropped exactly as truncation would drop it.
-        writeFile(stale, obj & ": \\\n " & stale.changeFileExt("") & "\n")
-        setLastModificationTime(stale, getTime())
-        let beforeTrunc = objectStamps()
-        var newest = beforeTrunc[0][1]
-        for (_, t) in beforeTrunc:
-          if t > newest: newest = t
-        writeHeader(333, newest + initDuration(seconds = 1))
-        doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 333"
+        # Every published dependency file carries the mark, and a successful
+        # build leaves no temporary behind.
+        doAssert readFile(stale).strip.endsWith("# nim-depfile-complete")
+        doAssert toSeq(walkDirRec(nimcache2)).filterIt(it.endsWith(".d.tmp")).len == 0
+        let
+          obj = stale.changeFileExt("o")
+          cname = stale.changeFileExt("") # the generated `.c`, first prerequisite
+          damaged = @[
+            ("deleted", ""),
+            ("empty", ""),
+            ("no rule separator", "this is not a make rule at all\n"),
+            ("prerequisite truncated mid-path",
+             obj & ": \\\n " & cname[0 ..< cname.len - 4] & "\n"),
+            ("target with no prerequisites", obj & ":\n"),
+            ("dangling continuation, newline", obj & ": \\\n " & cname & " \\\n"),
+            ("dangling continuation, no newline", obj & ": \\\n " & cname & " \\"),
+            # The likely truncation: a valid rule whose prerequisites stop just
+            # before the edited header.
+            ("truncated at a token boundary", obj & ": \\\n " & cname & "\n"),
+          ]
+        var expected = 333
+        for depFileIsNewer in [true, false]:
+          for (name, content) in damaged:
+            let beforeEdit = objectStamps()
+            var newest = beforeEdit[0][1]
+            for (_, t) in beforeEdit:
+              if t > newest: newest = t
+            if name == "deleted":
+              removeFile stale
+            else:
+              writeFile(stale, content)
+              setLastModificationTime(stale,
+                if depFileIsNewer: newest + initDuration(seconds = 1)
+                else: newest - initDuration(seconds = 10))
+            writeHeader(expected, newest + initDuration(seconds = 1))
+            doAssert runNimCmdChk(file, opt).strip == "mheaderdep: " & $expected,
+              $(name, depFileIsNewer)
+            inc expected
 
       block: # a header that lives *inside* the nimcache is still a header
         #[
