@@ -454,6 +454,55 @@ running: v2
       let afterHeaderEdit = objectStamps()
       doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 222"
       doAssert objectStamps() == afterHeaderEdit, $(objectStamps(), afterHeaderEdit)
+
+      block: # a dependency file that is only a *prefix* of the real one
+        #[
+        A build killed (SIGINT, OOM, ENOSPC) while the C compiler was flushing
+        the dependency file leaves a valid make rule over a subset of the
+        header closure, beside the previous run's still-valid object. Nothing
+        in the text marks it as partial — a compiler wraps every prerequisite
+        as `<path> \` + newline, so a cut at a token boundary is indeed the
+        likely one — so believing it would reuse an object whose headers were
+        never checked. The dependency file is newer than the object it sits
+        next to, which a complete one never is, and that is what gives it away.
+        ]#
+        var stale = ""
+        for path in walkDirRec(nimcache2):
+          if path.splitFile.ext == ".d" and "mheaderdep.h" in readFile(path):
+            stale = path
+        doAssert stale.len > 0
+        let obj = stale.changeFileExt("o")
+        # Keep only the rule's target and its first prerequisite, the generated
+        # `.c`; the header is dropped exactly as truncation would drop it.
+        writeFile(stale, obj & ": \\\n " & stale.changeFileExt("") & "\n")
+        setLastModificationTime(stale, getTime())
+        let beforeTrunc = objectStamps()
+        var newest = beforeTrunc[0][1]
+        for (_, t) in beforeTrunc:
+          if t > newest: newest = t
+        writeHeader(333, newest + initDuration(seconds = 1))
+        doAssert runNimCmdChk(file, opt).strip == "mheaderdep: 333"
+
+      block: # a header that lives *inside* the nimcache is still a header
+        #[
+        Prerequisites the build generated itself are skipped, because several
+        configurations sharing one nimcache rewrite each other's `.c`. That is
+        a statement about those files, not about the directory: with
+        `--nimcache:<project dir>`, or a header generated into the cache, a
+        real header lives there too, and skipping it would let `-r` answer
+        "nothing changed" and rerun the previous binary.
+        ]#
+        const nimcache3 = buildDir / "D20260919T101500"
+        removeDir nimcache3
+        createDir nimcache3
+        let opt3 = fmt"-r --nimcache:{nimcache3.quoteShell} --cincludes:{nimcache3.quoteShell}"
+        let header3 = nimcache3 / "mheaderdep.h"
+        writeFile(header3, "#define MHEADERDEP_VALUE 111\n")
+        setLastModificationTime(header3, getTime() - initDuration(minutes = 1))
+        doAssert runNimCmdChk(file, opt3).strip == "mheaderdep: 111"
+        writeFile(header3, "#define MHEADERDEP_VALUE 222\n")
+        setLastModificationTime(header3, getTime())
+        doAssert runNimCmdChk(file, opt3).strip == "mheaderdep: 222"
     else:
       # A toolchain without dependency-file support (e.g. MSVC) keeps the
       # header-blind behaviour it always had; do not assert the fixed outcome.

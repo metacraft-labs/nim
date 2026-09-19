@@ -2582,6 +2582,11 @@ proc writeModule(m: BModule) =
     addFileToCompile(m.config, cf)
 
 proc updateCachedModule(m: BModule) =
+  # XXX Dead in this fork: nothing calls this. It marks the module's object
+  # `Cached` unconditionally, which is the header-blind reuse that
+  # `shouldRecompile` above no longer performs. Whoever revives the legacy IC
+  # path must gate this on `headerDepsUpToDate(m.config, cf)` the same way, or
+  # a header edit will once again leave a stale `.o` in the link.
   let cfile = getCFile(m)
   var cf = Cfile(nimname: m.module.name.s, cname: cfile,
                  obj: completeCfilePath(m.config, toObjFile(m.config, cfile)), flags: {})
