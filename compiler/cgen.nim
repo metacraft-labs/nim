@@ -2509,7 +2509,13 @@ proc genTopLevelStmt*(m: BModule; n: PNode) =
 proc shouldRecompile(m: BModule; code: Rope, cfile: Cfile): bool =
   if optForceFullMake notin m.config.globalOptions:
     if not moduleHasChanged(m.g.graph, m.module):
-      result = false
+      # The Nim module is unchanged, so the `.c` on disk is still current — but
+      # the object built from it also embeds every header that `.c` includes
+      # (`{.emit.}`, `{.header.}`, `--passC:-include`, nimbase.h, ...), and
+      # those are invisible to `moduleHasChanged`. Editing such a header used
+      # to leave the stale object in place, silently running code that no
+      # longer corresponds to the sources.
+      result = not headerDepsUpToDate(m.config, cfile)
     elif not equalsFile(code, cfile.cname):
       when false:
         #m.config.symbolFiles == readOnlySf: #isDefined(m.config, "nimdiff"):
@@ -2522,7 +2528,9 @@ proc shouldRecompile(m: BModule; code: Rope, cfile: Cfile): bool =
         rawMessage(m.config, errCannotOpenFile, cfile.cname.string)
       result = true
     elif fileExists(cfile.obj) and os.fileNewer(cfile.obj.string, cfile.cname.string):
-      result = false
+      # Same reasoning as above: the object must also postdate every header it
+      # was built from, not only the `.c`.
+      result = not headerDepsUpToDate(m.config, cfile)
     else:
       result = true
   else:
@@ -2574,6 +2582,11 @@ proc writeModule(m: BModule) =
     addFileToCompile(m.config, cf)
 
 proc updateCachedModule(m: BModule) =
+  # XXX Dead in this fork: nothing calls this. It marks the module's object
+  # `Cached` unconditionally, which is the header-blind reuse that
+  # `shouldRecompile` above no longer performs. Whoever revives the legacy IC
+  # path must gate this on `headerDepsUpToDate(m.config, cf)` the same way, or
+  # a header edit will once again leave a stale `.o` in the link.
   let cfile = getCFile(m)
   var cf = Cfile(nimname: m.module.name.s, cname: cfile,
                  obj: completeCfilePath(m.config, toObjFile(m.config, cfile)), flags: {})

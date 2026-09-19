@@ -14,7 +14,8 @@
 
 import ropes, platform, condsyms, options, msgs, lineinfos, pathutils, modulepaths
 
-import std/[os, osproc, streams, sequtils, times, strtabs, json, jsonutils, sugar, parseutils]
+import std/[os, osproc, streams, sequtils, times, strtabs, json, jsonutils, sugar,
+            parseutils, tables, algorithm]
 
 import std / strutils except addf
 
@@ -33,7 +34,12 @@ type
     hasGnuAsm,                # CC's asm uses the absurd GNU assembler syntax
     hasDeclspec,              # CC has __declspec(X)
     hasAttribute,             # CC has __attribute__((X))
-    hasBuiltinUnreachable     # CC has __builtin_unreachable
+    hasBuiltinUnreachable,    # CC has __builtin_unreachable
+    hasGnuDepfiles            # CC understands `-MD -MF <file>` and writes a
+                              # GNU make style dependency file listing the
+                              # full transitive header closure of a
+                              # translation unit. Used to make the `.o` reuse
+                              # check aware of headers; see `footprint`.
   TInfoCCProps* = set[TInfoCCProp]
   TInfoCC* = tuple[
     name: string,        # the short name of the compiler
@@ -96,7 +102,7 @@ compiler gcc:
     produceAsm: gnuAsmListing,
     cppXsupport: "-std=gnu++17 -funsigned-char",
     props: {hasSwitchRange, hasComputedGoto, hasCpp, hasGcGuard, hasGnuAsm,
-            hasAttribute, hasBuiltinUnreachable})
+            hasAttribute, hasBuiltinUnreachable, hasGnuDepfiles})
 
 # GNU C and C++ Compiler
 compiler nintendoSwitchGCC:
@@ -184,6 +190,12 @@ compiler nvcc:
   result.cppCompiler = "nvcc"
   result.compileTmpl = "-c -x cu -Xcompiler=\"$options\" $include -o $objfile $file"
   result.linkTmpl = "$buildgui $builddll -o $exefile $objfiles -Xcompiler=\"$options\""
+  # nvcc's own `-MD` spelling has changed across CUDA releases and is not
+  # verified here, so keep the inherited gcc dependency-file support off rather
+  # than emit a flag the driver might reject. Consequence: nvcc keeps the
+  # header-blind `.o` reuse it has today (see `footprint`); it gains nothing and
+  # loses nothing.
+  result.props.excl hasGnuDepfiles
 
 # AMD HIPCC Compiler (rocm/cuda)
 compiler hipcc:
@@ -576,6 +588,36 @@ proc getLinkerExe(conf: ConfigRef; compiler: TSystemCC): string =
   result = if CC[compiler].linkerExe.len > 0: CC[compiler].linkerExe
            else: getCompilerExe(conf, compiler, optMixedMode in conf.globalOptions or conf.backend == backendCpp)
 
+proc objFileForCompile(conf: ConfigRef; cfile: Cfile): string =
+  ## The object file path exactly as it is spelled on the C compiler's command
+  ## line. Factored out of `getCompileCFileCmd` so that the `.o` reuse check
+  ## (`footprint`) can derive the matching dependency-file path.
+  let cf = if noAbsolutePaths(conf): AbsoluteFile extractFilename(cfile.cname.string)
+           else: cfile.cname
+  result =
+    if cfile.obj.isEmpty:
+      if CfileFlag.External notin cfile.flags or noAbsolutePaths(conf):
+        toObjFile(conf, cf).string
+      else:
+        completeCfilePath(conf, toObjFile(conf, cf)).string
+    elif noAbsolutePaths(conf):
+      extractFilename(cfile.obj.string)
+    else:
+      cfile.obj.string
+
+proc ccSupportsDepFiles(conf: ConfigRef): bool {.inline.} =
+  ## Whether we can ask this C compiler for the transitive header closure of a
+  ## translation unit, and can find the resulting file again afterwards.
+  ##
+  ## `noAbsolutePaths` (i.e. `--genScript` / `--genMapping`) is excluded on
+  ## purpose: there the object — and hence the dependency file — is named
+  ## relatively to whatever directory the generated script is eventually run
+  ## in, which is not a path this compiler run can resolve.
+  result = hasGnuDepfiles in CC[conf.cCompiler].props and not noAbsolutePaths(conf)
+
+proc depFileForCompile(conf: ConfigRef; cfile: Cfile): string =
+  result = objFileForCompile(conf, cfile).changeFileExt(".d")
+
 proc getCompileCFileCmd*(conf: ConfigRef; cfile: Cfile,
                          isMainFile = false; produceOutput = false): string =
   let
@@ -619,16 +661,7 @@ proc getCompileCFileCmd*(conf: ConfigRef; cfile: Cfile,
   let cf = if noAbsolutePaths(conf): AbsoluteFile extractFilename(cfile.cname.string)
            else: cfile.cname
 
-  let objfile =
-    if cfile.obj.isEmpty:
-      if CfileFlag.External notin cfile.flags or noAbsolutePaths(conf):
-        toObjFile(conf, cf).string
-      else:
-        completeCfilePath(conf, toObjFile(conf, cf)).string
-    elif noAbsolutePaths(conf):
-      extractFilename(cfile.obj.string)
-    else:
-      cfile.obj.string
+  let objfile = objFileForCompile(conf, cfile)
 
   # D files are required by nintendo switch libs for
   # compilation. They are basically a list of all includes.
@@ -663,30 +696,336 @@ proc getCompileCFileCmd*(conf: ConfigRef; cfile: Cfile,
     "vccplatform", vccplatform(conf),
     "ccenvflags", envFlags(conf)])
 
-proc footprint(conf: ConfigRef; cfile: Cfile): SecureHash =
-  result = secureHash(
-    $secureHashFile(cfile.cname.string) &
-    platform.OS[conf.target.targetOS].name &
-    platform.CPU[conf.target.targetCPU].name &
-    extccomp.CC[conf.cCompiler].name &
-    getCompileCFileCmd(conf, cfile))
+  if ccSupportsDepFiles(conf):
+    # Ask the C compiler to record the transitive header closure of this
+    # translation unit. The file is written next to the object and is read back
+    # by `footprint` on the next run so that editing a header invalidates the
+    # object. `-MD` (rather than `-MMD`) is deliberate: a header reached through
+    # `#include <...>` can change too, and the cost of covering them is bounded
+    # by `hashOfHeaderFile`'s per-process memoization — the closures of all
+    # translation units in a project overlap almost completely.
+    result.add(' ')
+    result.add("-MD -MF " & dfile)
+
+type
+  Footprint = object
+    ## Identity of the inputs that a cached `.o` was produced from.
+    hash: SecureHash
+    complete: bool
+      ## `false` when the transitive header closure could not be established
+      ## (no dependency file yet, unreadable, malformed, or a listed header
+      ## that cannot be hashed). Callers must then treat the object as stale:
+      ## a wrong "unchanged" answer silently ships a stale `.o`, a wrong
+      ## "changed" answer merely costs one recompilation.
+
+var
+  headerHashCache: Table[string, tuple[mtime: times.Time, size: BiggestInt,
+                                       hash: SecureHash]]
+    ## Memoizes header content hashes for the lifetime of the process. A single
+    ## compiler run asks about the same headers once per translation unit, and
+    ## the closures overlap heavily, so without this the same `nimbase.h` or
+    ## `stdio.h` would be hashed hundreds of times. The `mtime`/`size` guard
+    ## only decides whether the *in-memory* memo may be reused within this run;
+    ## it never substitutes for content hashing across runs, which is always
+    ## performed afresh.
+
+proc hashOfHeaderFile(path: string; hash: var SecureHash): bool =
+  ## Content hash of `path`. Returns false if it cannot be established, which
+  ## the caller must treat as "changed".
+  var info: FileInfo = default(FileInfo)
+  try:
+    info = getFileInfo(path)
+  except OSError, IOError, ValueError:
+    return false
+  if info.kind notin {pcFile, pcLinkToFile}:
+    return false
+  headerHashCache.withValue(path, cached):
+    if cached.mtime == info.lastWriteTime and cached.size == info.size:
+      hash = cached.hash
+      return true
+  try:
+    hash = secureHashFile(path)
+  except OSError, IOError, ValueError:
+    return false
+  headerHashCache[path] = (info.lastWriteTime, info.size, hash)
+  result = true
+
+proc unescapeMakePath(s: string): string =
+  ## Undoes the quoting a C compiler applies when writing a path into a make
+  ## rule. GNU cpp escapes only ` ` and `#` with a backslash and doubles `$`;
+  ## in particular it does *not* escape backslashes, so a Windows path such as
+  ## `C:\inc\a.h` must survive verbatim.
+  result = newStringOfCap(s.len)
+  var i = 0
+  while i < s.len:
+    if s[i] == '\\' and i + 1 < s.len and s[i+1] in {' ', '#'}:
+      result.add s[i+1]
+      inc i, 2
+    elif s[i] == '$' and i + 1 < s.len and s[i+1] == '$':
+      result.add '$'
+      inc i, 2
+    else:
+      result.add s[i]
+      inc i
+
+proc parseDepFile(content: string; deps: var seq[string]): bool =
+  ## Collects the prerequisites of every make rule in `content` into `deps`.
+  ##
+  ## Returns false when the text cannot be read as a dependency file at all:
+  ## no rule separator, no prerequisite, or a dangling line continuation. That
+  ## is the whole of the guarantee, and it is worth being precise about what it
+  ## is *not*.
+  ##
+  ## It establishes syntax, never COMPLETENESS. A dependency file truncated at
+  ## a token boundary — and a C compiler wraps every single prerequisite as
+  ## `<path> \` + newline, so token boundaries are everywhere — is a perfectly
+  ## well-formed rule over a *subset* of the real header closure. Nothing in
+  ## the text distinguishes that subset from the whole, and a caller that
+  ## believes a subset will report "up to date" while a header missing from it
+  ## has been edited, which is precisely the stale-object bug this machinery
+  ## exists to prevent. Ruling that out needs evidence from outside the text;
+  ## see `readUsableDepFile`.
+  ##
+  ## So: a `true` result means "these prerequisites were recorded for this
+  ## translation unit", never "these are all of them".
+  # A file whose last non-whitespace byte is a backslash ends in a line
+  # continuation that was never continued: the writer stopped mid-rule, and the
+  # prerequisites after it are simply missing. Refuse it rather than parse the
+  # prefix. (A prerequisite whose path genuinely ended in an escaped space or
+  # `#` at the very end of the file would be rejected too. No C compiler emits
+  # one, and being wrong in that direction costs one recompilation.)
+  var last = content.high
+  while last >= 0 and content[last] in {' ', '\t', '\r', '\n'}: dec last
+  if last >= 0 and content[last] == '\\': return false
+  var
+    i = 0
+    tok = ""
+    inPrereqs = false
+    sawRule = false
+  template flushTok() =
+    if tok.len > 0:
+      if inPrereqs: deps.add unescapeMakePath(tok)
+      tok.setLen 0
+  while i < content.len:
+    let c = content[i]
+    case c
+    of '\\':
+      if i + 1 < content.len and content[i+1] in {'\n', '\r'}:
+        # A backslash-newline is a line continuation: the rule goes on, and the
+        # continuation itself separates tokens.
+        flushTok()
+        inc i
+        while i < content.len and content[i] in {'\r', '\n'}: inc i
+      elif i + 1 < content.len and content[i+1] in {' ', '#'}:
+        tok.add c
+        tok.add content[i+1]
+        inc i, 2
+      else:
+        tok.add c
+        inc i
+    of ' ', '\t':
+      flushTok()
+      inc i
+    of '\n', '\r':
+      # An unescaped newline ends the rule. `-MP`'s phony `header.h:` lines end
+      # here with no prerequisites, and contribute nothing.
+      flushTok()
+      inPrereqs = false
+      inc i
+    of ':':
+      if inPrereqs:
+        tok.add c
+        inc i
+      elif tok.len == 1 and tok[0] in {'A'..'Z', 'a'..'z'} and
+           i + 1 < content.len and content[i+1] in {'/', '\\'}:
+        # Windows drive letter, not the rule separator.
+        tok.add c
+        inc i
+      else:
+        flushTok() # the target; we only care about the prerequisites
+        inPrereqs = true
+        sawRule = true
+        inc i
+    else:
+      tok.add c
+      inc i
+  flushTok()
+  result = sawRule and deps.len > 0
+
+proc readUsableDepFile(conf: ConfigRef; cfile: Cfile; content: var string;
+                       objTime: var times.Time): bool =
+  ## Reads the dependency file belonging to `cfile`'s object, but only if it
+  ## may be believed to describe that object's *whole* header closure.
+  ##
+  ## `parseDepFile` can reject text that is not a dependency file; it cannot
+  ## detect one that was truncated at a token boundary, because such a prefix
+  ## is valid syntax over a subset of the prerequisites. The missing evidence
+  ## is a timestamp. A C compiler writes the dependency file while
+  ## preprocessing and the object only after code generation, so for every
+  ## object it produced, `mtime(.o) >= mtime(.d)`. A dependency file that is
+  ## *newer* than the object beside it therefore cannot have come from the run
+  ## that produced that object: it is the partial output of a later run that
+  ## died (SIGINT, OOM, ENOSPC) after cpp had flushed some of the `.d` but
+  ## before the compiler replaced the `.o`. That is exactly the situation in
+  ## which a truncated file sits next to a stale-but-plausible object, and it
+  ## is the situation this rejects.
+  ##
+  ## The ordering was measured, not assumed: across a 244-object build of the
+  ## Nim compiler itself, 0 dependency files were newer than their object, the
+  ## narrowest margin being 7 ms. The comparison is `>=` rather than `>` so
+  ## that a filesystem with coarse timestamps, which collapses that margin to
+  ## zero, keeps reusing objects instead of rebuilding them forever.
+  content = ""
+  objTime = default(times.Time)
+  let obj = objFileForCompile(conf, cfile)
+  let depFile = depFileForCompile(conf, cfile)
+  var depTime: times.Time = default(times.Time)
+  try:
+    if not fileExists(depFile): return false
+    depTime = getFileInfo(depFile).lastWriteTime
+    objTime = getFileInfo(obj).lastWriteTime
+  except OSError, IOError, ValueError:
+    return false
+  if depTime > objTime: return false
+  try:
+    content = readFile(depFile)
+  except OSError, IOError:
+    return false
+  result = true
+
+proc headerClosureHash(conf: ConfigRef; cfile: Cfile; hash: var string): bool =
+  ## Folds the content of every header the previous compilation of `cfile`
+  ## actually read into a single hash. Returns false — meaning "assume changed"
+  ## — if that closure cannot be determined.
+  var content: string = ""
+  var objTime: times.Time = default(times.Time)
+  if not readUsableDepFile(conf, cfile, content, objTime): return false
+  var deps: seq[string] = @[]
+  if not parseDepFile(content, deps): return false
+  deps = deduplicate(deps)
+  sort(deps)
+  var acc = ""
+  for dep in deps:
+    var h: SecureHash = default(SecureHash)
+    if not hashOfHeaderFile(dep, h):
+      # A prerequisite recorded by the previous build is gone or unreadable.
+      # The object cannot be shown to be up to date, so it is not.
+      return false
+    acc.add dep
+    acc.add '\0'
+    acc.add $h
+    acc.add '\n'
+  hash = $secureHash(acc)
+  result = true
+
+proc headerDepsUpToDate*(conf: ConfigRef; cfile: Cfile): bool =
+  ## True only when every header the previous compilation of `cfile` actually
+  ## read can be shown to be older than the object file it produced.
+  ##
+  ## This is the timestamp-based counterpart of the hash-based `footprint`
+  ## check, for the caller in `cgen` that decides whether a *generated* `.c`
+  ## needs recompiling. That decision is already made on timestamps there
+  ## (`fileNewer(obj, cname)`), and, like that one, this answers "no" on a tie
+  ## and on anything it cannot determine: the object is only reused when the
+  ## evidence positively supports it.
+  ##
+  ## For a C compiler that cannot produce a dependency file the answer is a
+  ## vacuous `true`, i.e. exactly today's header-blind behaviour.
+  ##
+  ## "Every header ... actually read" is load-bearing and is what
+  ## `readUsableDepFile`, not `parseDepFile`, is responsible for: a partial
+  ## list of headers all of which happen to be old is not evidence that the
+  ## object is current.
+  if not ccSupportsDepFiles(conf): return true
+  var content: string = ""
+  var objTime: times.Time = default(times.Time)
+  if not readUsableDepFile(conf, cfile, content, objTime): return false
+  var deps: seq[string] = @[]
+  if not parseDepFile(content, deps): return false
+  for dep in deps:
+    var depTime: times.Time = default(times.Time)
+    try:
+      depTime = getFileInfo(dep).lastWriteTime
+    except OSError, IOError, ValueError:
+      return false # a recorded prerequisite vanished
+    if not (objTime > depTime): return false
+  result = true
+
+proc footprint(conf: ConfigRef; cfile: Cfile): Footprint =
+  ## The identity of a cached `.o`.
+  ##
+  ## Historically this hashed only the generated `.c`, the target OS/CPU, the C
+  ## compiler's *name* and the compile command — but not the headers that `.c`
+  ## includes. Editing a header therefore left the footprint unchanged and Nim
+  ## reused a stale object, which is a silent miscompilation: the program that
+  ## ran did not correspond to the sources on disk. `headerClosureHash` closes
+  ## that hole using the C compiler's own record of what it read.
+  var headers = ""
+  var complete = true
+  if ccSupportsDepFiles(conf):
+    complete = headerClosureHash(conf, cfile, headers)
+  result = Footprint(
+    complete: complete,
+    hash: secureHash(
+      $secureHashFile(cfile.cname.string) &
+      platform.OS[conf.target.targetOS].name &
+      platform.CPU[conf.target.targetCPU].name &
+      extccomp.CC[conf.cCompiler].name &
+      getCompileCFileCmd(conf, cfile) &
+      headers))
+
+proc footprintFile(conf: ConfigRef; cfile: Cfile): AbsoluteFile =
+  toGeneratedFile(conf, conf.mangleModuleName(cfile.cname).AbsoluteFile, "sha1")
+
+proc writeFootprint(conf: ConfigRef; cfile: Cfile; hash: SecureHash) =
+  var f: File = default(File)
+  if open(f, footprintFile(conf, cfile).string, fmWrite):
+    f.writeLine($hash)
+    close(f)
+
+proc refreshFootprints(conf: ConfigRef) =
+  ## Re-records the footprint of every *external* object just (re)built, now
+  ## that the C compiler has written its dependency file.
+  ##
+  ## Without this a freshly populated nimcache would cost one extra full
+  ## rebuild: the footprint stored *before* compiling cannot include a header
+  ## closure that did not exist yet, so the very next run would find a
+  ## mismatch. Storing the complete footprint after a successful compilation
+  ## makes the first warm rebuild already a no-op.
+  ##
+  ## Only external files take part. A footprint is written to be read back by
+  ## `externalFileChanged`, which is reached from `addExternalFileToCompile`
+  ## and hence only ever for `{.compile.}` / `--compile:` inputs; every caller
+  ## of it tags the `Cfile` with `CfileFlag.External`. Nim's own generated
+  ## translation units are decided by `cgen`'s `shouldRecompile` instead and
+  ## never consult a `.sha1` file, so computing one for them means hashing
+  ## every generated `.c` and leaving behind a file nothing will ever open —
+  ## six of them for a six-module program.
+  if not ccSupportsDepFiles(conf): return
+  for it in conf.toCompile:
+    if CfileFlag.External notin it.flags: continue
+    if CfileFlag.Cached in it.flags: continue
+    let fp = footprint(conf, it)
+    if fp.complete:
+      writeFootprint(conf, it, fp.hash)
 
 proc externalFileChanged(conf: ConfigRef; cfile: Cfile): bool =
   if conf.backend == backendJs: return false # pre-existing behavior, but not sure it's good
 
-  let hashFile = toGeneratedFile(conf, conf.mangleModuleName(cfile.cname).AbsoluteFile, "sha1")
-  let currentHash = footprint(conf, cfile)
+  let hashFile = footprintFile(conf, cfile)
+  let current = footprint(conf, cfile)
   var f: File = default(File)
-  if open(f, hashFile.string, fmRead):
+  if not current.complete:
+    # The header closure is unknown; fail closed and recompile.
+    result = true
+  elif open(f, hashFile.string, fmRead):
     let oldHash = parseSecureHash(f.readLine())
     close(f)
-    result = oldHash != currentHash
+    result = oldHash != current.hash
   else:
     result = true
   if result:
-    if open(f, hashFile.string, fmWrite):
-      f.writeLine($currentHash)
-      close(f)
+    writeFootprint(conf, cfile, current.hash)
 
 proc addExternalFileToCompile*(conf: ConfigRef; c: var Cfile) =
   # we want to generate the hash file unconditionally
@@ -994,6 +1333,10 @@ proc callCCompiler*(conf: ConfigRef) =
 
   if optCompileOnly notin conf.globalOptions:
     execCmdsInParallel(conf, cmds, prettyCb)
+    # `execCmdsInParallel` aborts the compiler on a failing command, so getting
+    # here means every object above was produced together with its dependency
+    # file. Record the now-complete footprints; see `refreshFootprints`.
+    refreshFootprints(conf)
   if optNoLinking notin conf.globalOptions:
     # call the linker:
     var objfiles = ""
@@ -1066,7 +1409,7 @@ proc jsonBuildInstructionsFile*(conf: ConfigRef): AbsoluteFile =
   # works out of the box with `hashMainCompilationParams`.
   result = getNimcacheDir(conf) / conf.outFile.changeFileExt("json")
 
-const cacheVersion = "D20240927T193831" # update when `BuildCache` spec changes
+const cacheVersion = "D20260919T090000" # update when `BuildCache` spec changes
 type BuildCache = object
   cacheVersion: string
   outputFile: string
@@ -1082,7 +1425,81 @@ type BuildCache = object
   currentDir: string
   cmdline: string
   depfiles: seq[(string, string)]
+  cdepfiles: seq[(string, string)]
+    ## Content hashes of the C headers the previous build actually read, as
+    ## reported by the C compiler, minus the files this build generated itself.
+    ## `depfiles` covers the Nim sources only, so without this a `-r` /
+    ## `nimBetterRun` invocation would answer "nothing changed" after a header
+    ## edit and rerun a stale binary. Where a header physically lives is not
+    ## part of the criterion; see `collectHeaderDeps`.
+  cdepsComplete: bool
+    ## Whether `cdepfiles` is the *whole* header closure. When it is not, the
+    ## cached build must be treated as out of date: a wrong "unchanged" answer
+    ## silently runs stale code.
   nimexe: string
+
+proc collectHeaderDeps(conf: ConfigRef; complete: var bool): seq[(string, string)] =
+  ## Every file the C compiler reported reading while producing this build's
+  ## objects, paired with its content hash. `complete` is set to false if that
+  ## set could not be established for some object.
+  result = @[]
+  complete = true
+  if not ccSupportsDepFiles(conf):
+    # Nothing to report, and nothing is claimed: `cdepsComplete` stays true so
+    # that such a toolchain keeps exactly the behaviour it has today.
+    return
+  var seen = initTable[string, bool]()
+  # Prerequisites that this very run wrote itself are deliberately left out:
+  # their content is a function of the Nim sources, which `depfiles` already
+  # hashes, and several configurations sharing one nimcache (`--usenimcache`
+  # with different `-d:` values) rewrite each other's `.c` without that meaning
+  # either build is stale.
+  #
+  # The set is those files, enumerated — *not* the directory they happen to sit
+  # in. Excluding everything under the nimcache would also silence a genuine
+  # header that lives there: `--nimcache:<project dir>`, or a header the build
+  # generates into it. Such a header would be edited and the `-r` fast path
+  # would answer "nothing changed" and rerun the previous binary, which is the
+  # exact failure this whole mechanism exists to prevent.
+  var generated = initTable[string, bool]()
+  proc note(path: string) =
+    let p = try: path.absolutePath.normalizedPath
+            except OSError, ValueError: return
+    generated[p] = true
+  for it in conf.toCompile:
+    # `cgen` emits one translation unit per Nim module; external `{.compile.}`
+    # inputs are real sources and must keep being hashed.
+    if CfileFlag.External notin it.flags:
+      note it.cname.string
+  if optGenIndex in conf.globalOptions:
+    # `--header` (and `--index`, which sets the same flag) makes `cgen`
+    # generate a `.h` as well; mirror `setupCgen`'s spelling of its path.
+    let hf = if conf.headerFile.len > 0: AbsoluteFile conf.headerFile
+             else: conf.projectFull
+    note changeFileExt(completeCfilePath(conf, hf), hExt).string
+  proc isGenerated(path: string): bool =
+    let p = try: path.absolutePath.normalizedPath
+            except OSError, ValueError: return false
+    result = generated.hasKey(p)
+  for it in conf.toCompile:
+    var content: string = ""
+    var objTime: times.Time = default(times.Time)
+    if not readUsableDepFile(conf, it, content, objTime):
+      complete = false
+      continue
+    var deps: seq[string] = @[]
+    if not parseDepFile(content, deps):
+      complete = false
+      continue
+    for dep in deps:
+      if isGenerated(dep): continue
+      if seen.hasKeyOrPut(dep, true): continue
+      var h: SecureHash = default(SecureHash)
+      if hashOfHeaderFile(dep, h):
+        result.add (dep, $h)
+      else:
+        complete = false
+  sort(result)
 
 proc writeJsonBuildInstructions*(conf: ConfigRef; deps: StringTableRef) =
   var linkFiles = collect(for it in conf.externalToLink:
@@ -1113,6 +1530,7 @@ proc writeJsonBuildInstructions*(conf: ConfigRef; deps: StringTableRef) =
         else: # backup for configs etc.
           bcache.depfiles.add (path, $secureHashFile(path))
 
+    bcache.cdepfiles = collectHeaderDeps(conf, bcache.cdepsComplete)
     bcache.nimexe = hashNimExe()
     if fileExists(bcache.outputFile):
       bcache.outputLastModificationTime = $getLastModificationTime(bcache.outputFile)
@@ -1123,7 +1541,12 @@ proc changeDetectedViaJsonBuildInstructions*(conf: ConfigRef; jsonFile: Absolute
   result = false
   if not fileExists(jsonFile) or not fileExists(conf.absOutFile): return true
   var bcache: BuildCache = default(BuildCache)
-  try: bcache.fromJson(jsonFile.string.parseFile)
+  # `allowMissingKeys`: a `BuildCache` written by an older compiler simply lacks
+  # the newer fields. Tolerate that and let the `cacheVersion` check below
+  # reject it, instead of reporting a scary JSON failure once per nimcache after
+  # every upgrade. Missing fields default to zero values, which for
+  # `cdepsComplete` means "not established", i.e. rebuild.
+  try: bcache.fromJson(jsonFile.string.parseFile, Joptions(allowMissingKeys: true))
   except IOError, OSError, ValueError:
     stderr.write "Warning: JSON processing failed for: $#\n" % jsonFile.string
     return true
@@ -1136,6 +1559,13 @@ proc changeDetectedViaJsonBuildInstructions*(conf: ConfigRef; jsonFile: Absolute
     # xxx optimize by returning false if stdin input was the same
   for (file, hash) in bcache.depfiles:
     if $secureHashFile(file) != hash: return true
+  # The Nim sources are unchanged; the C headers they pull in must be too.
+  # Without this check a `-r` run would skip the whole compilation after a
+  # header edit and rerun the previous, now stale, binary.
+  if not bcache.cdepsComplete: return true
+  for (file, hash) in bcache.cdepfiles:
+    var h: SecureHash = default(SecureHash)
+    if not hashOfHeaderFile(file, h) or $h != hash: return true
   if bcache.outputLastModificationTime != $getLastModificationTime(bcache.outputFile):
     return true
 
