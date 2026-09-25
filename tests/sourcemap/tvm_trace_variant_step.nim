@@ -63,7 +63,7 @@ proc make(): Shape =           # line 13
   result = Shape(kind: red, r: 42)  # line 14
 
 block:                         # line 16
-  const s = make()             # line 17
+  let s = make()               # line 17
   doAssert $s == "(kind: red, r: 42)"  # line 18
 """
 

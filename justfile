@@ -1,8 +1,8 @@
 # codetracer-nim — common build & test recipes
 #
 # Prereq: enter the flake's dev shell first
-#     nix develop          # one-off
-#     # or:  direnv allow  (with `use flake` in .envrc)
+#     repro allow          # authorize the repro shell hook
+#     repro exec -- just build-nim  # explicit activation
 #
 # Assumes the standard sibling-repo `dist/` layout. After CTFS-M1, the
 # compiler links against `dist/codetracer-trace-format-nim`. Run
@@ -22,7 +22,11 @@ default:
 # use koch to bootstrap bin/nim in release mode.
 build-nim:
     nim c koch
-    ./koch boot -d:release
+    ./koch boot -d:release --lib:lib
+
+# Build the matching fork: stock nimsuggest lacks highlightRange.
+build-nimsuggest:
+    ./koch nimsuggest -d:release --lib:lib
 
 # ---------------------------------------------------------------------
 # Testing
@@ -37,7 +41,7 @@ test category:
     ./koch tests cat {{category}}
 
 # Run the sourcemap category (our main focus given the V3 series).
-test-sourcemap:
+test-sourcemap: build-nimsuggest
     ./koch tests cat sourcemap
 
 # Run the vm category.
@@ -45,7 +49,7 @@ test-vm:
     ./koch tests cat vm
 
 # Curated fast subset suitable for pre-push.
-check:
+check: build-nimsuggest
     ./koch tests cat sourcemap
     ./koch tests cat vm
 

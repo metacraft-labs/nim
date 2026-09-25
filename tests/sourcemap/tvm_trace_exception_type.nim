@@ -25,12 +25,9 @@ discard """
 ##
 ## Asserted properties:
 ##   1. The trace's varname pool contains the user-source binding `e`.
-##   2. At least one value record references that varname and carries
-##      a type whose name contains the substring `IndexDefect`. The
-##      full expected rendering is `ref IndexDefect`, but the test
-##      accepts the substring form to stay robust against a future
-##      tighter rendering choice (e.g. dropping the `ref` qualifier
-##      for ref-typed bindings).
+##   2. A completed reference assignment carries exactly `ref IndexDefect`.
+##      An earlier initialization record may still carry the object type;
+##      it must not hide the later reference assignment from this check.
 
 import std/[os, osproc, assertions, strutils]
 import results
@@ -100,8 +97,7 @@ proc main() =
   doAssert eId >= 0,
     "expected user-bound `e` in varnames[], got: " & varnames.join(", ")
 
-  # --- (2) at least one value record for `e` carries a type name that
-  # contains `IndexDefect` ---------------------------------------------------
+  # --- (2) the reference assignment is recorded, beyond initialization ------
   let stepsRes = rdr.stepCount
   doAssert stepsRes.isOk, "stepCount failed: " & stepsRes.error
   let steps = stepsRes.get()
@@ -120,15 +116,15 @@ proc main() =
         "typeName lookup failed for typeId " & $v.typeId & ": " & tn.error
       let name = tn.get
       sawTypeName = name
-      if "IndexDefect" in name:
+      if name == "ref IndexDefect":
         matched = true
         break
     if matched:
       break
 
   doAssert matched,
-    "expected a value record for `e` whose type_name contains " &
-    "'IndexDefect' (full form: `ref IndexDefect`); got type_name=" &
+    "expected a value record for `e` whose type_name is " &
+    "'ref IndexDefect'; got type_name=" &
     sawTypeName.repr & " in interning pool " & typeNames.join(", ")
 
   # The fix produces the qualified form `ref IndexDefect`. We assert the

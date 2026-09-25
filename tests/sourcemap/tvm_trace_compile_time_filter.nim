@@ -91,7 +91,7 @@ proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
   let totalRes = rdr.stepCount
   doAssert totalRes.isOk, "stepCount failed: " & totalRes.error
   let total = totalRes.get()
-  let gli = buildGliFromMeta(rdr.meta)
+  let gli = rdr.globalPositionSpace()
   result = @[]
   for i in 0'u64 ..< total:
     let evRes = rdr.step(i)
@@ -110,7 +110,9 @@ proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
         let p = posRes.get()
         (int(p.file), uint64(p.line))
       else:
-        resolveGli(gli, absRes.get())
+        let posRes = resolveGli(gli, absRes.get())
+        doAssert posRes.isOk, "resolveGli failed: " & posRes.error
+        posRes.get()
     result.add(EventInfo(idx: i, kind: ev.kind, line: line,
                          pathId: pathId))
 

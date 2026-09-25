@@ -85,7 +85,7 @@ proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
   let totalRes = rdr.stepCount
   doAssert totalRes.isOk, "stepCount failed: " & totalRes.error
   let total = totalRes.get()
-  let gli = buildGliFromMeta(rdr.meta)
+  let gli = rdr.globalPositionSpace()
 
   result = @[]
   for i in 0'u64 ..< total:
@@ -104,8 +104,9 @@ proc collectEvents(rdr: var NewTraceReader): seq[EventInfo] =
           "decodeGlobalPositionIndex failed: " & posRes.error
         uint64(posRes.get().line)
       else:
-        let (_, l) = resolveGli(gli, absRes.get())
-        l
+        let posRes = resolveGli(gli, absRes.get())
+        doAssert posRes.isOk, "resolveGli failed: " & posRes.error
+        posRes.get()[1]
     var msg = ""
     if ev.kind == sekRaise:
       msg = cast[string](ev.message)

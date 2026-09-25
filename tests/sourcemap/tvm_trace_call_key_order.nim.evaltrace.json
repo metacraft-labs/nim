@@ -4,6 +4,21 @@
     "args": [],
     "workdir": "<workdir>",
     "recorder": "",
+    "flags": {
+      "has_column_aware_steps": true,
+      "has_alternate_source_views": false,
+      "supports_column_breakpoints": true,
+      "supports_column_motions": true,
+      "has_call_stream": true,
+      "has_step_stream": true,
+      "has_value_stream": true,
+      "has_io_event_stream": true,
+      "has_interning_tables": true,
+      "has_correlation_index": false,
+      "has_line_count_table": false,
+      "has_source_reload": false
+    },
+    "column_aware_paths_suspected": false,
     "trace_filter": {
       "filters": [
         {
@@ -16,21 +31,32 @@
   "paths": [
     "<workdir>/tests/sourcemap/tvm_trace_call_key_order.nim"
   ],
+  "path_versions": [
+    {
+      "path_id": 0,
+      "version_ordinal": 0,
+      "version_count": 1,
+      "recorded_line_count": 0
+    }
+  ],
   "functions": [
     "outer",
     "inner"
   ],
   "varnames": [],
   "types": [],
+  "source_views": [],
   "counts": {
     "paths": 1,
     "functions": 2,
     "varnames": 0,
     "types": 0,
+    "source_views": 0,
     "steps": 4,
     "calls": 2,
-    "values": 4,
-    "io_events": 0
+    "values": 9,
+    "io_events": 0,
+    "source_reloads": 0
   },
   "events": [
     {
@@ -38,7 +64,9 @@
       "step_index": 0,
       "path_id": 0,
       "line": 28,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tvm_trace_call_key_order.nim",
+      "column": 1,
       "step_kind": "sekAbsoluteStep",
       "vars": []
     },
@@ -47,8 +75,8 @@
       "call_key": 0,
       "function_id": 0,
       "function": "outer",
-      "entry_step": 1,
-      "exit_step": 3,
+      "entry_step": 2,
+      "exit_step": 8,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -58,10 +86,12 @@
     },
     {
       "kind": "step",
-      "step_index": 1,
+      "step_index": 2,
       "path_id": 0,
       "line": 26,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tvm_trace_call_key_order.nim",
+      "column": 1,
       "step_kind": "sekDeltaStep",
       "function_id": 0,
       "function": "outer",
@@ -73,8 +103,8 @@
       "call_key": 1,
       "function_id": 1,
       "function": "inner",
-      "entry_step": 2,
-      "exit_step": 2,
+      "entry_step": 5,
+      "exit_step": 6,
       "depth": 1,
       "parent_call_key": 0,
       "args": [],
@@ -82,11 +112,13 @@
     },
     {
       "kind": "step",
-      "step_index": 2,
+      "step_index": 5,
       "path_id": 0,
       "line": 23,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tvm_trace_call_key_order.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 1,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 1,
       "function": "inner",
       "depth": 1,
@@ -97,7 +129,7 @@
       "call_key": 1,
       "function_id": 1,
       "function": "inner",
-      "exit_step": 2,
+      "exit_step": 6,
       "depth": 1,
       "return_value": {
         "kind": "Void"
@@ -105,11 +137,13 @@
     },
     {
       "kind": "step",
-      "step_index": 3,
+      "step_index": 7,
       "path_id": 0,
       "line": 26,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tvm_trace_call_key_order.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 1,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 0,
       "function": "outer",
       "depth": 0,
@@ -120,7 +154,7 @@
       "call_key": 0,
       "function_id": 0,
       "function": "outer",
-      "exit_step": 3,
+      "exit_step": 8,
       "depth": 0,
       "return_value": {
         "kind": "Void"

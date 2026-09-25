@@ -119,3 +119,6 @@ pkgs/
 
 # Nix-generated pre-commit config
 .pre-commit-config.yaml
+
+# Repro development environment cache
+.repro/

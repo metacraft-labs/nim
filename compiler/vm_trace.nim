@@ -1694,9 +1694,30 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
   if shouldSkipPath(tracer, int32(sym.info.fileIndex)):
     return
 
-  let value = serializeVmValue(reg, typ)
+  var value = serializeVmValue(reg, typ)
   let typeName = typeNameForReg(reg, typ)
   let typeId = tracer.ensureTypeName(typeName)
+  # StepValues stores (varname, CBOR value), not VariableValue.typeId.
+  # The reader reconstructs the type ID from this top-level CBOR field.
+  let encodedTypeId = TypeId(typeId)
+  case value.kind
+  of vrkInt: value.intTypeId = encodedTypeId
+  of vrkFloat: value.floatTypeId = encodedTypeId
+  of vrkBool: value.boolTypeId = encodedTypeId
+  of vrkString: value.strTypeId = encodedTypeId
+  of vrkSequence: value.seqTypeId = encodedTypeId
+  of vrkTuple: value.tupleTypeId = encodedTypeId
+  of vrkStruct: value.structTypeId = encodedTypeId
+  of vrkVariant: value.variantTypeId = encodedTypeId
+  of vrkReference: value.refTypeId = encodedTypeId
+  of vrkRaw: value.rawTypeId = encodedTypeId
+  of vrkError: value.errorTypeId = encodedTypeId
+  of vrkNone: value.noneTypeId = encodedTypeId
+  of vrkBigInt: value.bigIntTypeId = encodedTypeId
+  of vrkChar: value.charTypeId = encodedTypeId
+  of vrkSet: value.setTypeId = encodedTypeId
+  of vrkEnum: value.enumTypeId = encodedTypeId
+  of vrkCell, vrkValueRef: discard # These wire variants carry no type ID.
 
   let key = sym.itemId
   var varnameId: uint64 = 0

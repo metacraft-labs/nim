@@ -51,6 +51,7 @@
             packages = with pkgs; [
               # Toolchain
               gcc
+              nim # Host compiler used by `just build-nim` to compile koch.
               pkg-config
               gnumake
               git

@@ -755,6 +755,10 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
                         c.debug[pc])
     of opcAsgnRef:
       asgnRef(regs[ra], regs[instr.regB])
+      if c.vmTracer != nil:
+        let sym = resolveTracedSlotSym(c, tos, ra.int)
+        traceAssignment(cast[ptr VmTracer](c.vmTracer)[], sym, regs[ra],
+                        c.debug[pc], if sym != nil: sym.typ else: nil)
     of opcNodeToReg:
       let ra = instr.regA
       let rb = instr.regB
