@@ -72,16 +72,16 @@ block:                         # line 16
 # lines that a debugger user stepping forward should not jump into.
 const forbiddenTypeDefLines = @[5, 6, 7, 8, 9, 10, 11]
 
-proc main() =
+proc checkVariant(binding: string) =
   let nim = getCurrentCompilerExe()
   doAssert fileExists(nim), "compiler binary not found at: " & nim
 
   createDir(buildDir)
-  let scriptFile = buildDir / "variant_step.nims"
-  let traceFile = buildDir / "variant_step.ct"
-  writeFile(scriptFile, testScript)
+  let scriptFile = buildDir / ("variant_step_" & binding & ".nims")
+  let traceFile = buildDir / ("variant_step_" & binding & ".ct")
+  writeFile(scriptFile, testScript.replace("let s =", binding & " s ="))
 
-  let cmd = nim & " e --trace:" & traceFile & " " & scriptFile
+  let cmd = quoteShell(nim) & " e --trace:" & quoteShell(traceFile) & " " & quoteShell(scriptFile)
   let (output, exitCode) = execCmdEx(cmd)
   doAssert exitCode == 0, "nim e --trace failed: " & output
 
@@ -128,14 +128,21 @@ proc main() =
     "step events landed inside the variant-object type definition at " &
     "lines " & $violations & " (full step sequence: " & $stepLines & ")"
 
-  # Also assert that the actual construction site (line 14) appears in the
-  # trace. Without this, the "no forbidden lines" check would be vacuously
-  # true if the construction emitted no steps at all.
-  doAssert 14 in stepLines,
-    "expected a step at the construction site (line 14); got " & $stepLines
+  # Both arms must actually inspect the variant at runtime. Const construction
+  # happens during compilation and must not leak into the runtime trace; let
+  # construction must remain visible. These are distinct positive contracts.
+  doAssert 18 in stepLines,
+    binding & ": missing runtime variant inspection: " & $stepLines
+  if binding == "let":
+    doAssert 14 in stepLines,
+      "let: missing runtime construction: " & $stepLines
+  else:
+    doAssert 14 notin stepLines,
+      "const: compile-time construction leaked into runtime: " & $stepLines
 
   removeDir(buildDir)
-  echo "PASS: tvm_trace_variant_step - step sequence " & $stepLines &
+  echo "PASS: tvm_trace_variant_step " & binding & " - step sequence " & $stepLines &
     " (no events inside type definition)"
 
-main()
+checkVariant("const")
+checkVariant("let")
