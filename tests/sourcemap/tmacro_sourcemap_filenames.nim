@@ -92,9 +92,9 @@ proc compileAndAssert(filenamesMode: string) =
   doAssert exitCode == 0,
     "[" & filenamesMode & "] compilation failed:\n" & output
 
-  let mapFile = findMacroSourcemap(workDir)
+  let mapFile = findMacroSourcemap(nimcache)
   doAssert mapFile.len > 0,
-    "[" & filenamesMode & "] macro_sourcemap_*.json not found in " & workDir
+    "[" & filenamesMode & "] macro_sourcemap_*.json not found in " & nimcache
 
   let js = parseJson(readFile(mapFile))
 

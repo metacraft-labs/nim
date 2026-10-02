@@ -122,3 +122,7 @@ pkgs/
 
 # Repro development environment cache
 .repro/
+
+# The fork writes macro_sourcemap_<name>.json into the nimcache; older builds
+# of it wrote the file beside the output binary, often inside a source tree.
+macro_sourcemap_*.json

@@ -44,15 +44,15 @@ proc main() =
   let (output, exitCode) = execCmdEx(cmd)
   doAssert exitCode == 0, "Compilation failed: " & output
 
-  # macro_sourcemap_*.json lives next to the output binary
+  # macro_sourcemap_*.json lives in the nimcache
   var macroSourcemapFile = ""
-  for f in walkDir(buildDir):
+  for f in walkDir(nimcache):
     let name = f.path.extractFilename
     if name.startsWith("macro_sourcemap_") and name.endsWith(".json"):
       macroSourcemapFile = f.path
       break
   doAssert macroSourcemapFile.len > 0,
-    "macro_sourcemap_*.json not found in " & buildDir
+    "macro_sourcemap_*.json not found in " & nimcache
 
   let js = parseJson(readFile(macroSourcemapFile))
 

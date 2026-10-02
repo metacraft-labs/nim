@@ -2731,9 +2731,13 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
 
   # start of macro sourcemap code
 
-  let fullPath = config.prepareToWriteOutput
-
-  let (outDir, name, _) = splitFile(fullPath)
+  # The macro sourcemap is a build side output: it is written into the
+  # nimcache, beside the per-module `.c.map` source maps, and named after the
+  # output file (`macro_sourcemap_<out name>.json`). The output directory is
+  # often a source tree, where it would be an untracked file.
+  let (_, name, _) = splitFile(config.absOutFile)
+  let macroSourcemapDir = getNimcacheDir(config)
+  createDir(macroSourcemapDir)
 
   if config.macroSourcemap.isNil:
     config.macroSourcemap = MacroSourcemap()
@@ -2820,7 +2824,7 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
   finalJsonNode["expandedEntries"] = %config.macroSourcemap.expandedEntries
   finalJsonNode["expandedFilename"] = %config.macroSourcemap.expandedFilename
   finalJsonNode["topLevelLines"] = %config.macroSourcemap.topLevelLines
-  writeFile(outDir / RelativeFile("macro_sourcemap_" & name.string & ".json"), pretty(finalJsonNode))
+  writeFile(macroSourcemapDir / RelativeFile("macro_sourcemap_" & name.string & ".json"), pretty(finalJsonNode))
 
   if config.macroSourcemap.expandedFilename.len > 0:
     writeFile(config.macroSourcemap.expandedFilename.AbsoluteFile, config.macroSourcemap.source)
