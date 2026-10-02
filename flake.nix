@@ -109,18 +109,26 @@
               # codetracer-trace-format-nim; the nim-stew checkout must carry the
               # slim-system `import std/assertions` guard for endians2 et al. (the
               # nimony bootstrap tools build with -d:nimPreviewSlimSystem).
-              _ctnim_ws="$(cd "$PWD/.." 2>/dev/null && pwd)"
-              if [ -n "$_ctnim_ws" ]; then
-                mkdir -p dist
+              # The links go into THIS repository's `dist/`, never into the
+              # directory the shell is entered from: `nix develop` of this
+              # flake from another checkout must write nothing there. This
+              # repository is recognised by `koch.nim` and `compiler/cgen.nim`
+              # at the top level of the enclosing git checkout.
+              # tests/test_dev_shell_writes_nothing_elsewhere.sh
+              _ctnim_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+              if [ -n "$_ctnim_root" ] && [ -f "$_ctnim_root/koch.nim" ] \
+                && [ -f "$_ctnim_root/compiler/cgen.nim" ]; then
+                _ctnim_ws="$(cd "$_ctnim_root/.." 2>/dev/null && pwd)"
+                mkdir -p "$_ctnim_root/dist"
                 for _dep in codetracer-trace-format-nim nim-stew nim-results; do
-                  if [ -d "$_ctnim_ws/$_dep" ] && [ ! -e "dist/$_dep" ]; then
-                    ln -sfn "../../$_dep" "dist/$_dep"
+                  if [ -d "$_ctnim_ws/$_dep" ] && [ ! -e "$_ctnim_root/dist/$_dep" ]; then
+                    ln -sfn "../../$_dep" "$_ctnim_root/dist/$_dep"
                     echo "[codetracer-nim] dist: linked dist/$_dep -> ../../$_dep"
                   fi
                 done
-                unset _dep
+                unset _dep _ctnim_ws
               fi
-              unset _ctnim_ws
+              unset _ctnim_root
 
               echo "[codetracer-nim] Run 'just' to see available recipes."
             '';

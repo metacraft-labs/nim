@@ -44,6 +44,11 @@ test category:
 test-sourcemap: build-nimsuggest
     ./koch tests cat sourcemap
 
+# Entering the dev shell from another git repository must write nothing
+# there. Runs `nix develop`, so it is not part of the testament suites.
+test-dev-shell:
+    bash tests/devshell/test_dev_shell_writes_nothing_elsewhere.sh
+
 # Run the vm category.
 test-vm:
     ./koch tests cat vm
