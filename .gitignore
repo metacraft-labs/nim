@@ -117,8 +117,22 @@ nimdoc.out.css
 pkgs/
 /compiler/compiler/
 
-# Nix-generated pre-commit config
-.pre-commit-config.yaml
+# The committed `.pre-commit-config.yaml` is the portable form of the MCL
+# Standard Hook Set (metacraft-dev-guidelines repo-requirements.md 4.1-4.3),
+# so it must NOT be ignored. The entry that used to ignore it here as a
+# "Nix-generated" file is stale, measured rather than assumed: `git grep -ni
+# pre-commit -- '*.nix'` matches nothing in this repository, this fork's
+# flake.nix takes only nixpkgs as an input and wires no git hooks, and a
+# checkout of this fork carries no `.pre-commit-config.yaml` symlink into
+# /nix/store (8 workspace repos do; this is not one of them).
+#
+# An ignored config is a trap, not a nicety: plain `git add` of it is refused,
+# so a hook set can be installed, pass its own proofs locally, and never be
+# committed at all -- which is exactly how a gate ends up existing on one
+# machine. These two lines were Metacraft's and not upstream's (nim-lang/Nim
+# devel carries no pre-commit entry in .gitignore), so replacing them conflicts
+# with nothing upstream maintains.
+!.pre-commit-config.yaml
 
 # Repro development environment cache
 .repro/
