@@ -79,13 +79,13 @@ import ast, renderer
 import results
 export results
 import codetracer_trace_writer/multi_stream_writer
-export multi_stream_writer.IOEventKind
 import codetracer_trace_writer/value_stream
 import codetracer_trace_writer/call_stream
 import codetracer_trace_writer/cbor
 import codetracer_trace_writer/path_filter
 import ../dist/checksums/src/checksums/sha2
 import codetracer_trace_types
+export codetracer_trace_types.EventLogKind
 import vm_value_serializer
 import vmdef
 
@@ -1254,6 +1254,13 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
     compileTimeDepth: 0,
   )
 
+  template setupOrFail(call: untyped, what: string) =
+    let setupRes = call
+    if setupRes.isErr:
+      tracer.writer.closeCtfs()
+      dealloc(tracer)
+      return err("failed to " & what & ": " & setupRes.error)
+
   # Column-Aware-Replay: opt the writer into column-aware step
   # encoding *before* any path / step is registered. This sets bit 4
   # of `meta.dat`'s flag word at close time, switches `registerPath`
@@ -1263,7 +1270,8 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   # opts in: column data is cheap on this side (it's already in
   # every TLineInfo via the parser), and traces consumed by
   # CodeTracer's replay UI expect column-aware navigation.
-  tracer.writer.enableColumnAwareSteps()
+  setupOrFail(tracer.writer.enableColumnAwareSteps(),
+              "enable column-aware steps")
 
   # M-capability-flags: the Nim VM tracer carries the full
   # ``(line, column)`` pair from every TLineInfo, so the per-step
@@ -1273,8 +1281,10 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   # step-over / step-in / step-out controls.  Spec:
   # ``codetracer-trace-format-spec/internal-files.md`` §
   # "Column-Aware Capability Flags".
-  tracer.writer.enableColumnBreakpointsSupport()
-  tracer.writer.enableColumnMotionsSupport()
+  setupOrFail(tracer.writer.enableColumnBreakpointsSupport(),
+              "advertise column breakpoints")
+  setupOrFail(tracer.writer.enableColumnMotionsSupport(),
+              "advertise column motions")
 
   # TF-M5-Prep-2 (Blocker 2): hand the composed provenance chain to
   # the writer so meta.dat carries the `FlagHasTraceFilterProvenance`
@@ -1285,8 +1295,9 @@ proc initVmTracer*(outputPath: string, scriptPath: string,
   # the bit to distinguish "did not record" from "recorded an empty
   # chain", and the Nim VM tracer always at least loads the embedded
   # builtin default, so this branch is mainly defensive.
-  tracer.writer.setFilterProvenance(composed.provenance,
-                                    recordEvenIfEmpty = true)
+  setupOrFail(tracer.writer.setFilterProvenance(composed.provenance,
+                                                recordEvenIfEmpty = true),
+              "record the trace-filter provenance")
 
   # TF-M4a: populate `metadata.workdir` so the materializer's
   # `FullOpts(stripPaths: true)` can substitute `<workdir>` into paths
@@ -1744,23 +1755,21 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
     info: info,
   ))
 
-proc traceIO*(tracer: var VmTracer, kind: IOEventKind, info: TLineInfo,
+proc traceIO*(tracer: var VmTracer, kind: EventLogKind, info: TLineInfo,
               payload: string) =
   ## CTFS-M-IO: emit an IO event into the trace's io_event stream.
   ##
   ## Hooked from:
-  ##   * `opcEcho` in vm.nim — `kind = ioStdout`, `payload` = the joined
+  ##   * `opcEcho` in vm.nim — `kind = elkWrite`, `payload` = the joined
   ##     argument string with a trailing newline (matching what
   ##     `msgWriteln` actually writes).
   ##   * NimScript callbacks in scriptconfig.nim (`rawExec`, `removeDir`,
   ##     `removeFile`, `createDir`, `setCurrentDir`, `moveFile`,
   ##     `moveDir`, `copyFile`, `copyDir`, `putEnv`, `delEnv`) —
-  ##     `kind = ioFileOp`, `payload` = a short human-readable
+  ##     `kind = elkReadFile`, `payload` = a short human-readable
   ##     description of the operation ("exec: <cmd>", "createDir:
-  ##     <path>", ...). `ioFileOp` is the format library's
-  ##     general-purpose "filesystem / process" kind; we encode the
-  ##     specific operation in the payload prefix since the wire enum
-  ##     has only four kinds (ioStdout, ioStderr, ioFileOp, ioError).
+  ##     <path>", ...). The specific operation is encoded in the payload
+  ##     prefix; every filesystem / process operation shares one kind.
   ##
   ## CTFS-M-CompileTimeFilter: skipped while the VM is executing
   ## compile-time code. NimScript callbacks fire only at runtime

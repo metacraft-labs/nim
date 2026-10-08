@@ -53,7 +53,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   # an explicit alias keeps the trace hook readable and avoids depending
   # on dirty-template name capture for non-template code.
   let ctx = result
-  template traceIoOp(a: VmArgs, kindArg: IOEventKind, payload: string) =
+  template traceIoOp(a: VmArgs, kindArg: EventLogKind, payload: string) =
     ## Emit an IO event from a NimScript callback. No-op when tracing
     ## is disabled (most common case). The event's source position is
     ## the line of the callsite that invoked the callback
@@ -91,18 +91,18 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     else:
       let path = getString(a, 0)
       os.removeDir(path, getBool(a, 1))
-      traceIoOp(a, ioFileOp, "removeDir: " & path)
+      traceIoOp(a, elkReadFile, "removeDir: " & path)
   cbos removeFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
       let path = getString(a, 0)
       os.removeFile path
-      traceIoOp(a, ioFileOp, "removeFile: " & path)
+      traceIoOp(a, elkReadFile, "removeFile: " & path)
   cbos createDir:
     let path = getString(a, 0)
     os.createDir path
-    traceIoOp(a, ioFileOp, "createDir: " & path)
+    traceIoOp(a, elkReadFile, "createDir: " & path)
 
   result.registerCallback "stdlib.system.getError",
     proc (a: VmArgs) = setResult(a, errorMsg)
@@ -110,7 +110,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   cbos setCurrentDir:
     let path = getString(a, 0)
     os.setCurrentDir path
-    traceIoOp(a, ioFileOp, "setCurrentDir: " & path)
+    traceIoOp(a, elkReadFile, "setCurrentDir: " & path)
   cbos getCurrentDir:
     setResult(a, os.getCurrentDir())
   cbos moveFile:
@@ -120,7 +120,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.moveFile(src, dst)
-      traceIoOp(a, ioFileOp, "moveFile: " & src & " -> " & dst)
+      traceIoOp(a, elkReadFile, "moveFile: " & src & " -> " & dst)
   cbos moveDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -128,7 +128,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.moveDir(src, dst)
-      traceIoOp(a, ioFileOp, "moveDir: " & src & " -> " & dst)
+      traceIoOp(a, elkReadFile, "moveDir: " & src & " -> " & dst)
   cbos copyFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -136,7 +136,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.copyFile(src, dst)
-      traceIoOp(a, ioFileOp, "copyFile: " & src & " -> " & dst)
+      traceIoOp(a, elkReadFile, "copyFile: " & src & " -> " & dst)
   cbos copyDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -144,7 +144,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.copyDir(src, dst)
-      traceIoOp(a, ioFileOp, "copyDir: " & src & " -> " & dst)
+      traceIoOp(a, elkReadFile, "copyDir: " & src & " -> " & dst)
   cbos getLastModificationTime:
     setResult(a, getLastModificationTime(getString(a, 0)).toUnix)
   cbos findExe:
@@ -155,7 +155,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       discard
     else:
       let cmd = getString(a, 0)
-      traceIoOp(a, ioFileOp, "exec: " & cmd)
+      traceIoOp(a, elkReadFile, "exec: " & cmd)
       setResult(a, osproc.execCmd cmd)
 
   cbconf getEnv:
@@ -166,11 +166,11 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     let key = a.getString 0
     let val = a.getString 1
     os.putEnv(key, val)
-    traceIoOp(a, ioFileOp, "putEnv: " & key & "=" & val)
+    traceIoOp(a, elkReadFile, "putEnv: " & key & "=" & val)
   cbconf delEnv:
     let key = a.getString 0
     os.delEnv(key)
-    traceIoOp(a, ioFileOp, "delEnv: " & key)
+    traceIoOp(a, elkReadFile, "delEnv: " & key)
   cbconf dirExists:
     setResult(a, os.dirExists(a.getString 0))
   cbconf fileExists:

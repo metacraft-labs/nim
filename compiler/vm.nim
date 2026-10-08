@@ -1592,13 +1592,13 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
           #if regs[i].kind != rkNode: debug regs[i]
           ioPayload.add(regs[i].node.strVal)
         fn(ioPayload)
-      # CTFS-M-IO: record the echo as an `ioStdout` event in the trace.
+      # CTFS-M-IO: record the echo as an `elkWrite` event in the trace.
       # `msgWriteln` appends a trailing newline (writeLine to stdout) so
       # we mirror that here — the recorded payload matches what the
       # user actually saw on the terminal.
       if c.vmTracer != nil:
         ioPayload.add('\n')
-        traceIO(cast[ptr VmTracer](c.vmTracer)[], ioStdout, c.debug[pc],
+        traceIO(cast[ptr VmTracer](c.vmTracer)[], elkWrite, c.debug[pc],
                 ioPayload)
     of opcContainsSet:
       decodeBC(rkInt)
