@@ -1739,7 +1739,6 @@ proc traceAssignment*(tracer: var VmTracer, sym: PSym, reg: TFullReg,
   tracer.pendingValues.add(PendingValue(
     value: VariableValue(
       varnameId: varnameId,
-      typeId: typeId,
       data: encodeValue(value),
     ),
     info: info,
