@@ -297,20 +297,7 @@ func capacity*[T](self: seq[T]): int {.inline.} =
   let sek = cast[ptr NimSeqV2[T]](unsafeAddr self)
   result = if sek.p != nil: sek.p.cap and not strlitFlag else: 0
 
-func setLenUninit[T](s: var seq[T], newlen: Natural) {.nodestroy.} =
-  ## Sets the length of seq `s` to `newlen`. `T` may be any sequence type.
-  ## New slots will not be initialized.
-  ##
-  ## If the current length is greater than the new length,
-  ## `s` will be truncated.
-  ##   ```nim
-  ##   var x = @[10, 20]
-  ##   x.setLenUninit(5)
-  ##   x[4] = 50
-  ##   assert x[4] == 50
-  ##   x.setLenUninit(1)
-  ##   assert x == @[10]
-  ##   ```
+template setLenUninitImpl[T](s: var seq[T], newlen: Natural) =
   {.noSideEffect.}:
     if newlen < s.len:
       shrink(s, newlen)
@@ -322,5 +309,41 @@ func setLenUninit[T](s: var seq[T], newlen: Natural) {.nodestroy.} =
         if xu.p == nil or (xu.p.cap and not strlitFlag) < newlen:
           xu.p = cast[typeof(xu.p)](prepareSeqAddUninit(oldLen, xu.p, newlen - oldLen, sizeof(T), alignof(T)))
         xu.len = newlen
+
+when defined(nimHasSetLengthSeqUninitMagic):
+  func setLenUninit[T](s: var seq[T], newlen: Natural) {.nodestroy.} =
+    ## Sets the length of seq `s` to `newlen`. `T` may be any sequence type.
+    ## New slots will not be initialized.
+    ##
+    ## If the current length is greater than the new length,
+    ## `s` will be truncated.
+    ##   ```nim
+    ##   var x = @[10, 20]
+    ##   x.setLenUninit(5)
+    ##   x[4] = 50
+    ##   assert x[4] == 50
+    ##   x.setLenUninit(1)
+    ##   assert x == @[10]
+    ##   ```
+    setLenUninitImpl(s, newlen)
+else:
+  # A compiler without the magic (the stage that bootstraps this compiler)
+  # gets the exported seq overload from here; the compiler itself imports
+  # library code that calls it.
+  func setLenUninit*[T](s: var seq[T], newlen: Natural) {.nodestroy.} =
+    ## Sets the length of seq `s` to `newlen`. `T` may be any sequence type.
+    ## New slots will not be initialized.
+    ##
+    ## If the current length is greater than the new length,
+    ## `s` will be truncated.
+    ##   ```nim
+    ##   var x = @[10, 20]
+    ##   x.setLenUninit(5)
+    ##   x[4] = 50
+    ##   assert x[4] == 50
+    ##   x.setLenUninit(1)
+    ##   assert x == @[10]
+    ##   ```
+    setLenUninitImpl(s, newlen)
 
 {.pop.}  # See https://github.com/nim-lang/Nim/issues/21401
