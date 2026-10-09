@@ -55,7 +55,7 @@
     "source_views": 0,
     "steps": 3,
     "calls": 0,
-    "values": 6,
+    "values": 3,
     "io_events": 1,
     "source_reloads": 0
   },
@@ -67,18 +67,18 @@
       "line": 23,
       "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tctfs_bootstrap_demo.nim",
-      "column": 1,
+      "column": 5,
       "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 3,
+      "step_index": 1,
       "path_id": 0,
       "line": 23,
       "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tctfs_bootstrap_demo.nim",
-      "column": 1,
+      "column": 11,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -96,12 +96,12 @@
     },
     {
       "kind": "step",
-      "step_index": 4,
+      "step_index": 2,
       "path_id": 0,
       "line": 24,
       "path_version_ordinal": 0,
       "path": "<workdir>/tests/sourcemap/tctfs_bootstrap_demo.nim",
-      "column": 1,
+      "column": 6,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -109,7 +109,7 @@
       "kind": "io",
       "io_kind": "Write",
       "io_index": 0,
-      "step_id": 5,
+      "step_id": 2,
       "text": "3\n",
       "bytes_b64": "Mwo=",
       "bytes_len": 2
