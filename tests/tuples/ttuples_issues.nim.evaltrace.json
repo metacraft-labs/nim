@@ -4,6 +4,21 @@
     "args": [],
     "workdir": "<workdir>",
     "recorder": "",
+    "flags": {
+      "has_column_aware_steps": true,
+      "has_alternate_source_views": false,
+      "supports_column_breakpoints": true,
+      "supports_column_motions": true,
+      "has_call_stream": true,
+      "has_step_stream": true,
+      "has_value_stream": true,
+      "has_io_event_stream": true,
+      "has_interning_tables": true,
+      "has_correlation_index": false,
+      "has_line_count_table": false,
+      "has_source_reload": false
+    },
+    "column_aware_paths_suspected": false,
     "trace_filter": {
       "filters": [
         {
@@ -15,6 +30,14 @@
   },
   "paths": [
     "<workdir>/tests/tuples/ttuples_issues.nim"
+  ],
+  "path_versions": [
+    {
+      "path_id": 0,
+      "version_ordinal": 0,
+      "version_count": 1,
+      "recorded_line_count": 0
+    }
   ],
   "functions": [
     "fn",
@@ -36,9 +59,9 @@
     "x",
     "y",
     "g",
-    "item",
     "scores",
     "x1",
+    "item",
     "x2",
     "chars",
     "value",
@@ -57,15 +80,18 @@
     "ref OrderedTable",
     "string"
   ],
+  "source_views": [],
   "counts": {
     "paths": 1,
     "functions": 5,
     "varnames": 26,
     "types": 4,
-    "steps": 127,
+    "source_views": 0,
+    "steps": 178,
     "calls": 6,
-    "values": 127,
-    "io_events": 0
+    "values": 178,
+    "io_events": 0,
+    "source_reloads": 0
   },
   "events": [
     {
@@ -73,7 +99,9 @@
       "step_index": 0,
       "path_id": 0,
       "line": 17,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekAbsoluteStep",
       "vars": []
     },
@@ -81,8 +109,10 @@
       "kind": "step",
       "step_index": 1,
       "path_id": 0,
-      "line": 18,
+      "line": 17,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 23,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -90,8 +120,10 @@
       "kind": "step",
       "step_index": 2,
       "path_id": 0,
-      "line": 19,
+      "line": 18,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -99,8 +131,10 @@
       "kind": "step",
       "step_index": 3,
       "path_id": 0,
-      "line": 20,
+      "line": 19,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -108,8 +142,10 @@
       "kind": "step",
       "step_index": 4,
       "path_id": 0,
-      "line": 17,
+      "line": 20,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -118,7 +154,9 @@
       "step_index": 5,
       "path_id": 0,
       "line": 17,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 22,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -157,16 +195,20 @@
       "step_index": 6,
       "path_id": 0,
       "line": 23,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "step",
       "step_index": 7,
       "path_id": 0,
-      "line": 24,
+      "line": 23,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 23,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -174,8 +216,10 @@
       "kind": "step",
       "step_index": 8,
       "path_id": 0,
-      "line": 25,
+      "line": 24,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -183,8 +227,10 @@
       "kind": "step",
       "step_index": 9,
       "path_id": 0,
-      "line": 26,
+      "line": 25,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -192,8 +238,10 @@
       "kind": "step",
       "step_index": 10,
       "path_id": 0,
-      "line": 23,
+      "line": 26,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -202,7 +250,9 @@
       "step_index": 11,
       "path_id": 0,
       "line": 23,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 23,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -241,8 +291,10 @@
       "step_index": 12,
       "path_id": 0,
       "line": 29,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
@@ -250,7 +302,53 @@
       "step_index": 13,
       "path_id": 0,
       "line": 29,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 30,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 14,
+      "path_id": 0,
+      "line": 29,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 31,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 15,
+      "path_id": 0,
+      "line": 29,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 35,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 16,
+      "path_id": 0,
+      "line": 29,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 40,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 17,
+      "path_id": 0,
+      "line": 29,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 29,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -286,19 +384,23 @@
     },
     {
       "kind": "step",
-      "step_index": 14,
+      "step_index": 18,
       "path_id": 0,
       "line": 30,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 15,
+      "step_index": 19,
       "path_id": 0,
       "line": 30,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 13,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -309,26 +411,74 @@
           "value": {
             "kind": "Int",
             "i": 7,
-            "type_id": 0
+            "type_id": 1
           }
         }
       ]
     },
     {
       "kind": "step",
-      "step_index": 16,
+      "step_index": 20,
       "path_id": 0,
       "line": 31,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 17,
+      "step_index": 21,
       "path_id": 0,
       "line": 31,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 26,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 22,
+      "path_id": 0,
+      "line": 31,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 32,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 23,
+      "path_id": 0,
+      "line": 31,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 45,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 24,
+      "path_id": 0,
+      "line": 31,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 56,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 25,
+      "path_id": 0,
+      "line": 31,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 25,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -364,37 +514,34 @@
     },
     {
       "kind": "step",
-      "step_index": 18,
+      "step_index": 26,
       "path_id": 0,
       "line": 34,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 27,
+      "path_id": 0,
+      "line": 34,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 13,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 19,
+      "step_index": 28,
       "path_id": 0,
       "line": 34,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 20,
-      "path_id": 0,
-      "line": 34,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 21,
-      "path_id": 0,
-      "line": 34,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 47,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -4566,44 +4713,41 @@
             },
             "address": 1,
             "mutable": true,
-            "type_id": 0
+            "type_id": 2
           }
         }
       ]
     },
     {
       "kind": "step",
-      "step_index": 22,
+      "step_index": 29,
       "path_id": 0,
       "line": 35,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 23,
+      "step_index": 30,
       "path_id": 0,
       "line": 35,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 13,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 24,
+      "step_index": 31,
       "path_id": 0,
       "line": 35,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 25,
-      "path_id": 0,
-      "line": 35,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 47,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -8775,93 +8919,96 @@
             },
             "address": 2,
             "mutable": true,
-            "type_id": 0
+            "type_id": 2
           }
         }
       ]
-    },
-    {
-      "kind": "step",
-      "step_index": 26,
-      "path_id": 0,
-      "line": 36,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 27,
-      "path_id": 0,
-      "line": 36,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": [
-        {
-          "varname_id": 7,
-          "varname": "key",
-          "type_id": 0,
-          "type_name": "node",
-          "value": {
-            "kind": "None",
-            "type_id": 0
-          }
-        }
-      ]
-    },
-    {
-      "kind": "step",
-      "step_index": 28,
-      "path_id": 0,
-      "line": 38,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 29,
-      "path_id": 0,
-      "line": 38,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": [
-        {
-          "varname_id": 7,
-          "varname": "key",
-          "type_id": 0,
-          "type_name": "node",
-          "value": {
-            "kind": "None",
-            "type_id": 0
-          }
-        }
-      ]
-    },
-    {
-      "kind": "step",
-      "step_index": 30,
-      "path_id": 0,
-      "line": 47,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 31,
-      "path_id": 0,
-      "line": 47,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
     },
     {
       "kind": "step",
       "step_index": 32,
       "path_id": 0,
-      "line": 47,
+      "line": 36,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 7,
+          "varname": "key",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "None",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 33,
+      "path_id": 0,
+      "line": 38,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
+      "step_kind": "sekDeltaStep",
+      "vars": [
+        {
+          "varname_id": 7,
+          "varname": "key",
+          "type_id": 0,
+          "type_name": "node",
+          "value": {
+            "kind": "None",
+            "type_id": 0
+          }
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 34,
+      "path_id": 0,
+      "line": 47,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 35,
+      "path_id": 0,
+      "line": 47,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 13,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 36,
+      "path_id": 0,
+      "line": 47,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 35,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 37,
+      "path_id": 0,
+      "line": 47,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 34,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -8897,19 +9044,12 @@
     },
     {
       "kind": "step",
-      "step_index": 33,
+      "step_index": 38,
       "path_id": 0,
       "line": 48,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 34,
-      "path_id": 0,
-      "line": 48,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -8933,7 +9073,63 @@
             ],
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 39,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 40,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 41,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 18,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 42,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 10,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 43,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
+      "step_kind": "sekDeltaStep",
+      "vars": [
         {
           "varname_id": 9,
           "varname": "x",
@@ -8942,9 +9138,32 @@
           "value": {
             "kind": "Int",
             "i": 0,
-            "type_id": 0
+            "type_id": 1
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 44,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 45,
+      "path_id": 0,
+      "line": 48,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
+      "step_kind": "sekDeltaStep",
+      "vars": [
         {
           "varname_id": 10,
           "varname": "y",
@@ -8953,26 +9172,30 @@
           "value": {
             "kind": "Int",
             "i": 0,
-            "type_id": 0
+            "type_id": 1
           }
         }
       ]
     },
     {
       "kind": "step",
-      "step_index": 35,
+      "step_index": 46,
       "path_id": 0,
       "line": 58,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 36,
+      "step_index": 47,
       "path_id": 0,
       "line": 58,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 36,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -8991,105 +9214,137 @@
     },
     {
       "kind": "step",
-      "step_index": 37,
+      "step_index": 48,
       "path_id": 0,
       "line": 76,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 38,
-      "path_id": 0,
-      "line": 76,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 39,
+      "step_index": 49,
       "path_id": 0,
       "line": 77,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 40,
-      "path_id": 0,
-      "line": 77,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 41,
+      "step_index": 50,
       "path_id": 0,
       "line": 78,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 42,
-      "path_id": 0,
-      "line": 78,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 43,
+      "step_index": 51,
       "path_id": 0,
       "line": 81,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 52,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 42,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 44,
+      "step_index": 53,
       "path_id": 0,
       "line": 81,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 49,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 54,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 43,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 55,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 44,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 56,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 43,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 57,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 51,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 58,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 42,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 59,
+      "path_id": 0,
+      "line": 81,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 41,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
           "varname_id": 12,
-          "varname": "item",
-          "type_id": 0,
-          "type_name": "node",
-          "value": {
-            "kind": "Set",
-            "members": [],
-            "type_id": 0
-          }
-        },
-        {
-          "varname_id": 12,
-          "varname": "item",
-          "type_id": 0,
-          "type_name": "node",
-          "value": {
-            "kind": "Set",
-            "members": [
-              {
-                "kind": "Int",
-                "i": 47,
-                "type_id": 0
-              }
-            ],
-            "type_id": 0
-          }
-        },
-        {
-          "varname_id": 13,
           "varname": "scores",
           "type_id": 0,
           "type_name": "node",
@@ -9127,23 +9382,16 @@
     },
     {
       "kind": "step",
-      "step_index": 45,
+      "step_index": 60,
       "path_id": 0,
       "line": 83,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 46,
-      "path_id": 0,
-      "line": 83,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 14,
+          "varname_id": 13,
           "varname": "x1",
           "type_id": 0,
           "type_name": "node",
@@ -9157,23 +9405,16 @@
     },
     {
       "kind": "step",
-      "step_index": 47,
+      "step_index": 61,
       "path_id": 0,
       "line": 84,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 48,
-      "path_id": 0,
-      "line": 84,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 12,
+          "varname_id": 14,
           "varname": "item",
           "type_id": 0,
           "type_name": "node",
@@ -9186,23 +9427,49 @@
     },
     {
       "kind": "step",
-      "step_index": 49,
+      "step_index": 62,
       "path_id": 0,
       "line": 85,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 50,
+      "step_index": 63,
       "path_id": 0,
       "line": 85,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 64,
+      "path_id": 0,
+      "line": 85,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 16,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 65,
+      "path_id": 0,
+      "line": 85,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
-          "varname_id": 14,
+          "varname_id": 13,
           "varname": "x1",
           "type_id": 0,
           "type_name": "node",
@@ -9222,28 +9489,23 @@
     },
     {
       "kind": "step",
-      "step_index": 51,
+      "step_index": 66,
       "path_id": 0,
       "line": 87,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 52,
+      "step_index": 67,
       "path_id": 0,
       "line": 89,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 53,
-      "path_id": 0,
-      "line": 89,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -9261,19 +9523,12 @@
     },
     {
       "kind": "step",
-      "step_index": 54,
+      "step_index": 68,
       "path_id": 0,
       "line": 90,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 55,
-      "path_id": 0,
-      "line": 90,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 10,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -9285,7 +9540,19 @@
             "kind": "None",
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 69,
+      "path_id": 0,
+      "line": 90,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
+      "step_kind": "sekDeltaStep",
+      "vars": [
         {
           "varname_id": 17,
           "varname": "value",
@@ -9300,19 +9567,34 @@
     },
     {
       "kind": "step",
-      "step_index": 56,
+      "step_index": 70,
       "path_id": 0,
       "line": 91,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 57,
+      "step_index": 71,
       "path_id": 0,
       "line": 91,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 72,
+      "path_id": 0,
+      "line": 91,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -9336,20 +9618,24 @@
     },
     {
       "kind": "step",
-      "step_index": 58,
+      "step_index": 73,
       "path_id": 0,
       "line": 93,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 59,
+      "step_index": 74,
       "path_id": 0,
       "line": 100,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
@@ -9357,8 +9643,8 @@
       "call_key": 0,
       "function_id": 0,
       "function": "fn",
-      "entry_step": 60,
-      "exit_step": 68,
+      "entry_step": 75,
+      "exit_step": 92,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -9366,23 +9652,13 @@
     },
     {
       "kind": "step",
-      "step_index": 60,
+      "step_index": 75,
       "path_id": 0,
       "line": 97,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 0,
-      "function": "fn",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 61,
-      "path_id": 0,
-      "line": 97,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 11,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 0,
       "function": "fn",
       "depth": 0,
@@ -9398,7 +9674,22 @@
             "is_slice": false,
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 76,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 16,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 18,
           "varname": "a",
@@ -9443,10 +9734,12 @@
     },
     {
       "kind": "step",
-      "step_index": 62,
+      "step_index": 77,
       "path_id": 0,
-      "line": 98,
+      "line": 97,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
       "step_kind": "sekDeltaStep",
       "function_id": 0,
       "function": "fn",
@@ -9455,10 +9748,96 @@
     },
     {
       "kind": "step",
-      "step_index": 63,
+      "step_index": 78,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 18,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 79,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 25,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 80,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 26,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 81,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 30,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 82,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 25,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 83,
+      "path_id": 0,
+      "line": 97,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 16,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 84,
       "path_id": 0,
       "line": 98,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
       "step_kind": "sekDeltaStep",
       "function_id": 0,
       "function": "fn",
@@ -9473,7 +9852,22 @@
             "kind": "None",
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 85,
+      "path_id": 0,
+      "line": 98,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 20,
           "varname": "v",
@@ -9488,22 +9882,12 @@
     },
     {
       "kind": "step",
-      "step_index": 64,
+      "step_index": 86,
       "path_id": 0,
       "line": 99,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 0,
-      "function": "fn",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 65,
-      "path_id": 0,
-      "line": 99,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
       "step_kind": "sekDeltaStep",
       "function_id": 0,
       "function": "fn",
@@ -9517,9 +9901,24 @@
           "value": {
             "kind": "String",
             "text": "",
-            "type_id": 0
+            "type_id": 3
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 87,
+      "path_id": 0,
+      "line": 99,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 21,
           "varname": ":tmp",
@@ -9541,7 +9940,36 @@
             ],
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 88,
+      "path_id": 0,
+      "line": 99,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 16,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 89,
+      "path_id": 0,
+      "line": 99,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 21,
           "varname": ":tmp",
@@ -9552,7 +9980,22 @@
             "text": "foo",
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 90,
+      "path_id": 0,
+      "line": 99,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "function_id": 0,
+      "function": "fn",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 21,
           "varname": ":tmp",
@@ -9579,23 +10022,13 @@
     },
     {
       "kind": "step",
-      "step_index": 66,
+      "step_index": 91,
       "path_id": 0,
       "line": 96,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 0,
-      "function": "fn",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 67,
-      "path_id": 0,
-      "line": 96,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 0,
       "function": "fn",
       "depth": 0,
@@ -9637,11 +10070,13 @@
     },
     {
       "kind": "step",
-      "step_index": 68,
+      "step_index": 92,
       "path_id": 0,
       "line": 99,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 0,
       "function": "fn",
       "depth": 0,
@@ -9652,7 +10087,7 @@
       "call_key": 0,
       "function_id": 0,
       "function": "fn",
-      "exit_step": 68,
+      "exit_step": 92,
       "depth": 0,
       "return_value": {
         "kind": "Void"
@@ -9660,37 +10095,89 @@
     },
     {
       "kind": "step",
-      "step_index": 69,
+      "step_index": 93,
       "path_id": 0,
       "line": 100,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 70,
-      "path_id": 0,
-      "line": 100,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 71,
+      "step_index": 94,
       "path_id": 0,
       "line": 104,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 95,
+      "path_id": 0,
+      "line": 104,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 13,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 72,
+      "step_index": 96,
       "path_id": 0,
       "line": 104,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 97,
+      "path_id": 0,
+      "line": 104,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 18,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 98,
+      "path_id": 0,
+      "line": 104,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 99,
+      "path_id": 0,
+      "line": 104,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 18,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 100,
+      "path_id": 0,
+      "line": 104,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 13,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -9725,11 +10212,13 @@
     },
     {
       "kind": "step",
-      "step_index": 73,
+      "step_index": 101,
       "path_id": 0,
       "line": 108,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
@@ -9737,8 +10226,8 @@
       "call_key": 1,
       "function_id": 1,
       "function": "bar",
-      "entry_step": 74,
-      "exit_step": 81,
+      "entry_step": 102,
+      "exit_step": 111,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -9746,22 +10235,12 @@
     },
     {
       "kind": "step",
-      "step_index": 74,
+      "step_index": 102,
       "path_id": 0,
       "line": 106,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 1,
-      "function": "bar",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 75,
-      "path_id": 0,
-      "line": 106,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
       "step_kind": "sekDeltaStep",
       "function_id": 1,
       "function": "bar",
@@ -9776,7 +10255,22 @@
             "kind": "None",
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 103,
+      "path_id": 0,
+      "line": 106,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "bar",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 10,
           "varname": "y",
@@ -9791,10 +10285,12 @@
     },
     {
       "kind": "step",
-      "step_index": 76,
+      "step_index": 104,
       "path_id": 0,
       "line": 103,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 41,
       "step_kind": "sekDeltaStep",
       "function_id": 1,
       "function": "bar",
@@ -9803,11 +10299,13 @@
     },
     {
       "kind": "step",
-      "step_index": 77,
+      "step_index": 105,
       "path_id": 0,
       "line": 107,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 17,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 1,
       "function": "bar",
       "depth": 0,
@@ -9815,10 +10313,12 @@
     },
     {
       "kind": "step",
-      "step_index": 78,
+      "step_index": 106,
       "path_id": 0,
       "line": 107,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
       "step_kind": "sekDeltaStep",
       "function_id": 1,
       "function": "bar",
@@ -9840,7 +10340,36 @@
             ],
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 107,
+      "path_id": 0,
+      "line": 107,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 16,
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "bar",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 108,
+      "path_id": 0,
+      "line": 107,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "bar",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 21,
           "varname": ":tmp",
@@ -9849,9 +10378,24 @@
           "value": {
             "kind": "Int",
             "i": 10,
-            "type_id": 0
+            "type_id": 1
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 109,
+      "path_id": 0,
+      "line": 107,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "function_id": 1,
+      "function": "bar",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 21,
           "varname": ":tmp",
@@ -9873,22 +10417,12 @@
     },
     {
       "kind": "step",
-      "step_index": 79,
+      "step_index": 110,
       "path_id": 0,
       "line": 105,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 1,
-      "function": "bar",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 80,
-      "path_id": 0,
-      "line": 105,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "function_id": 1,
       "function": "bar",
@@ -9926,10 +10460,12 @@
     },
     {
       "kind": "step",
-      "step_index": 81,
+      "step_index": 111,
       "path_id": 0,
       "line": 107,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "function_id": 1,
       "function": "bar",
@@ -9941,7 +10477,7 @@
       "call_key": 1,
       "function_id": 1,
       "function": "bar",
-      "exit_step": 81,
+      "exit_step": 111,
       "depth": 0,
       "return_value": {
         "kind": "Void"
@@ -9949,29 +10485,24 @@
     },
     {
       "kind": "step",
-      "step_index": 82,
+      "step_index": 112,
       "path_id": 0,
       "line": 108,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 83,
-      "path_id": 0,
-      "line": 108,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 84,
+      "step_index": 113,
       "path_id": 0,
       "line": 118,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
@@ -9979,8 +10510,8 @@
       "call_key": 2,
       "function_id": 2,
       "function": "p",
-      "entry_step": 85,
-      "exit_step": 92,
+      "entry_step": 114,
+      "exit_step": 128,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -9988,23 +10519,13 @@
     },
     {
       "kind": "step",
-      "step_index": 85,
+      "step_index": 114,
       "path_id": 0,
       "line": 114,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 2,
-      "function": "p",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 86,
-      "path_id": 0,
-      "line": 114,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 11,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 2,
       "function": "p",
       "depth": 0,
@@ -10030,7 +10551,64 @@
             ],
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 115,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 116,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 20,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 117,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 24,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 118,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 11,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 9,
           "varname": "x",
@@ -10057,10 +10635,12 @@
     },
     {
       "kind": "step",
-      "step_index": 87,
+      "step_index": 119,
       "path_id": 0,
       "line": 115,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10069,10 +10649,82 @@
     },
     {
       "kind": "step",
-      "step_index": 88,
+      "step_index": 120,
       "path_id": 0,
       "line": 115,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 34,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 121,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 37,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 122,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 35,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 123,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 43,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 124,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 41,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 125,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10104,10 +10756,12 @@
     },
     {
       "kind": "step",
-      "step_index": 89,
+      "step_index": 126,
       "path_id": 0,
       "line": 116,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10116,23 +10770,13 @@
     },
     {
       "kind": "step",
-      "step_index": 90,
+      "step_index": 127,
       "path_id": 0,
       "line": 113,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 2,
-      "function": "p",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 91,
-      "path_id": 0,
-      "line": 113,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 2,
       "function": "p",
       "depth": 0,
@@ -10163,10 +10807,12 @@
     },
     {
       "kind": "step",
-      "step_index": 92,
+      "step_index": 128,
       "path_id": 0,
       "line": 114,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10178,7 +10824,7 @@
       "call_key": 2,
       "function_id": 2,
       "function": "p",
-      "exit_step": 92,
+      "exit_step": 128,
       "depth": 0,
       "return_value": {
         "kind": "Void"
@@ -10186,28 +10832,23 @@
     },
     {
       "kind": "step",
-      "step_index": 93,
+      "step_index": 129,
       "path_id": 0,
       "line": 118,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 94,
-      "path_id": 0,
-      "line": 118,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 95,
+      "step_index": 130,
       "path_id": 0,
       "line": 119,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 5,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -10216,8 +10857,8 @@
       "call_key": 3,
       "function_id": 2,
       "function": "p",
-      "entry_step": 96,
-      "exit_step": 103,
+      "entry_step": 131,
+      "exit_step": 144,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -10225,23 +10866,13 @@
     },
     {
       "kind": "step",
-      "step_index": 96,
+      "step_index": 131,
       "path_id": 0,
       "line": 114,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 2,
-      "function": "p",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 97,
-      "path_id": 0,
-      "line": 114,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 11,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 2,
       "function": "p",
       "depth": 0,
@@ -10267,7 +10898,64 @@
             ],
             "type_id": 0
           }
-        },
+        }
+      ]
+    },
+    {
+      "kind": "step",
+      "step_index": 132,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 133,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 20,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 134,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 24,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 135,
+      "path_id": 0,
+      "line": 114,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 11,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": [
         {
           "varname_id": 9,
           "varname": "x",
@@ -10294,10 +10982,12 @@
     },
     {
       "kind": "step",
-      "step_index": 98,
+      "step_index": 136,
       "path_id": 0,
       "line": 115,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 14,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10306,10 +10996,68 @@
     },
     {
       "kind": "step",
-      "step_index": 99,
+      "step_index": 137,
       "path_id": 0,
       "line": 115,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 138,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 19,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 139,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 24,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 140,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 17,
+      "step_kind": "sekDeltaStep",
+      "function_id": 2,
+      "function": "p",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 141,
+      "path_id": 0,
+      "line": 115,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10341,10 +11089,12 @@
     },
     {
       "kind": "step",
-      "step_index": 100,
+      "step_index": 142,
       "path_id": 0,
       "line": 116,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10353,23 +11103,13 @@
     },
     {
       "kind": "step",
-      "step_index": 101,
+      "step_index": 143,
       "path_id": 0,
       "line": 113,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 2,
-      "function": "p",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 102,
-      "path_id": 0,
-      "line": 113,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 2,
       "function": "p",
       "depth": 0,
@@ -10400,10 +11140,12 @@
     },
     {
       "kind": "step",
-      "step_index": 103,
+      "step_index": 144,
       "path_id": 0,
       "line": 114,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "function_id": 2,
       "function": "p",
@@ -10415,7 +11157,7 @@
       "call_key": 3,
       "function_id": 2,
       "function": "p",
-      "exit_step": 103,
+      "exit_step": 144,
       "depth": 0,
       "return_value": {
         "kind": "Void"
@@ -10423,28 +11165,34 @@
     },
     {
       "kind": "step",
-      "step_index": 104,
+      "step_index": 145,
       "path_id": 0,
       "line": 119,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 105,
-      "path_id": 0,
-      "line": 119,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 106,
+      "step_index": 146,
       "path_id": 0,
       "line": 133,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 1,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 147,
+      "path_id": 0,
+      "line": 133,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 9,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -10453,8 +11201,8 @@
       "call_key": 4,
       "function_id": 3,
       "function": "mainProc",
-      "entry_step": 107,
-      "exit_step": 109,
+      "entry_step": 148,
+      "exit_step": 149,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -10462,11 +11210,13 @@
     },
     {
       "kind": "step",
-      "step_index": 107,
+      "step_index": 148,
       "path_id": 0,
       "line": 126,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
+      "column": 5,
+      "step_kind": "sekAbsoluteStep",
       "function_id": 3,
       "function": "mainProc",
       "depth": 0,
@@ -10474,22 +11224,12 @@
     },
     {
       "kind": "step",
-      "step_index": 108,
-      "path_id": 0,
-      "line": 126,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "function_id": 3,
-      "function": "mainProc",
-      "depth": 0,
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 109,
+      "step_index": 149,
       "path_id": 0,
       "line": 124,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "function_id": 3,
       "function": "mainProc",
@@ -10501,7 +11241,7 @@
       "call_key": 4,
       "function_id": 3,
       "function": "mainProc",
-      "exit_step": 109,
+      "exit_step": 149,
       "depth": 0,
       "return_value": {
         "kind": "Void"
@@ -10509,19 +11249,45 @@
     },
     {
       "kind": "step",
-      "step_index": 110,
+      "step_index": 150,
       "path_id": 0,
       "line": 144,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 151,
+      "path_id": 0,
+      "line": 144,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 22,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 111,
+      "step_index": 152,
       "path_id": 0,
       "line": 144,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 26,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 153,
+      "path_id": 0,
+      "line": 144,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 22,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -10545,28 +11311,23 @@
     },
     {
       "kind": "step",
-      "step_index": 112,
+      "step_index": 154,
       "path_id": 0,
       "line": 145,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 113,
+      "step_index": 155,
       "path_id": 0,
       "line": 149,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
-      "step_kind": "sekDeltaStep",
-      "vars": []
-    },
-    {
-      "kind": "step",
-      "step_index": 114,
-      "path_id": 0,
-      "line": 149,
-      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -10585,19 +11346,56 @@
     },
     {
       "kind": "step",
-      "step_index": 115,
+      "step_index": 156,
       "path_id": 0,
       "line": 157,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 157,
+      "path_id": 0,
+      "line": 157,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 25,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 116,
+      "step_index": 158,
       "path_id": 0,
       "line": 157,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 29,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 159,
+      "path_id": 0,
+      "line": 157,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 36,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 160,
+      "path_id": 0,
+      "line": 157,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 25,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -10626,37 +11424,89 @@
     },
     {
       "kind": "step",
-      "step_index": 117,
+      "step_index": 161,
       "path_id": 0,
       "line": 158,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 118,
+      "step_index": 162,
       "path_id": 0,
       "line": 159,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 119,
+      "step_index": 163,
       "path_id": 0,
       "line": 165,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 164,
+      "path_id": 0,
+      "line": 165,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 24,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 120,
+      "step_index": 165,
       "path_id": 0,
       "line": 165,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 32,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 166,
+      "path_id": 0,
+      "line": 165,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 36,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 167,
+      "path_id": 0,
+      "line": 165,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 32,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 168,
+      "path_id": 0,
+      "line": 165,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 24,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -10686,28 +11536,56 @@
     },
     {
       "kind": "step",
-      "step_index": 121,
+      "step_index": 169,
       "path_id": 0,
       "line": 166,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 122,
+      "step_index": 170,
       "path_id": 0,
       "line": 176,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 7,
+      "step_kind": "sekAbsoluteStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 171,
+      "path_id": 0,
+      "line": 176,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 22,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
     {
       "kind": "step",
-      "step_index": 123,
+      "step_index": 172,
       "path_id": 0,
       "line": 176,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 26,
+      "step_kind": "sekDeltaStep",
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 173,
+      "path_id": 0,
+      "line": 176,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 22,
       "step_kind": "sekDeltaStep",
       "vars": [
         {
@@ -10731,10 +11609,12 @@
     },
     {
       "kind": "step",
-      "step_index": 124,
+      "step_index": 174,
       "path_id": 0,
       "line": 177,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "vars": []
     },
@@ -10743,8 +11623,8 @@
       "call_key": 5,
       "function_id": 4,
       "function": "f(Tup[system.void]) -> int",
-      "entry_step": 125,
-      "exit_step": 125,
+      "entry_step": 175,
+      "exit_step": 176,
       "depth": 0,
       "parent_call_key": -1,
       "args": [],
@@ -10752,10 +11632,26 @@
     },
     {
       "kind": "step",
-      "step_index": 125,
+      "step_index": 175,
       "path_id": 0,
       "line": 174,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 15,
+      "step_kind": "sekDeltaStep",
+      "function_id": 4,
+      "function": "f(Tup[system.void]) -> int",
+      "depth": 0,
+      "vars": []
+    },
+    {
+      "kind": "step",
+      "step_index": 176,
+      "path_id": 0,
+      "line": 174,
+      "path_version_ordinal": 0,
+      "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 12,
       "step_kind": "sekDeltaStep",
       "function_id": 4,
       "function": "f(Tup[system.void]) -> int",
@@ -10767,7 +11663,7 @@
       "call_key": 5,
       "function_id": 4,
       "function": "f(Tup[system.void]) -> int",
-      "exit_step": 125,
+      "exit_step": 176,
       "depth": 0,
       "return_value": {
         "kind": "Void"
@@ -10775,10 +11671,12 @@
     },
     {
       "kind": "step",
-      "step_index": 126,
+      "step_index": 177,
       "path_id": 0,
       "line": 177,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/tuples/ttuples_issues.nim",
+      "column": 3,
       "step_kind": "sekDeltaStep",
       "vars": []
     }

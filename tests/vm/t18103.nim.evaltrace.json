@@ -4,6 +4,21 @@
     "args": [],
     "workdir": "<workdir>",
     "recorder": "",
+    "flags": {
+      "has_column_aware_steps": true,
+      "has_alternate_source_views": false,
+      "supports_column_breakpoints": true,
+      "supports_column_motions": true,
+      "has_call_stream": true,
+      "has_step_stream": true,
+      "has_value_stream": true,
+      "has_io_event_stream": true,
+      "has_interning_tables": true,
+      "has_correlation_index": false,
+      "has_line_count_table": false,
+      "has_source_reload": false
+    },
+    "column_aware_paths_suspected": false,
     "trace_filter": {
       "filters": [
         {
@@ -14,18 +29,22 @@
     }
   },
   "paths": [],
+  "path_versions": [],
   "functions": [],
   "varnames": [],
   "types": [],
+  "source_views": [],
   "counts": {
     "paths": 0,
     "functions": 0,
     "varnames": 0,
     "types": 0,
+    "source_views": 0,
     "steps": 0,
     "calls": 0,
     "values": 0,
-    "io_events": 0
+    "io_events": 0,
+    "source_reloads": 0
   },
   "events": []
 }
