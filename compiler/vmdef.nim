@@ -248,6 +248,12 @@ type
     pc*: int32
     usedRegisters*: int32
 
+  SlotOwner* = object
+    ## A user binding's tenure of a VM register (see `regSymTable`).
+    startPc*: int
+    endPc*: int   ## exclusive; `high(int)` while the binding holds it
+    sym*: PSym
+
   TCtx* = object of TPassContext # code gen context
     code*: seq[TInstr]
     debug*: seq[TLineInfo]  # line info for every instruction; kept separate
@@ -301,7 +307,12 @@ type
     # Table.add per setSlot / param / result), which is small compared to
     # the per-instruction emit hot path. The lookup is performed only when
     # tracing is active.
-    regSymTable*: Table[(ItemId, int), PSym]
+    regSymTable*: Table[(ItemId, int), seq[SlotOwner]]
+      ## Bindings that held each (proc, register), with the code range
+      ## [startPc, endPc) over which each held it. Registers are reused
+      ## once a binding's scope ends, and all top-level code (a `static:`
+      ## block included) shares one numbering, so a write is named after
+      ## the binding whose range contains the writing instruction.
     # CTFS-M-TraceSites: side table mapping a PC (offset into c.code) of a
     # write-through-pointer instruction (`opcWrDeref`) to the user-source
     # global binding whose `c.globals[s.position-1]` is being mutated.

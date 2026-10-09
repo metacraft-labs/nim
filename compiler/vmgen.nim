@@ -209,7 +209,31 @@ proc bestEffort(c: PCtx): TLineInfo =
   else:
     c.module.info
 
-proc getFreeRegister(cc: PCtx; k: TSlotKind; start: int): TRegister =
+proc procIdForRegSymTable(c: PCtx): ItemId {.inline.} =
+  ## CTFS-M-Varnames: the key half identifying the proc that owns a slot.
+  ## For top-level / module-body code (`c.prc.sym == nil`) we use the
+  ## default-constructed `ItemId(module: 0, item: 0)`; vm.nim performs the
+  ## same substitution when `tos.prc == nil`, so the two halves always match.
+  if c.prc != nil and c.prc.sym != nil:
+    c.prc.sym.itemId
+  else:
+    ItemId(module: 0, item: 0)
+
+proc openSlotOwner(c: PCtx; slot: int; sym: PSym; startPc: int) =
+  ## CTFS-M-Varnames: `sym` holds register `slot` of the current proc from
+  ## `startPc` on.
+  c.regSymTable.mgetOrPut((procIdForRegSymTable(c), slot), @[]).add(
+    SlotOwner(startPc: startPc, endPc: high(int), sym: sym))
+
+proc endSlotOwner(c: PCtx; slot: int) {.inline.} =
+  ## Register `slot` is being handed out again, so whichever binding held
+  ## it no longer does: its tenure ends at the next instruction.
+  if c.regSymTable.len == 0: return
+  c.regSymTable.withValue((procIdForRegSymTable(c), slot), owners):
+    if owners[].len > 0 and owners[][^1].endPc == high(int):
+      owners[][^1].endPc = c.code.len
+
+proc getFreeRegisterImpl(cc: PCtx; k: TSlotKind; start: int): TRegister =
   let c = cc.prc
   # we prefer the same slot kind here for efficiency. Unfortunately for
   # discardable return types we may not know the desired type. This can happen
@@ -230,6 +254,10 @@ proc getFreeRegister(cc: PCtx; k: TSlotKind; start: int): TRegister =
   result = TRegister(max(c.regInfo.len, start))
   c.regInfo.setLen int(result)+1
   c.regInfo[result] = (inUse: true, kind: k)
+
+proc getFreeRegister(cc: PCtx; k: TSlotKind; start: int): TRegister =
+  result = getFreeRegisterImpl(cc, k, start)
+  endSlotOwner(cc, result)
 
 proc getTemp(cc: PCtx; tt: PType): TRegister =
   let typ = tt.skipTypesOrNil({tyStatic})
@@ -263,13 +291,17 @@ proc getTempRange(cc: PCtx; n: int; kind: TSlotKind): TRegister =
           for j in i+1..i+n-1:
             if c.regInfo[j].inUse: break search
           result = TRegister(i)
-          for k in result..result+n-1: c.regInfo[k] = (inUse: true, kind: kind)
+          for k in result..result+n-1:
+            c.regInfo[k] = (inUse: true, kind: kind)
+            endSlotOwner(cc, k)
           return
   if c.regInfo.len+n >= high(TRegister):
     globalError(cc.config, cc.bestEffort, "VM problem: too many registers required")
   result = TRegister(c.regInfo.len)
   setLen c.regInfo, c.regInfo.len+n
-  for k in result..result+n-1: c.regInfo[k] = (inUse: true, kind: kind)
+  for k in result..result+n-1:
+    c.regInfo[k] = (inUse: true, kind: kind)
+    endSlotOwner(cc, k)
 
 proc freeTempRange(c: PCtx; start: TRegister, n: int) =
   for i in start..start+n-1: c.freeTemp(TRegister(i))
@@ -1613,15 +1645,6 @@ proc genAsgn(c: PCtx; dest: TDest; ri: PNode; requiresCopy: bool) =
   gABC(c, ri, whichAsgnOpc(ri, requiresCopy), dest, tmp)
   c.freeTemp(tmp)
 
-proc procIdForRegSymTable(c: PCtx): ItemId {.inline.} =
-  ## CTFS-M-Varnames: the key half identifying the proc that owns a slot.
-  ## For top-level / module-body code (`c.prc.sym == nil`) we use the
-  ## default-constructed `ItemId(module: 0, item: 0)`; vm.nim performs the
-  ## same substitution when `tos.prc == nil`, so the two halves always match.
-  if c.prc != nil and c.prc.sym != nil:
-    c.prc.sym.itemId
-  else:
-    ItemId(module: 0, item: 0)
 
 proc registerGlobalWriteSym(c: PCtx; s: PSym) {.inline.} =
   ## CTFS-M-TraceSites: record that the just-emitted final instruction
@@ -1648,7 +1671,7 @@ proc setSlot(c: PCtx; v: PSym) =
     # bindings (params and result are handled separately in `genParams`).
     # Only `slotFixedVar` / `slotFixedLet` kinds reach this branch by
     # construction, so we don't need an extra filter.
-    c.regSymTable[(procIdForRegSymTable(c), v.position)] = v
+    openSlotOwner(c, v.position, v, c.code.len)
 
 template cannotEval(c: PCtx; n: PNode) =
   if c.config.cmd == cmdCheck and c.config.m.errorOutputs != {}:
@@ -2505,15 +2528,15 @@ proc genParams(c: PCtx; params: PNode) =
   # formal parameters list); element 0 is the return-type/result, elements
   # 1.. are the named parameters, each carrying its symbol in `.sym`. Slot
   # arithmetic matches vmgen's reads at line ~1717 (skParam → position+1,
-  # skResult → position == 0).
-  let pid = procIdForRegSymTable(c)
+  # skResult → position == 0). They hold their registers for the whole
+  # proc.
   if c.prc != nil and c.prc.sym != nil and c.prc.sym.ast != nil and
      resultPos < c.prc.sym.ast.len and
      c.prc.sym.ast[resultPos].kind == nkSym:
-    c.regSymTable[(pid, 0)] = c.prc.sym.ast[resultPos].sym
+    openSlotOwner(c, 0, c.prc.sym.ast[resultPos].sym, 0)
   for i in 1..<params.len:
     if params[i].kind == nkSym:
-      c.regSymTable[(pid, i)] = params[i].sym
+      openSlotOwner(c, i, params[i].sym, 0)
 
 proc finalJumpTarget(c: PCtx; pc, diff: int) =
   internalAssert(c.config, regBxMin < diff and diff < regBxMax)
@@ -2525,13 +2548,12 @@ proc finalJumpTarget(c: PCtx; pc, diff: int) =
 proc genGenericParams(c: PCtx; gp: PNode) =
   var base = c.prc.regInfo.len
   setLen c.prc.regInfo, base + gp.len
-  let pid = procIdForRegSymTable(c)
   for i in 0..<gp.len:
     var param = gp[i].sym
     param.position = base + i # XXX: fix this earlier; make it consistent with templates
     c.prc.regInfo[base + i] = (inUse: true, kind: slotFixedLet)
     # CTFS-M-Varnames: generic parameters are user-visible names too.
-    c.regSymTable[(pid, base + i)] = param
+    openSlotOwner(c, base + i, param, 0)
 
 proc optimizeJumps(c: PCtx; start: int) =
   const maxIterations = 10
