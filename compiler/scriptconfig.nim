@@ -55,7 +55,12 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   let ctx = result
   template traceIoOp(a: VmArgs, kindArg: EventLogKind, payload: string) =
     ## Emit an IO event from a NimScript callback. No-op when tracing
-    ## is disabled (most common case). The event's source position is
+    ## is disabled (most common case). The kind describes the operation
+    ## (trace-events.md §"EventLogKind"): creating, removing, moving or
+    ## copying a file or directory writes a named filesystem entry
+    ## (`elkWriteFile`); changing directory opens one (`elkOpenDir`);
+    ## running a command or changing the environment writes to something
+    ## other than stdout or a named file (`elkWriteOther`). The event's source position is
     ## the line of the callsite that invoked the callback
     ## (`a.currentLineInfo`, populated by vm.nim's opcIndCall dispatch).
     if ctx.vmTracer != nil:
@@ -91,18 +96,18 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     else:
       let path = getString(a, 0)
       os.removeDir(path, getBool(a, 1))
-      traceIoOp(a, elkReadFile, "removeDir: " & path)
+      traceIoOp(a, elkWriteFile, "removeDir: " & path)
   cbos removeFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
       let path = getString(a, 0)
       os.removeFile path
-      traceIoOp(a, elkReadFile, "removeFile: " & path)
+      traceIoOp(a, elkWriteFile, "removeFile: " & path)
   cbos createDir:
     let path = getString(a, 0)
     os.createDir path
-    traceIoOp(a, elkReadFile, "createDir: " & path)
+    traceIoOp(a, elkWriteFile, "createDir: " & path)
 
   result.registerCallback "stdlib.system.getError",
     proc (a: VmArgs) = setResult(a, errorMsg)
@@ -110,7 +115,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   cbos setCurrentDir:
     let path = getString(a, 0)
     os.setCurrentDir path
-    traceIoOp(a, elkReadFile, "setCurrentDir: " & path)
+    traceIoOp(a, elkOpenDir, "setCurrentDir: " & path)
   cbos getCurrentDir:
     setResult(a, os.getCurrentDir())
   cbos moveFile:
@@ -120,7 +125,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.moveFile(src, dst)
-      traceIoOp(a, elkReadFile, "moveFile: " & src & " -> " & dst)
+      traceIoOp(a, elkWriteFile, "moveFile: " & src & " -> " & dst)
   cbos moveDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -128,7 +133,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.moveDir(src, dst)
-      traceIoOp(a, elkReadFile, "moveDir: " & src & " -> " & dst)
+      traceIoOp(a, elkWriteFile, "moveDir: " & src & " -> " & dst)
   cbos copyFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -136,7 +141,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.copyFile(src, dst)
-      traceIoOp(a, elkReadFile, "copyFile: " & src & " -> " & dst)
+      traceIoOp(a, elkWriteFile, "copyFile: " & src & " -> " & dst)
   cbos copyDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -144,7 +149,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.copyDir(src, dst)
-      traceIoOp(a, elkReadFile, "copyDir: " & src & " -> " & dst)
+      traceIoOp(a, elkWriteFile, "copyDir: " & src & " -> " & dst)
   cbos getLastModificationTime:
     setResult(a, getLastModificationTime(getString(a, 0)).toUnix)
   cbos findExe:
@@ -155,7 +160,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       discard
     else:
       let cmd = getString(a, 0)
-      traceIoOp(a, elkReadFile, "exec: " & cmd)
+      traceIoOp(a, elkWriteOther, "exec: " & cmd)
       setResult(a, osproc.execCmd cmd)
 
   cbconf getEnv:
@@ -166,11 +171,11 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     let key = a.getString 0
     let val = a.getString 1
     os.putEnv(key, val)
-    traceIoOp(a, elkReadFile, "putEnv: " & key & "=" & val)
+    traceIoOp(a, elkWriteOther, "putEnv: " & key & "=" & val)
   cbconf delEnv:
     let key = a.getString 0
     os.delEnv(key)
-    traceIoOp(a, elkReadFile, "delEnv: " & key)
+    traceIoOp(a, elkWriteOther, "delEnv: " & key)
   cbconf dirExists:
     setResult(a, os.dirExists(a.getString 0))
   cbconf fileExists:
