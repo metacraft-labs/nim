@@ -4,6 +4,21 @@
     "args": [],
     "workdir": "<workdir>",
     "recorder": "",
+    "flags": {
+      "has_column_aware_steps": true,
+      "has_alternate_source_views": false,
+      "supports_column_breakpoints": true,
+      "supports_column_motions": true,
+      "has_call_stream": true,
+      "has_step_stream": true,
+      "has_value_stream": true,
+      "has_io_event_stream": true,
+      "has_interning_tables": true,
+      "has_correlation_index": false,
+      "has_line_count_table": false,
+      "has_source_reload": false
+    },
+    "column_aware_paths_suspected": false,
     "trace_filter": {
       "filters": [
         {
@@ -16,18 +31,29 @@
   "paths": [
     "<workdir>/tests/misc/m20456.nims"
   ],
+  "path_versions": [
+    {
+      "path_id": 0,
+      "version_ordinal": 0,
+      "version_count": 1,
+      "recorded_line_count": 0
+    }
+  ],
   "functions": [],
   "varnames": [],
   "types": [],
+  "source_views": [],
   "counts": {
     "paths": 1,
     "functions": 0,
     "varnames": 0,
     "types": 0,
+    "source_views": 0,
     "steps": 1,
     "calls": 0,
     "values": 1,
-    "io_events": 1
+    "io_events": 1,
+    "source_reloads": 0
   },
   "events": [
     {
@@ -35,13 +61,15 @@
       "step_index": 0,
       "path_id": 0,
       "line": 5,
+      "path_version_ordinal": 0,
       "path": "<workdir>/tests/misc/m20456.nims",
+      "column": 6,
       "step_kind": "sekAbsoluteStep",
       "vars": []
     },
     {
       "kind": "io",
-      "io_kind": "ioStdout",
+      "io_kind": "Write",
       "io_index": 0,
       "step_id": 0,
       "text": "123\n",
