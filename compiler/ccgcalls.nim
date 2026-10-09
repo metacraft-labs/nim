@@ -84,8 +84,13 @@ proc cleanupTemp(p: BProc; returnType: PType, tmp: TLoc): bool =
     let dtor = getAttachedOp(p.module.g.graph, returnType, attachedDestructor)
     var op = initLocExpr(p, newSymNode(dtor))
     var callee = rdLoc(op)
+    # Mirror the destructor's C signature: its parameter is a pointer when
+    # it is `var`, and also when the backend passes the object by
+    # reference (large or non-final objects; see `ccgIntroducedPtr`).
+    let param = dtor.typ.n[1].sym
     let destroyArg =
-      if dtor.typ.firstParamType.kind == tyVar:
+      if param.typ.kind == tyVar or
+          ccgIntroducedPtr(p.config, param, dtor.typ.returnType):
         cAddr(rdLoc(tmp))
       else:
         rdLoc(tmp)
