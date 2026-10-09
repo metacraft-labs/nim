@@ -185,7 +185,7 @@ proc parseCtfsHeader(data: string): tuple[blockSize: uint32, maxRootEntries: uin
 
   # Version
   let version = uint8(data[5])
-  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
+  doAssert version == 5, "unexpected CTFS version: " & $version
 
   # Extended header
   let blockSize = readLE32(data, 8)
@@ -221,6 +221,17 @@ proc parseCtfsHeader(data: string): tuple[blockSize: uint32, maxRootEntries: uin
 proc readFileContent(data: string, entry: CtfsFileEntry, blockSize: uint32): string =
   if entry.size == 0:
     return ""
+
+  # A member of at most one block has no mapping block: its MapBlock is
+  # that data block with bit 63 set (ctfs-container.md, "File Entry").
+  const directBlockTag = 1'u64 shl 63
+  if (entry.mapBlock and directBlockTag) != 0:
+    doAssert entry.size <= uint64(blockSize),
+      "direct-block member larger than one block: " & $entry.size
+    let blockStart = int(entry.mapBlock and not directBlockTag) * int(blockSize)
+    doAssert blockStart + int(entry.size) <= data.len,
+      "direct block past the end of the container"
+    return data[blockStart ..< blockStart + int(entry.size)]
 
   let usable = int(blockSize) div 8 - 1
   var resultStr = ""

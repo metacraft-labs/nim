@@ -116,7 +116,7 @@ proc main() =
     verifyCTFSMagic(midData)
 
     let version = uint8(midData[5])
-    doAssert version >= 2 and version <= 4,
+    doAssert version == 5,
       "unexpected CTFS version in mid-stream file: " & $version
 
     let blockSize = readLE32(midData, 8)

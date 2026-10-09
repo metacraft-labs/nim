@@ -91,7 +91,7 @@ proc main() =
 
   # 2. Verify version
   let version = uint8(data[5])
-  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
+  doAssert version == 5, "unexpected CTFS version: " & $version
 
   # 3. Verify block size is reasonable
   let blockSize = readLE32(data, 8)

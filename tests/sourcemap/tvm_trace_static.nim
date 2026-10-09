@@ -46,7 +46,7 @@ proc verifyCtfsStructure(path: string) =
            data[2] == '\x72' and data[3] == '\xAC' and
            data[4] == '\xE2', "not a valid CTFS file (bad magic bytes)"
   let version = uint8(data[5])
-  doAssert version >= 2 and version <= 4, "unexpected version: " & $version
+  doAssert version == 5, "unexpected version: " & $version
   let blockSize = readLE32(data, 8)
   doAssert blockSize >= 64, "invalid block size: " & $blockSize
   let eventsLogSize = readLE64(data, 16)

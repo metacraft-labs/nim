@@ -73,9 +73,10 @@ proc main() =
   doAssert data[0] == '\xC0' and data[1] == '\xDE' and data[2] == '\x72' and
            data[3] == '\xAC' and data[4] == '\xE2', "not a valid CTFS file"
 
-  # 2. Verify version (CTFS v2..v4 all accepted)
+  # 2. Verify version: every writer writes container version 5
+  #    (ctfs-container.md, "Older versions are refused").
   let version = uint8(data[5])
-  doAssert version >= 2 and version <= 4, "unexpected CTFS version: " & $version
+  doAssert version == 5, "unexpected CTFS version: " & $version
 
   # 3. Verify block size and max entries
   let blockSize = readLE32(data, 8)

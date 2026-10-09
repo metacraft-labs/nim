@@ -47,7 +47,7 @@ proc verifyCtfsStructure(path: string) =
 
   # Version
   let version = uint8(data[5])
-  doAssert version >= 2 and version <= 4, "unexpected version: " & $version
+  doAssert version == 5, "unexpected version: " & $version
 
   # Block size and max entries
   let blockSize = readLE32(data, 8)
