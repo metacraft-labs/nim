@@ -23,9 +23,9 @@ discard """
 ##        - `ioEventCount() == 5`
 ##        - the first two events are `elkWrite` with payloads
 ##          "hello\n" and "world\n"
-##        - the third event is `elkWriteOther` carrying "exec: echo from-exec"
-##        - the fourth/fifth events are `elkWriteFile` with "createDir: ..."
-##          and "removeDir: ..."
+##        - the third event is `elkExec` carrying "exec: echo from-exec"
+##        - the fourth/fifth events are `elkCreateDir` with "createDir: ..."
+##          and `elkRemoveDir` with "removeDir: ..."
 
 import std/[os, osproc, assertions, strutils]
 import results
@@ -105,15 +105,15 @@ rmDir("""" & tmpSubdir & """")
     "event 1: expected 'world\\n', got " & readPayload(ev1).escape
 
   let ev2 = readEv(2)
-  doAssert ev2.kind == elkWriteOther,
-    "event 2: expected elkWriteOther (exec), got " & $ev2.kind
+  doAssert ev2.kind == elkExec,
+    "event 2: expected elkExec, got " & $ev2.kind
   doAssert readPayload(ev2) == "exec: echo from-exec",
     "event 2: expected 'exec: echo from-exec', got " &
     readPayload(ev2).escape
 
   let ev3 = readEv(3)
-  doAssert ev3.kind == elkWriteFile,
-    "event 3: expected elkWriteFile (createDir), got " & $ev3.kind
+  doAssert ev3.kind == elkCreateDir,
+    "event 3: expected elkCreateDir, got " & $ev3.kind
   doAssert readPayload(ev3).startsWith("createDir: "),
     "event 3: expected payload prefix 'createDir: ', got " &
     readPayload(ev3).escape
@@ -122,8 +122,8 @@ rmDir("""" & tmpSubdir & """")
     readPayload(ev3).escape
 
   let ev4 = readEv(4)
-  doAssert ev4.kind == elkWriteFile,
-    "event 4: expected elkWriteFile (removeDir), got " & $ev4.kind
+  doAssert ev4.kind == elkRemoveDir,
+    "event 4: expected elkRemoveDir, got " & $ev4.kind
   doAssert readPayload(ev4).startsWith("removeDir: "),
     "event 4: expected payload prefix 'removeDir: ', got " &
     readPayload(ev4).escape

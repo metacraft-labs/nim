@@ -380,6 +380,11 @@ proc registerCallback*(c: PCtx; name: string; callback: VmCallback): int {.disca
   c.callbacks.add(callback)
   c.callbackIndex[reverseName(name)] = result
 
+proc registeredCallback*(c: PCtx; name: string): VmCallback =
+  ## The callback registered under `name`, or nil when there is none.
+  let idx = c.callbackIndex.getOrDefault(reverseName(name), -1)
+  if idx >= 0: c.callbacks[idx] else: nil
+
 const
   firstABxInstr* = opcTJmp
   largeInstrs* = { # instructions which use 2 int32s instead of 1:

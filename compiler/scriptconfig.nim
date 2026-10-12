@@ -23,7 +23,7 @@ import vm_trace, msgs, lineinfos
 when defined(nimPreviewSlimSystem):
   import std/[syncio, assertions]
 
-import std/[strtabs, os, times, osproc]
+import std/[strtabs, os, times, osproc, sequtils]
 
 # we support 'cmpIgnoreStyle' natively for efficiency:
 from std/strutils import cmpIgnoreStyle, contains
@@ -55,17 +55,41 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   let ctx = result
   template traceIoOp(a: VmArgs, kindArg: EventLogKind, payload: string) =
     ## Emit an IO event from a NimScript callback. No-op when tracing
-    ## is disabled (most common case). The kind describes the operation
-    ## (trace-events.md §"EventLogKind"): creating, removing, moving or
-    ## copying a file or directory writes a named filesystem entry
-    ## (`elkWriteFile`); changing directory opens one (`elkOpenDir`);
-    ## running a command or changing the environment writes to something
-    ## other than stdout or a named file (`elkWriteOther`). The event's source position is
-    ## the line of the callsite that invoked the callback
-    ## (`a.currentLineInfo`, populated by vm.nim's opcIndCall dispatch).
+    ## is disabled (most common case). The kind is the exact one for the
+    ## operation (trace-events.md §"EventLogKind"): creating, removing or
+    ## renaming a directory or file is `elkCreateDir` / `elkRemoveDir` /
+    ## `elkRemoveFile` / `elkRename`, copying or writing a file is
+    ## `elkWriteFile`, changing directory is `elkChangeDir`, running a
+    ## command is `elkExec`, setting or removing an environment variable is
+    ## `elkWriteEnv`. Reads are recorded too, with what the script observed
+    ## in the payload: an environment lookup is `elkReadEnv`, an existence
+    ## test or a PATH search `elkStat`, a directory listing `elkReadDir`, a
+    ## file read `elkReadFile`, a line from stdin `elkRead`. The event's
+    ## source position is the line of the callsite that invoked the
+    ## callback (`a.currentLineInfo`, populated by vm.nim's opcIndCall
+    ## dispatch).
     if ctx.vmTracer != nil:
       traceIO(cast[ptr VmTracer](ctx.vmTracer)[], kindArg,
               a.currentLineInfo, payload)
+
+  proc listing(entries: seq[string]): string =
+    "[" & strutils.join(entries, ", ") & "]"
+
+  proc resultBool(a: VmArgs): bool =
+    a.slots[a.ra].intVal != 0
+
+  template traceAfter(name: string, body) {.dirty.} =
+    ## Wrap the callback `registerAdditionalOps` installed under `name`
+    ## (the `std/os` / `std/syncio` operations a script
+    ## reaches by importing them) so that it records an IO event after it
+    ## ran. The operation itself is the original callback, unchanged.
+    block:
+      let original = result.registeredCallback(name)
+      if original != nil:
+        result.registerCallback name,
+          proc (a: VmArgs) =
+            original(a)
+            body
 
   template cbconf(name, body) {.dirty.} =
     result.registerCallback "stdlib.system." & astToStr(name),
@@ -88,26 +112,30 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   # endless recursions out of the box.
   cbos listFilesImpl:
     listDirs(a, {pcFile, pcLinkToFile})
+    traceIoOp(a, elkReadDir, "listFiles: " & getString(a, 0) & " -> " &
+      listing(a.slots[a.ra].node.sons.mapIt(it.strVal)))
   cbos listDirsImpl:
     listDirs(a, {pcDir})
+    traceIoOp(a, elkReadDir, "listDirs: " & getString(a, 0) & " -> " &
+      listing(a.slots[a.ra].node.sons.mapIt(it.strVal)))
   cbos removeDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
       let path = getString(a, 0)
       os.removeDir(path, getBool(a, 1))
-      traceIoOp(a, elkWriteFile, "removeDir: " & path)
+      traceIoOp(a, elkRemoveDir, "removeDir: " & path)
   cbos removeFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
       let path = getString(a, 0)
       os.removeFile path
-      traceIoOp(a, elkWriteFile, "removeFile: " & path)
+      traceIoOp(a, elkRemoveFile, "removeFile: " & path)
   cbos createDir:
     let path = getString(a, 0)
     os.createDir path
-    traceIoOp(a, elkWriteFile, "createDir: " & path)
+    traceIoOp(a, elkCreateDir, "createDir: " & path)
 
   result.registerCallback "stdlib.system.getError",
     proc (a: VmArgs) = setResult(a, errorMsg)
@@ -115,7 +143,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
   cbos setCurrentDir:
     let path = getString(a, 0)
     os.setCurrentDir path
-    traceIoOp(a, elkOpenDir, "setCurrentDir: " & path)
+    traceIoOp(a, elkChangeDir, "setCurrentDir: " & path)
   cbos getCurrentDir:
     setResult(a, os.getCurrentDir())
   cbos moveFile:
@@ -125,7 +153,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.moveFile(src, dst)
-      traceIoOp(a, elkWriteFile, "moveFile: " & src & " -> " & dst)
+      traceIoOp(a, elkRename, "moveFile: " & src & " -> " & dst)
   cbos moveDir:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -133,7 +161,7 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.moveDir(src, dst)
-      traceIoOp(a, elkWriteFile, "moveDir: " & src & " -> " & dst)
+      traceIoOp(a, elkRename, "moveDir: " & src & " -> " & dst)
   cbos copyFile:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
@@ -149,37 +177,55 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
       let src = getString(a, 0)
       let dst = getString(a, 1)
       os.copyDir(src, dst)
-      traceIoOp(a, elkWriteFile, "copyDir: " & src & " -> " & dst)
+      traceIoOp(a, elkCreateDir, "copyDir: " & src & " -> " & dst)
   cbos getLastModificationTime:
-    setResult(a, getLastModificationTime(getString(a, 0)).toUnix)
+    let path = getString(a, 0)
+    let t = getLastModificationTime(path).toUnix
+    setResult(a, t)
+    traceIoOp(a, elkStat, "getLastModificationTime: " & path & " -> " & $t)
   cbos findExe:
-    setResult(a, os.findExe(getString(a, 0)))
+    let bin = getString(a, 0)
+    let found = os.findExe(bin)
+    setResult(a, found)
+    traceIoOp(a, elkStat, "findExe: " & bin & " -> " & found)
 
   cbos rawExec:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       discard
     else:
       let cmd = getString(a, 0)
-      traceIoOp(a, elkWriteOther, "exec: " & cmd)
+      traceIoOp(a, elkExec, "exec: " & cmd)
       setResult(a, osproc.execCmd cmd)
 
   cbconf getEnv:
-    setResult(a, os.getEnv(a.getString 0, a.getString 1))
+    let key = a.getString 0
+    let val = os.getEnv(key, a.getString 1)
+    setResult(a, val)
+    traceIoOp(a, elkReadEnv, "getEnv: " & key & " -> " & val)
   cbconf existsEnv:
-    setResult(a, os.existsEnv(a.getString 0))
+    let key = a.getString 0
+    let exists = os.existsEnv(key)
+    setResult(a, exists)
+    traceIoOp(a, elkReadEnv, "existsEnv: " & key & " -> " & $exists)
   cbconf putEnv:
     let key = a.getString 0
     let val = a.getString 1
     os.putEnv(key, val)
-    traceIoOp(a, elkWriteOther, "putEnv: " & key & "=" & val)
+    traceIoOp(a, elkWriteEnv, "putEnv: " & key & "=" & val)
   cbconf delEnv:
     let key = a.getString 0
     os.delEnv(key)
-    traceIoOp(a, elkWriteOther, "delEnv: " & key)
+    traceIoOp(a, elkWriteEnv, "delEnv: " & key)
   cbconf dirExists:
-    setResult(a, os.dirExists(a.getString 0))
+    let path = a.getString 0
+    let exists = os.dirExists(path)
+    setResult(a, exists)
+    traceIoOp(a, elkStat, "dirExists: " & path & " -> " & $exists)
   cbconf fileExists:
-    setResult(a, os.fileExists(a.getString 0))
+    let path = a.getString 0
+    let exists = os.fileExists(path)
+    setResult(a, exists)
+    traceIoOp(a, elkStat, "fileExists: " & path & " -> " & $exists)
 
   cbconf projectName:
     setResult(a, conf.projectName)
@@ -237,12 +283,35 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       setResult(a, "")
     else:
-      setResult(a, stdin.readLine())
+      let line = stdin.readLine()
+      setResult(a, line)
+      traceIoOp(a, elkRead, line)
   cbexc stdinReadAll, EOFError:
     if defined(nimsuggest) or graph.config.cmd == cmdCheck:
       setResult(a, "")
     else:
-      setResult(a, stdin.readAll())
+      let text = stdin.readAll()
+      setResult(a, text)
+      traceIoOp(a, elkRead, text)
+
+  # The same operations reached through `std/os` and `std/syncio` run
+  # `registerAdditionalOps`' callbacks; record those too. (`std/envvars`
+  # is not reachable from a script: NimScript's own `getEnv` and friends
+  # above are the ones it calls.)
+  traceAfter "stdlib.syncio.readFile":
+    traceIoOp(a, elkReadFile, "readFile: " & getString(a, 0))
+  traceAfter "stdlib.syncio.readLines":
+    traceIoOp(a, elkReadFile, "readLines: " & getString(a, 0))
+  traceAfter "stdlib.syncio.writeFile":
+    traceIoOp(a, elkWriteFile, "writeFile: " & getString(a, 0))
+  traceAfter "stdlib.oscommon.dirExists":
+    traceIoOp(a, elkStat, "dirExists: " & getString(a, 0) & " -> " &
+      $resultBool(a))
+  traceAfter "stdlib.oscommon.fileExists":
+    traceIoOp(a, elkStat, "fileExists: " & getString(a, 0) & " -> " &
+      $resultBool(a))
+  traceAfter "stdlib.osdirs.createDir":
+    traceIoOp(a, elkCreateDir, "createDir: " & getString(a, 0))
 
 proc runNimScript*(cache: IdentCache; scriptName: AbsoluteFile;
                    idgen: IdGenerator;
