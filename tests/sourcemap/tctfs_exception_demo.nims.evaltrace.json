@@ -51,7 +51,7 @@
     "varnames": 0,
     "types": 1,
     "source_views": 0,
-    "steps": 9,
+    "steps": 7,
     "calls": 0,
     "values": 9,
     "io_events": 1,
@@ -103,17 +103,10 @@
       "vars": []
     },
     {
-      "kind": "step",
+      "kind": "raise",
       "step_index": 4,
-      "path_id": 0,
-      "line": 15,
-      "path_version_ordinal": 0,
-      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
-      "column": 3,
-      "step_kind": "sekRaise",
       "exception_type_id": 0,
-      "exception_message": "out of range",
-      "vars": []
+      "exception_message": "out of range"
     },
     {
       "kind": "step",
@@ -127,16 +120,9 @@
       "vars": []
     },
     {
-      "kind": "step",
+      "kind": "catch",
       "step_index": 6,
-      "path_id": 0,
-      "line": 16,
-      "path_version_ordinal": 0,
-      "path": "<workdir>/tests/sourcemap/tctfs_exception_demo.nims",
-      "column": 1,
-      "step_kind": "sekCatch",
-      "catch_exception_type_id": 0,
-      "vars": []
+      "exception_type_id": 0
     },
     {
       "kind": "step",

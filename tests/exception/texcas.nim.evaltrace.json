@@ -60,7 +60,7 @@
     "varnames": 2,
     "types": 3,
     "source_views": 0,
-    "steps": 36,
+    "steps": 32,
     "calls": 3,
     "values": 36,
     "io_events": 2,
@@ -158,20 +158,10 @@
       "vars": []
     },
     {
-      "kind": "step",
+      "kind": "raise",
       "step_index": 6,
-      "path_id": 0,
-      "line": 10,
-      "path_version_ordinal": 0,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "column": 5,
-      "step_kind": "sekRaise",
       "exception_type_id": 0,
-      "exception_message": "Hello",
-      "function_id": 0,
-      "function": "test()",
-      "depth": 0,
-      "vars": []
+      "exception_message": "Hello"
     },
     {
       "kind": "step",
@@ -188,19 +178,9 @@
       "vars": []
     },
     {
-      "kind": "step",
+      "kind": "catch",
       "step_index": 8,
-      "path_id": 0,
-      "line": 12,
-      "path_version_ordinal": 0,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "column": 9,
-      "step_kind": "sekCatch",
-      "catch_exception_type_id": 0,
-      "function_id": 0,
-      "function": "test()",
-      "depth": 0,
-      "vars": []
+      "exception_type_id": 0
     },
     {
       "kind": "step",
@@ -380,20 +360,10 @@
       "vars": []
     },
     {
-      "kind": "step",
+      "kind": "raise",
       "step_index": 19,
-      "path_id": 0,
-      "line": 17,
-      "path_version_ordinal": 0,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "column": 5,
-      "step_kind": "sekRaise",
       "exception_type_id": 0,
-      "exception_message": "Hello",
-      "function_id": 1,
-      "function": "test2",
-      "depth": 0,
-      "vars": []
+      "exception_message": "Hello"
     },
     {
       "kind": "step",
@@ -410,19 +380,9 @@
       "vars": []
     },
     {
-      "kind": "step",
+      "kind": "catch",
       "step_index": 21,
-      "path_id": 0,
-      "line": 19,
-      "path_version_ordinal": 0,
-      "path": "<workdir>/tests/exception/texcas.nim",
-      "column": 9,
-      "step_kind": "sekCatch",
-      "catch_exception_type_id": 0,
-      "function_id": 1,
-      "function": "test2",
-      "depth": 0,
-      "vars": []
+      "exception_type_id": 0
     },
     {
       "kind": "step",
