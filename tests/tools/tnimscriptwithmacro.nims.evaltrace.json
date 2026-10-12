@@ -169,7 +169,7 @@
     },
     {
       "kind": "io",
-      "io_kind": "WriteOther",
+      "io_kind": "Exec",
       "io_index": 2,
       "step_id": 6,
       "text": "exec: echo hallo",
