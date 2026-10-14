@@ -1068,8 +1068,35 @@ proc commonOptimizations*(g: ModuleGraph; idgen: IdGenerator; c: PSym, n: PNode)
   ## a single constant expression. It also inlines constant expressions which are not
   ## complex.
   result = n
+  # Skip the subtrees that `transform` does not descend into either. Term
+  # rewriting (hlo.nim) runs this over a whole rewritten statement, which can
+  # contain declarations whose nodes are not expressions: the `typeOfIter`
+  # enum symbol in the `typeof(..., typeOfIter)` that `mapIt` expands to has
+  # no type, and folding it crashed the compiler. A `const` section is
+  # skipped so that ``const c = 3`` is not turned into ``const 3 = 3``, and
+  # routine bodies are transformed on their own.
+  var typeSlot = -1
+  case n.kind
+  of nkCommentStmt, callableDefs, nkImportStmt, nkImportExceptStmt,
+      nkFromStmt, nkIncludeStmt, nkStaticStmt, nkExportStmt,
+      nkExportExceptStmt, nkConstSection, nkTypeSection, nkTypeOfExpr,
+      nkMixinStmt, nkBindStmt:
+    return
+  of nkIdentDefs, nkVarTuple:
+    # `var x: T = v` and `var (a, b): T = v` keep the declared type as it
+    # was written in the second-to-last son; `transform` skips it too.
+    typeSlot = n.len - 2
+  of nkCast, nkObjConstr:
+    # `cast[T](v)` and `T(field: v)` keep the type as written in son 0.
+    typeSlot = 0
+  else: discard
   for i in 0..<n.safeLen:
-    result[i] = commonOptimizations(g, idgen, c, n[i])
+    if i != typeSlot:
+      result[i] = commonOptimizations(g, idgen, c, n[i])
+  if n.typ == nil:
+    # A statement, or a node that semantic checking left as written: there
+    # is no typed value to fold, and folding it would read the missing type.
+    return
   var op = getMergeOp(n)
   if (op != nil) and (op.magic != mNone) and (n.len >= 3):
     result = newNodeIT(nkCall, n.info, n.typ)
