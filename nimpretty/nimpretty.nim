@@ -54,7 +54,8 @@ type
 
 proc goodEnough(a, b: PNode): bool =
   if a.isNil or b.isNil: return a.isNil and b.isNil
-  if a.kind == b.kind and a.flags == b.flags and a.safeLen == b.safeLen:
+  if a.flags != b.flags: return false
+  if a.kind == b.kind and a.safeLen == b.safeLen:
     case a.kind
     of nkNone, nkEmpty, nkNilLit: result = true
     of nkIdent: result = a.ident.s == b.ident.s
