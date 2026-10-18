@@ -28,6 +28,7 @@ Usage:
 Options:
   --out:file            set the output file (default: overwrite the input file)
   --outDir:dir          set the output dir (default: overwrite the input files)
+  --checkEquivalent:file compare the input AST with file; write nothing
   --stdin               read input from stdin and write output to stdout
   --indent:N[=0]        set the number of spaces that is used for indentation
                         --indent:0 means autodetection (default behaviour)
@@ -52,12 +53,13 @@ type
     maxLineLen*: Positive
 
 proc goodEnough(a, b: PNode): bool =
-  if a.kind == b.kind and a.safeLen == b.safeLen:
+  if a.isNil or b.isNil: return a.isNil and b.isNil
+  if a.kind == b.kind and a.flags == b.flags and a.safeLen == b.safeLen:
     case a.kind
     of nkNone, nkEmpty, nkNilLit: result = true
-    of nkIdent: result = a.ident.id == b.ident.id
-    of nkSym: result = a.sym == b.sym
-    of nkType: result = true
+    of nkIdent: result = a.ident.s == b.ident.s
+    of nkSym: result = false # A parsed source must not contain resolved symbols.
+    of nkType: result = false # Refuse unsupported semantic nodes conservatively.
     of nkCharLit, nkIntLit..nkInt64Lit, nkUIntLit..nkUInt64Lit:
       result = a.intVal == b.intVal
     of nkFloatLit..nkFloat128Lit:
@@ -85,7 +87,24 @@ proc finalCheck(content: string; origAst: PNode): bool {.nimcall.} =
   openParser(parser, fileIdx, llStreamOpen(content), newIdentCache(), conf)
   let newAst = parseAll(parser)
   closeParser(parser)
-  result = conf.errorCounter == oldErrors # and goodEnough(newAst, origAst)
+  result = conf.errorCounter == oldErrors and goodEnough(newAst, origAst)
+  if not result:
+    raise newException(ValueError, "formatted output changes parsed meaning")
+
+proc equivalentFiles*(original, candidate: string): bool =
+  ## Compare parsed source meaning, including indentation and pragma structure.
+  ## Identifier spellings are compared, never cache-local numeric identifiers.
+  var conf = newConfigRef()
+  let cache = newIdentCache()
+  proc parseFile(path: string): PNode =
+    var parser: Parser
+    openParser(parser, fileInfoIdx(conf, AbsoluteFile absolutePath(path)),
+               llStreamOpen(readFile(path)), cache, conf)
+    result = parseAll(parser)
+    closeParser(parser)
+  let a = parseFile(original)
+  let b = parseFile(candidate)
+  result = conf.errorCounter == 0 and goodEnough(a, b)
 
 proc prettyPrint*(infile, outfile: string; opt: PrettyOptions) =
   var conf = newConfigRef()
@@ -117,7 +136,7 @@ proc handleStdinInput(opt: PrettyOptions) =
   removeFile(path)
 
 proc main =
-  var outfile, outdir: string
+  var outfile, outdir, equivalentTo: string
 
   var infiles = newSeq[string]()
   var outfiles = newSeq[string]()
@@ -146,14 +165,22 @@ proc main =
       of "help", "h": writeHelp()
       of "version", "v": writeVersion()
       of "backup": backup = parseBool(val)
+      of "checkequivalent": equivalentTo = val
       of "output", "o", "out": outfile = val
       of "outDir", "outdir": outdir = val
       of "indent": opt.indWidth = parseInt(val)
       of "maxlinelen": opt.maxLineLen = parseInt(val)
       # "" is equal to '-' as input
       of "stdin", "": isStdin = true
-      else: writeHelp()
+      else: quit "[Error] unknown option: " & key
     of cmdEnd: assert(false) # cannot happen
+
+  if equivalentTo.len > 0:
+    if infiles.len != 1 or isStdin or outfile.len > 0 or outdir.len > 0:
+      quit "[Error] checkEquivalent requires one input and no output options"
+    if not equivalentFiles(equivalentTo, infiles[0]):
+      quit "[Error] formatted output changes parsed meaning"
+    return
 
   if isStdin:
     handleStdinInput(opt)

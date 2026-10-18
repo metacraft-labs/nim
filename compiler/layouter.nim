@@ -135,7 +135,8 @@ proc optionalIsGood(em: var Emitter; pos, currentLen: int): bool =
         em.kinds[nlPos] = ltOptionalNewline
         if em.kinds[nlPos+1] == ltSpaces:
           # inhibit extra spaces when concatenating two lines
-          em.tokens[nlPos+1] = if em.tokens[nlPos-2] == ",": " " else: ""
+          em.tokens[nlPos+1] = if em.tokens[nlPos-2] == "," or
+              em.kinds[nlPos-2] == ltKeyword: " " else: ""
       result = true
     elif em.tokens[p+1].len < ourIndent:
       result = isLongEnough(lineLen, pos, p)
