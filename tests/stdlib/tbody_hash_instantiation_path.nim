@@ -115,7 +115,10 @@ proc main() =
   let libDir = currentSourcePath().parentDir.parentDir.parentDir / "lib"
   doAssert dirExists(libDir), "Nim library directory not found at: " & libDir
 
-  let sandbox = createTempDir("tbody_hash_instantiation_path_", "")
+  # Resolved, because the compiler renders `ipAbsolute` from the resolved path:
+  # on macOS the default temp directory sits under the `/var` -> `/private/var`
+  # symlink, and an unresolved sandbox would never equal the rendering.
+  let sandbox = expandFilename(createTempDir("tbody_hash_instantiation_path_", ""))
   try:
     # Two checkouts of one package, with root names that differ in length as
     # well as content so that no equality below can hold by coincidence.
