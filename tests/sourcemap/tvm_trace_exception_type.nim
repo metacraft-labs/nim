@@ -1,7 +1,6 @@
 discard """
   action: "run"
   targets: "c"
-  matrix: "-p:$lib/../dist/codetracer-trace-format-nim/src -p:$lib/../dist/nim-results -p:$lib/../dist/nim-stew"
 """
 
 ## CTFS-M-ExceptionTypeRefinement: verify that a variable bound by

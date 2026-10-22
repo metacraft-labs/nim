@@ -1,7 +1,6 @@
 discard """
   action: "run"
   targets: "c"
-  matrix: "-p:$lib/../dist/codetracer-trace-format-nim/src -p:$lib/../dist/nim-results -p:$lib/../dist/nim-stew"
 """
 
 ## Column-Aware-Replay: end-to-end test for multi-statement-per-line

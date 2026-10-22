@@ -1,7 +1,6 @@
 discard """
   action: "run"
   targets: "c"
-  matrix: "-p:$lib/../dist/codetracer-trace-format-nim/src -p:$lib/../dist/nim-results -p:$lib/../dist/nim-stew"
 """
 ## No mocks: real compiler, CTFS materializer and Testament snapshot comparator.
 ## Independent semantic checks prevent blindly regenerated goldens blessing a

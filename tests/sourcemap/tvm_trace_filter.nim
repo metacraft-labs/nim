@@ -1,7 +1,6 @@
 discard """
   action: "run"
   targets: "c"
-  matrix: "-p:$lib/../dist/codetracer-trace-format-nim/src -p:$lib/../dist/nim-results -p:$lib/../dist/nim-stew"
 """
 
 ## TF-M4: end-to-end test for the cross-language trace-filter wiring.

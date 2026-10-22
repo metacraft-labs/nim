@@ -183,6 +183,23 @@ proc bundleAtlasExe(latest: bool, args: string) =
   nimCompile("dist/atlas/src/atlas.nim",
              options = "-d:release --noNimblePath -d:nimAtlasBootstrap " & args)
 
+proc compilerVendoredLibPaths(): string =
+  ## `--path` flags for the libraries the compiler's VM tracer imports
+  ## (`compiler/vm_trace.nim`: the CodeTracer trace-format library, and
+  ## through it nim-stew and nim-results), vendored under `dist/`.
+  ##
+  ## A program that links compiler modules needs them. The ones in this tree
+  ## list them in their own config (`compiler/nim.cfg`,
+  ## `nimsuggest/nimsuggest.nim.cfg`, ...); the global `config/nim.cfg` must
+  ## not, because every compile reads it and a project bringing its own
+  ## nim-stew would see two copies. Programs whose config is not ours to edit,
+  ## such as nimony's nifler, get them on the command line from here.
+  ## Absolute, because a relative command-line `--path` is resolved against
+  ## the project directory, not koch's.
+  result = ""
+  for dir in ["codetracer-trace-format-nim" / "src", "nim-stew", "nim-results"]:
+    result.add " --path:" & quoteShell(getCurrentDir() / distDir / dir)
+
 proc bundleChecksums(latest: bool) =
   let checksumsCommit = if latest: "HEAD" else: ChecksumsStableCommit
   cloneDependency(distDir, "https://github.com/nim-lang/checksums.git", checksumsCommit, allowBundled = true)
@@ -190,8 +207,11 @@ proc bundleChecksums(latest: bool) =
   let nimonyCommit = if latest: "HEAD" else: NimonyStableCommit
   cloneDependency(distDir, "https://github.com/nim-lang/nimony.git", nimonyCommit, allowBundled = true)
 
+  # nifler links compiler modules (`compiler/modulegraphs` and friends reach
+  # `vm_trace`), and its `nim.cfg` belongs to nimony.
   if not fileExists("bin/nifler".exe):
-    nimCompileFold("Compile nifler", "dist/nimony/src/nifler/nifler.nim", options = "-d:release")
+    nimCompileFold("Compile nifler", "dist/nimony/src/nifler/nifler.nim",
+                   options = "-d:release" & compilerVendoredLibPaths())
   if not fileExists("bin/nifmake".exe):
     nimCompileFold("Compile nifmake", "dist/nimony/src/nifmake/nifmake.nim", options = "-d:release")
 

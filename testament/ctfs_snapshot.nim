@@ -35,7 +35,8 @@
 ##
 ## Sibling-repo path resolution lives in `testament/testament.nim.cfg`
 ## (`--path:"$nim/dist/codetracer-trace-format-nim/src"`), mirroring the
-## compiler's `config/nim.cfg` setup.
+## compiler's own `compiler/nim.cfg`. The global `config/nim.cfg` does not
+## list these paths, so that ordinary compiles do not see the vendored copies.
 
 import std/[json, os, strutils, tables]
 import codetracer_trace_writer/new_trace_reader

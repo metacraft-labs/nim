@@ -102,7 +102,9 @@
 
               # CTFS-M1 column-aware compiler build: `koch boot` compiles
               # `vm_trace.nim`, which imports the codetracer trace-format library;
-              # `compiler/nim.cfg` resolves it from `$nim/dist/<dep>`. Wire those
+              # `compiler/nim.cfg` resolves it from `dist/<dep>` next to the
+              # compiler sources (the global `config/nim.cfg` does not list
+              # those paths, so ordinary compiles never see them). Wire those
               # dist entries to the workspace sibling checkouts so the build is
               # reproducible without a manual setup step. nim-stew (status-im) and
               # nim-results (arnetheduck) are workspace siblings alongside
