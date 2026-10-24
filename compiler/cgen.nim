@@ -2267,7 +2267,44 @@ proc genInitCode(m: BModule) =
 
   registerModuleToMain(m.g, m)
 
-proc postprocessCode(conf: ConfigRef, r: var Rope) =
+type
+  PostprocessRewrite = tuple
+    ## One directive `postprocessCode` replaced: the bytes
+    ## `[oldStart, oldEnd)` of its input became `[newStart, newEnd)` of
+    ## its output.
+    oldStart, oldEnd, newStart, newEnd: int
+
+proc rebaseOffset(rewrites: seq[PostprocessRewrite]; offset: int): int =
+  ## The output offset of input byte `offset` of `postprocessCode`.
+  ## `rewrites` are in input order. An offset inside a directive moves to
+  ## the start of the code that replaced it.
+  var lo = 0
+  var hi = rewrites.len
+  while lo < hi: # the first rewrite that starts after `offset`
+    let mid = (lo + hi) div 2
+    if rewrites[mid].oldStart <= offset: lo = mid + 1
+    else: hi = mid
+  if lo == 0: return offset
+  let r = rewrites[lo - 1]
+  if offset < r.oldEnd: r.newStart
+  else: offset - r.oldEnd + r.newEnd
+
+proc postprocessCode(conf: ConfigRef, r: var Rope;
+                     annotations: var seq[CSourcemapAnnotation]) =
+  ## Replace the line-trace directives (`genPostprocessDir`) in a module's
+  ## code with the `nimln_` / `nimlf_` calls they stand for.
+  ##
+  ## The replacement changes the code's length: a `nimlf_` call spells the
+  ## file's quoted path where the directive held its index. `annotations`
+  ## hold byte offsets into the code BEFORE this pass (`genModule` flattens
+  ## them first), so they are moved to the same bytes of the code after it.
+  ## Without that, every annotation after a directive pointed that many
+  ## bytes too early, the `.c.map` mapped each Nim line to generated lines
+  ## up to several lines above its code (the drift grows with every
+  ## `nimlf_`), and a debugger set a Nim breakpoint on an earlier line: in
+  ## an error branch that never runs, for `return final` in codetracer's
+  ## nim_flow_test (issue
+  ## 2026-10-24-d-and-nim-mcr-streaming-flow-tests-fail-once-ct-mcr-is-built.md).
   # find the first directive
   var f = r.find(postprocessDirStart)
   if f == -1:
@@ -2275,12 +2312,14 @@ proc postprocessCode(conf: ConfigRef, r: var Rope) =
 
   var
     nimlnDirLastF = ""
+    rewrites: seq[PostprocessRewrite] = @[]
 
   var res: Rope = r.substr(0, f - 1)
   while f != -1:
     var
       e = r.find(postprocessDirEnd, f + 1)
       dir = r.substr(f + 1, e - 1).split(postprocessDirSep)
+    let newStart = res.len
     case dir[0]
     of "nimln":
       if dir[2] == nimlnDirLastF:
@@ -2290,6 +2329,7 @@ proc postprocessCode(conf: ConfigRef, r: var Rope) =
         nimlnDirLastF = dir[2]
     else:
       raiseAssert "unexpected postprocess directive"
+    rewrites.add (oldStart: f, oldEnd: e + 1, newStart: newStart, newEnd: res.len)
 
     # find the next directive
     f = r.find(postprocessDirStart, e + 1)
@@ -2300,6 +2340,9 @@ proc postprocessCode(conf: ConfigRef, r: var Rope) =
       res.add(r.substr(e + 1))
 
   r = res
+  for ann in annotations.mitems:
+    ann.startOffset = rebaseOffset(rewrites, ann.startOffset)
+    ann.endOffset = rebaseOffset(rewrites, ann.endOffset)
 
 proc genModule(m: BModule, cfile: Cfile): Rope =
   var moduleIsEmpty = true
@@ -2349,7 +2392,7 @@ proc genModule(m: BModule, cfile: Cfile): Rope =
     result = ""
     m.sourcemapAnnotations = @[]
 
-  postprocessCode(m.config, result)
+  postprocessCode(m.config, result, m.sourcemapAnnotations)
 
 proc initProcOptions(m: BModule): TOptions =
   let opts = m.config.options
