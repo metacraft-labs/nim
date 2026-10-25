@@ -874,7 +874,11 @@ proc p(n: PNode; c: var Con; s: var Scope; mode: ProcessMode; tmpFlags = {sfSing
       # see also the remark about `nkTupleConstr`.
       let t = n.typ.skipTypes(abstractInst)
       let isRefConstr = t.kind == tyRef
-      let m = if isRefConstr: sinkArg
+      # A custom destructor also makes a borrowed value constructor an owning
+      # temporary. Consume its fields, or a call-result field and the enclosing
+      # temporary would both destroy the same reference without a copy.
+      let ownsData = isRefConstr or hasCustomDestructor(c, t)
+      let m = if ownsData: sinkArg
               elif mode == normal: normal
               else: sinkArg
 
@@ -889,7 +893,7 @@ proc p(n: PNode; c: var Con; s: var Scope; mode: ProcessMode; tmpFlags = {sfSing
             result[i][1] = p(n[i][1], c, s, m)
         else:
           result[i] = p(n[i], c, s, m)
-      if mode == normal and (isRefConstr or hasCustomDestructor(c, t)):
+      if mode == normal and ownsData:
         result = ensureDestruction(result, n, c, s)
     of nkCallKinds:
       let inSpawn = c.inSpawn
