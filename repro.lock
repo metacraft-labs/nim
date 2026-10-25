@@ -1,4 +1,4 @@
-schema = "reprobuild.solved-graph-lock.v2"
+schema = "reprobuild.solved-graph-lock.v3"
 
 [lock]
 platform = "amd64-linux"
@@ -6,4 +6,4 @@ optimal = false
 inputs_digest = "fnv1a64:cbf29ce484222325"
 variants = []
 packages = []
-deps = [{ name = "codetracer-trace-format-nim", path = "../codetracer-trace-format-nim", coord_kind = "vcs", url = "https://github.com/metacraft-labs/codetracer-trace-format-nim", ref = "agents", revision = "808ffdb4507634c3aba0661d96cbc353420ed856", integrity = "git-sha1:808ffdb4507634c3aba0661d96cbc353420ed856", version = "", visibility = "public", participation = "", depends = "", tags = "" }, { name = "nim", path = ".", coord_kind = "vcs", url = "https://github.com/metacraft-labs/nim", ref = "", revision = "18fa63e3cf69a46ca35ca72328a989faf95d2045", integrity = "git-sha1:18fa63e3cf69a46ca35ca72328a989faf95d2045", version = "", visibility = "public", participation = "", depends = "codetracer-trace-format-nim,nim-stew", tags = "" }, { name = "nim-stew", path = "../nim-stew", coord_kind = "vcs", url = "https://github.com/metacraft-labs/nim-stew", ref = "codetracer", revision = "cc405401637dc7a32bea708374e26e33f6deca44", integrity = "git-sha1:cc405401637dc7a32bea708374e26e33f6deca44", version = "", visibility = "public", participation = "", depends = "", tags = "" }]
+deps = [{ name = "codetracer-trace-format-nim", coord_kind = "vcs", url = "https://github.com/metacraft-labs/codetracer-trace-format-nim", ref = "agents", revision = "04fe9765a8ee6edcf70a6ea56f12d78e101585e7", integrity = "git-sha1:04fe9765a8ee6edcf70a6ea56f12d78e101585e7", version = "", visibility = "public", participation = "", depends = "", tags = "" }, { name = "nim", self = "true", coord_kind = "vcs", url = "https://github.com/metacraft-labs/nim", ref = "", revision = "18fa63e3cf69a46ca35ca72328a989faf95d2045", integrity = "git-sha1:18fa63e3cf69a46ca35ca72328a989faf95d2045", version = "", visibility = "public", participation = "", depends = "codetracer-trace-format-nim,nim-stew", tags = "" }, { name = "nim-stew", coord_kind = "vcs", url = "https://github.com/metacraft-labs/nim-stew", ref = "codetracer", revision = "f7bb6bb918081ef8326e98dd3a97b2b86bbf3d88", integrity = "git-sha1:f7bb6bb918081ef8326e98dd3a97b2b86bbf3d88", version = "", visibility = "public", participation = "", depends = "", tags = "" }]

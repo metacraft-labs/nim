@@ -1469,6 +1469,13 @@ proc createTypeBoundOps(g: ModuleGraph; c: PContext; orig: PType; info: TLineInf
     if canon != orig:
       setAttachedOp(g, idgen.module, orig, k, getAttachedOp(g, canon, k))
 
+  if skipped.kind == tyRef and canon != skipped and
+      g.config.selectedGC in {gcArc, gcOrc, gcYrc, gcAtomicArc}:
+    # Reusing reference hooks skips atomicRefOp, which normally prepares the
+    # referent's hooks. RTTI still looks them up on this concrete referent,
+    # even when the reference hook bodies and backend layout are shared.
+    createTypeBoundOps(g, c, skipped.elementType, info, idgen)
+
   if not isTrivial(getAttachedOp(g, orig, attachedDestructor)):
     #or not isTrivial(orig.assignment) or
     # not isTrivial(orig.sink):
