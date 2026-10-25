@@ -279,6 +279,16 @@ when (NimMajor, NimMinor, NimPatch) >= (1, 3, 5) or defined(nimSymImplTransform)
     ## note that code transformations are implementation dependent and subject to change.
     ## See an example in `tests/macros/tmacros_various.nim`.
 
+when defined(nimHasCopyOperationInspection):
+  proc getCopyOperation*(node: NimNode): NimNode {.magic: "GetCopyOperation", noSideEffect.}
+    ## Returns the actual completed attached Copy symbol for a concrete object,
+    ## tuple, array or distinct value type. A typedesc selects its represented
+    ## type; an expression is inspected without execution. This read-only query
+    ## never generates or instantiates operations. Unprepared, disabled,
+    ## provisional and unsupported bindings fail explicitly; nil is not success.
+    ## The result supports `getImpl`. An empty Copy body says nothing about
+    ## destruction, replacement or all effects of assignment.
+
 proc getOwner*(sym: NimNode): NimNode {.magic: "SymOwner", noSideEffect, since: (2, 3, 1).}
   ## Returns the compiler owner of a typed `nnkSym` node. For example, a
   ## procedure-local variable is owned by its procedure and an object field

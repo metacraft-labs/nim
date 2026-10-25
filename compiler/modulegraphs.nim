@@ -60,6 +60,14 @@ type
     typeInstCache*: Table[ItemId, seq[PType]] # A symbol's ItemId.
     procInstCache*: Table[ItemId, seq[PInstantiation]] # A symbol's ItemId.
     attachedOps*: array[TTypeAttachedOp, Table[ItemId, PSym]] # Type ID, destructors, etc.
+    # Inspection metadata is deliberately not serialized. A loaded attachment is
+    # not evidence that this engine completed its body and dependencies.
+    copyBindings*: Table[ItemId, PSym]
+    operationBodies*: Table[ItemId, PSym]
+    operationSymbols*: Table[ItemId, PSym]
+    copyGenerationDepth*: int
+    copyGenerationErrors*: int
+    pendingCopyBindings*: seq[PType]
     loadedOps: array[TTypeAttachedOp, Table[string, PSym]] # This can later by unified with `attachedOps` once it's stable
     opsLog*: seq[LogEntry]
     methodsPerGenericType*: Table[ItemId, seq[(int, PSym)]] # Type ID, attached methods
@@ -141,6 +149,11 @@ type
                  isFrontend: bool]
 
 proc resetForBackend*(g: ModuleGraph) =
+  g.copyBindings.clear()
+  g.operationBodies.clear()
+  g.operationSymbols.clear()
+  g.pendingCopyBindings.setLen(0)
+  g.copyGenerationDepth = 0
   g.compilerprocs = initStrTable()
   g.typeInstCache.clear()
   g.procInstCache.clear()
@@ -283,6 +296,13 @@ proc getAttachedOp*(g: ModuleGraph; t: PType; op: TTypeAttachedOp): PSym =
   else:
     result = nil
 
+proc invalidateOperation(g: ModuleGraph; typeId: ItemId;
+                         op: TTypeAttachedOp; value: PSym) =
+  let previous = g.attachedOps[op].getOrDefault(typeId)
+  if previous != nil and previous != value:
+    g.operationBodies.del(previous.itemId)
+  if op == attachedAsgn: g.copyBindings.del(typeId)
+
 proc setAttachedOp*(g: ModuleGraph; module: int; t: PType; op: TTypeAttachedOp; value: PSym) =
   ## we also need to record this to the packed module.
   if not g.attachedOps[op].contains(t.itemId):
@@ -295,18 +315,101 @@ proc setAttachedOp*(g: ModuleGraph; module: int; t: PType; op: TTypeAttachedOp; 
       let ownerModule = if t.sym != nil: t.sym.itemId.module.int else: module
       g.opsLog.add LogEntry(kind: HookEntry, op: op, module: ownerModule, key: key, sym: value)
       g.loadedOps[op][key] = value
+  g.invalidateOperation(t.itemId, op, value)
+  if value != nil: g.operationSymbols[value.itemId] = value
   g.attachedOps[op][t.itemId] = value
 
 proc setAttachedOp*(g: ModuleGraph; module: int; typeId: ItemId; op: TTypeAttachedOp; value: PSym) =
   ## Overload that takes ItemId directly, useful for registering hooks from NIF index.
+  g.invalidateOperation(typeId, op, value)
+  if value != nil: g.operationSymbols[value.itemId] = value
   g.attachedOps[op][typeId] = value
 
 proc setAttachedOpPartial*(g: ModuleGraph; module: int; t: PType; op: TTypeAttachedOp; value: PSym) =
   ## we also need to record this to the packed module.
+  g.invalidateOperation(t.itemId, op, value)
+  if value != nil:
+    g.operationSymbols[value.itemId] = value
+    g.operationBodies.del(value.itemId)
   g.attachedOps[op][t.itemId] = value
 
 proc completePartialOp*(g: ModuleGraph; module: int; t: PType; op: TTypeAttachedOp; value: PSym) {.inline.} =
-  discard
+  if value != nil and g.config.errorCounter == g.copyGenerationErrors:
+    g.operationBodies[value.itemId] = value
+
+proc completeOperationBody*(g: ModuleGraph; s: PSym) =
+  ## Called only after ordinary successful body semantic checking, including
+  ## generic instantiation. Registration and forward declarations do not count.
+  if s != nil and {sfForward, sfError} * s.flags == {}:
+    g.operationBodies[s.itemId] = s
+
+proc operationDependenciesComplete*(g: ModuleGraph; s: PSym): bool =
+  var seen: Table[ItemId, bool]
+  proc visit(s: PSym): bool
+  proc body(n: PNode): bool =
+    if n == nil: return true
+    if n.kind == nkSym and n.sym.itemId in g.operationSymbols:
+      if not visit(n.sym): return false
+    for child in n:
+      if not body(child): return false
+    true
+  proc visit(s: PSym): bool =
+    if s == nil or g.operationBodies.getOrDefault(s.itemId) != s or
+        {sfForward, sfError} * s.flags != {}: return false
+    if seen.hasKey(s.itemId): return true
+    seen[s.itemId] = true
+    s.ast != nil and body(s.ast[bodyPos])
+  result = visit(s)
+
+proc completeCopyBinding*(g: ModuleGraph; t: PType) =
+  ## Ordinary resolution can complete a private field's instantiated operation
+  ## without running createTypeBoundOps for the field as a separate root.
+  if g.copyGenerationDepth != 0:
+    g.pendingCopyBindings.add t
+  else:
+    let op = getAttachedOp(g, t, attachedAsgn)
+    if g.config.errorCounter == 0 and g.operationDependenciesComplete(op):
+      g.copyBindings[t.itemId] = op
+
+proc beginCopyGeneration*(g: ModuleGraph) =
+  if g.copyGenerationDepth == 0:
+    g.copyGenerationErrors = g.config.errorCounter
+  inc g.copyGenerationDepth
+
+proc endCopyGeneration*(g: ModuleGraph; succeeded: bool) =
+  dec g.copyGenerationDepth
+  if not succeeded: g.copyGenerationErrors = -1
+  if g.copyGenerationDepth == 0:
+    if g.copyGenerationErrors == g.config.errorCounter:
+      for t in g.pendingCopyBindings:
+        let op = getAttachedOp(g, t, attachedAsgn)
+        if op != nil: g.copyBindings[t.itemId] = op
+    else:
+      for t in g.pendingCopyBindings:
+        g.copyBindings.del(t.itemId)
+        for k in TTypeAttachedOp:
+          let op = getAttachedOp(g, t, k)
+          if op != nil: g.operationBodies.del(op.itemId)
+    g.pendingCopyBindings.setLen(0)
+
+proc inspectCopyBinding*(g: ModuleGraph; t: PType; failure: var string): PSym =
+  ## A certificate is useful only for the current selected symbol. Traversing
+  ## operation bodies also prevents a completed parent from publishing a still
+  ## provisional child or a child invalidated by later owner registration.
+  failure = ""
+  if g.copyGenerationDepth != 0:
+    failure = "copy operation is still being generated"
+    return
+  let op = getAttachedOp(g, t, attachedAsgn)
+  if op != nil and sfError in op.flags:
+    failure = "copy operation is disabled"
+    return
+  if g.config.symbolFiles != disabledSf or g.config.cmd in {cmdNifC, cmdM} or
+      op == nil or g.copyBindings.getOrDefault(t.itemId) != op or
+      not g.operationDependenciesComplete(op):
+    failure = "copy operation is not resolved"
+    return
+  result = op
 
 iterator getDispatchers*(g: ModuleGraph): PSym =
   for i in g.dispatchers.mitems:

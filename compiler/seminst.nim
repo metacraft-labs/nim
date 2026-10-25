@@ -120,6 +120,7 @@ proc freshGenSyms(c: PContext; n: PNode, owner, orig: PSym, symMap: var SymMappi
 proc addParamOrResult(c: PContext, param: PSym, kind: TSymKind)
 
 proc instantiateBody(c: PContext, n, params: PNode, result, orig: PSym) =
+  let operationErrorCount = c.config.errorCounter
   if n[bodyPos].kind != nkEmpty:
     let procParams = result.typ.n
     for i in 1..<procParams.len:
@@ -152,6 +153,8 @@ proc instantiateBody(c: PContext, n, params: PNode, result, orig: PSym) =
     excl(result, sfForward)
     trackProc(c, result, result.ast[bodyPos])
     dec c.inGenericInst
+    if c.config.errorCounter == operationErrorCount:
+      c.graph.completeOperationBody(result)
 
 proc fixupInstantiatedSymbols(c: PContext, s: PSym) =
   for i in 0..<c.generics.len:

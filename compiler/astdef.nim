@@ -535,7 +535,8 @@ type
     mInstantiationInfo, mGetTypeInfo, mGetTypeInfoV2,
     mNimvm, mIntDefine, mStrDefine, mBoolDefine, mGenericDefine, mRunnableExamples,
     mException, mBuiltinType, mSymOwner, mUncheckedArray, mGetImplTransf,
-    mSymIsInstantiationOf, mNodeId, mPrivateAccess, mZeroDefault
+    mSymIsInstantiationOf, mNodeId, mPrivateAccess, mZeroDefault,
+    mGetCopyOperation
 
 
 const

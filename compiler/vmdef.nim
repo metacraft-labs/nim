@@ -183,6 +183,7 @@ type
     opcSetType,   # dest.typ = types[Bx]
     opcTypeTrait,
     opcSymOwner,
+    opcGetCopyOperation,
     opcSymIsInstantiationOf
 
   TBlock* = object

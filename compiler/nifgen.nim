@@ -493,6 +493,7 @@ proc magicToNifTag(s: TMagic): (string, int) =
   of mException: ("exception", NoMagic)
   of mBuiltinType: ("builtintype", NoMagic)
   of mSymOwner: ("symowner", NoMagic)
+  of mGetCopyOperation: ("getcopyoperation", NoMagic)
   of mUncheckedArray: ("uarray", 0)
   of mGetImplTransf: ("getimpltransf", NoMagic)
   of mSymIsInstantiationOf: ("symisinstantiationof", NoMagic)

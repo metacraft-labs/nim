@@ -2449,6 +2449,7 @@ proc semMethodPrototype(c: PContext; s: PSym; n: PNode) =
 
 proc semProcAux(c: PContext, n: PNode, kind: TSymKind,
                 validPragmas: TSpecialWords, flags: TExprFlags = {}): PNode =
+  let operationErrorCount = c.config.errorCounter
   result = semProcAnnotation(c, n, validPragmas)
   if result != nil: return result
   result = n
@@ -2736,6 +2737,9 @@ proc semProcAux(c: PContext, n: PNode, kind: TSymKind,
   # When not highlighting we still need to allow for suggestions though
   if not isHighlight:
     suggestSym(c.graph, s.info, s, c.graph.usageSym)
+  if c.config.errorCounter == operationErrorCount and
+      n[genericParamsPos].kind == nkEmpty and n[bodyPos].kind != nkEmpty:
+    c.graph.completeOperationBody(s)
 
 proc determineType(c: PContext, s: PSym) =
   if s.typ != nil: return

@@ -1566,6 +1566,28 @@ proc rawExecute(c: PCtx, start: int, tos: PStackFrame): TFullReg =
               ast[i] = a.sym.ast[i]
             ast[bodyPos] = transformBody(c.graph, c.idgen, a.sym, {useCache, force})
             ast.copyTree()
+    of opcGetCopyOperation:
+      decodeB(rkNode)
+      let a = regs[rb].node
+      template copyFailure(message: string) =
+        stackTrace(c, tos, pc, message)
+      if c.config.backend notin {backendC, backendJs} or
+          (c.config.backend == backendC and c.config.selectedGC notin {gcArc, gcOrc}):
+        copyFailure("copy inspection is unsupported for this target or memory manager")
+      var t = if a == nil: nil else: a.typ
+      if t != nil:
+        const wrappers = {tyAlias, tyVar, tyLent, tySink, tyGenericInst}
+        t = t.skipTypes(wrappers)
+        if t.kind == tyTypeDesc and t.len == 1:
+          t = t[0].skipTypes(wrappers)
+      if t == nil or t.kind notin {tyObject, tyTuple, tyArray, tyDistinct} or
+          {tfHasMeta, tfUnresolved} * t.flags != {}:
+        copyFailure("copy inspection requires a typed concrete value type")
+      var failure = ""
+      let op = c.graph.inspectCopyBinding(t, failure)
+      if op == nil: copyFailure(failure)
+      regs[ra].node = newSymNode(op, a.info)
+      regs[ra].node.flags.incl nfIsRef
     of opcSymOwner:
       decodeB(rkNode)
       let a = regs[rb].node

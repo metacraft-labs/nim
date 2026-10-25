@@ -495,6 +495,7 @@ proc considerUserDefinedOp(c: var TLiftCtx; t: PType; body, x, y: PNode): bool =
     result = considerAsgnOrSink(c, t, body, x, y, op)
     if op != nil:
       setAttachedOp(c.g, c.idgen.module, t, c.kind, op)
+      if c.kind == attachedAsgn: c.g.completeCopyBinding(t)
 
   of attachedDeepCopy:
     let op = getAttachedOp(c.g, t, attachedDeepCopy)
@@ -1188,6 +1189,7 @@ proc produceSymDistinctType(g: ModuleGraph; c: PContext; typ: PType;
     discard produceSym(g, c, baseType, kind, info, idgen)
   result = getAttachedOp(g, baseType, kind)
   setAttachedOp(g, idgen.module, typ, kind, result)
+  if kind == attachedAsgn: g.completeCopyBinding(typ)
 
 proc symDupPrototype(g: ModuleGraph; typ: PType; owner: PSym; kind: TTypeAttachedOp;
               info: TLineInfo; idgen: IdGenerator): PSym =
@@ -1275,7 +1277,7 @@ proc genTypeFieldCopy(c: var TLiftCtx; t: PType; body, x, y: PNode) =
   yy.typ = xx.typ
   body.add newAsgnStmt(xx, yy)
 
-proc produceSym(g: ModuleGraph; c: PContext; typ: PType; kind: TTypeAttachedOp;
+proc produceSymImpl(g: ModuleGraph; c: PContext; typ: PType; kind: TTypeAttachedOp;
               info: TLineInfo; idgen: IdGenerator): PSym =
   if typ.kind == tyDistinct:
     # For =dup, if the distinct type has a user-defined =copy, don't delegate
@@ -1352,6 +1354,15 @@ proc produceSym(g: ModuleGraph; c: PContext; typ: PType; kind: TTypeAttachedOp;
     ensureMutable result
     incl result.optionsImpl, optQuirky
   completePartialOp(g, idgen.module, typ, kind, result)
+  if kind == attachedAsgn: g.completeCopyBinding(typ)
+
+proc produceSym(g: ModuleGraph; c: PContext; typ: PType; kind: TTypeAttachedOp;
+                info: TLineInfo; idgen: IdGenerator): PSym =
+  g.beginCopyGeneration()
+  var succeeded = false
+  defer: g.endCopyGeneration(succeeded)
+  result = produceSymImpl(g, c, typ, kind, info, idgen)
+  succeeded = true
 
 
 proc produceDestructorForDiscriminator*(g: ModuleGraph; typ: PType; field: PSym,
@@ -1421,6 +1432,11 @@ proc createTypeBoundOps(g: ModuleGraph; c: PContext; orig: PType; info: TLineInf
   ## to ensure we lift assignment, destructors and moves properly.
   ## The later 'injectdestructors' pass depends on it.
   if orig == nil or {tfCheckedForDestructor, tfHasMeta} * orig.flags != {}: return
+  # Publish a recursive generation component only after its outermost ordinary
+  # preparation succeeds. The inspection API never enters this path itself.
+  g.beginCopyGeneration()
+  var generationSucceeded = false
+  defer: g.endCopyGeneration(generationSucceeded)
   # IC: review this solution again later
   incl orig.flagsImpl, tfCheckedForDestructor
   # for user defined generic destructors:
@@ -1430,13 +1446,17 @@ proc createTypeBoundOps(g: ModuleGraph; c: PContext; orig: PType; info: TLineInf
     incl origRoot.flagsImpl, tfGenericHasDestructor
 
   let skipped = orig.skipTypes({tyGenericInst, tyAlias, tySink})
-  if isEmptyContainer(skipped) or skipped.kind == tyStatic: return
+  if isEmptyContainer(skipped) or skipped.kind == tyStatic:
+    generationSucceeded = true
+    return
 
   let h = sighashes.hashType(skipped, g.config, {CoType, CoConsiderOwned, CoDistinct})
   var canon = g.canonTypes.getOrDefault(h)
   if canon == nil:
     g.canonTypes[h] = skipped
     canon = skipped
+  g.pendingCopyBindings.add orig
+  g.pendingCopyBindings.add canon
 
   # multiple cases are to distinguish here:
   # 1. we don't know yet if 'typ' has a nontrival destructor.
@@ -1482,3 +1502,4 @@ proc createTypeBoundOps(g: ModuleGraph; c: PContext; orig: PType; info: TLineInf
     # IC: review this solution again later
     orig.flagsImpl.incl tfHasAsgn
     # ^ XXX Breaks IC!
+  generationSucceeded = true

@@ -879,6 +879,7 @@ proc toNifTag*(s: TMagic): string =
   of mException: "exception"
   of mBuiltinType: "builtintype"
   of mSymOwner: "symowner"
+  of mGetCopyOperation: "getcopyoperation"
   of mUncheckedArray: "uncheckedarray"
   of mGetImplTransf: "getimpltransf"
   of mSymIsInstantiationOf: "symisinstantiationof"
@@ -1161,6 +1162,7 @@ proc parse*(t: typedesc[TMagic]; s: string): TMagic =
   of "exception": mException
   of "builtintype": mBuiltinType
   of "symowner": mSymOwner
+  of "getcopyoperation": mGetCopyOperation
   of "uncheckedarray": mUncheckedArray
   of "getimpltransf": mGetImplTransf
   of "symisinstantiationof": mSymIsInstantiationOf
