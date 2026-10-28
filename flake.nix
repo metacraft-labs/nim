@@ -72,11 +72,17 @@
               sfml   # nixpkgs renamed SFML -> sfml on unstable
 
               # Test tools
-              valgrind
               gdb
               nodejs
               python3
             ] ++ pkgs.lib.optionals isLinux [
+              # Linux-only: nixpkgs marks valgrind broken on Darwin, so
+              # listing it unconditionally made this shell refuse to
+              # evaluate there. testament runs `valgrind:` specs only on
+              # 64-bit Linux anyway (`testament/specs.nim`).
+              # tests/devshell/test_dev_shell_evaluates_on_every_system.sh
+              valgrind
+
               # X11 headers (xorg category in testament). On unstable
               # the package was renamed from `xorg.libX11` to `libx11`.
               libx11.dev
