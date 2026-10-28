@@ -122,7 +122,7 @@
               # flake from another checkout must write nothing there. This
               # repository is recognised by `koch.nim` and `compiler/cgen.nim`
               # at the top level of the enclosing git checkout.
-              # tests/test_dev_shell_writes_nothing_elsewhere.sh
+              # tests/devshell/test_dev_shell_writes_nothing_elsewhere.sh
               _ctnim_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
               if [ -n "$_ctnim_root" ] && [ -f "$_ctnim_root/koch.nim" ] \
                 && [ -f "$_ctnim_root/compiler/cgen.nim" ]; then
