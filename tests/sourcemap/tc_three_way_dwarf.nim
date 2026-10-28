@@ -82,34 +82,89 @@ proc decodeMappings(s: string): seq[V3Segment] =
                     origLine: oLine, origCol: oCol)
     inc gLine
 
-proc dumpDebugLine(objFile: string): seq[DwarfRow] =
-  proc tryParse(output: string): seq[DwarfRow] =
-    var inTable = false
-    for raw in output.splitLines:
-      let stripped = raw.strip
-      if stripped.startsWith("File name") and
-          ("Starting address" in stripped or "Address" in stripped):
-        inTable = true
-        continue
-      if not inTable: continue
-      if stripped.len == 0: continue
+proc parseGnuDecodedLine(output: string): seq[DwarfRow] =
+  ## Parses GNU binutils' `objdump --dwarf=decodedline`, whose table rows
+  ## name the file directly: `<file> <line> <0xaddress> [view] [stmt]`.
+  ## https://sourceware.org/binutils/docs/binutils/objdump.html
+  var inTable = false
+  for raw in output.splitLines:
+    let stripped = raw.strip
+    if stripped.startsWith("File name") and
+        ("Starting address" in stripped or "Address" in stripped):
+      inTable = true
+      continue
+    if not inTable: continue
+    if stripped.len == 0: continue
+    let parts = stripped.splitWhitespace
+    if parts.len < 3: continue
+    if not parts[2].startsWith("0x"): continue
+    try:
+      let line = parseInt(parts[1])
+      let address = parseHexInt(parts[2])
+      result.add (address: address, line: line, file: parts[0])
+    except ValueError:
+      discard
+
+proc parseLlvmDebugLine(output: string): seq[DwarfRow] =
+  ## Parses LLVM's `llvm-dwarfdump --debug-line`. Unlike GNU's decoded
+  ## view, its rows carry a file *index*
+  ## (`<0xaddress> <line> <column> <file> <isa> ...`) that resolves through
+  ## the `file_names[ N]:` / `name: "<file>"` entries of the same line
+  ## table's prologue, so the index table is rebuilt for every
+  ## `debug_line[...]` unit.
+  ## https://llvm.org/docs/CommandGuide/llvm-dwarfdump.html
+  var files: seq[(int, string)]   # (index, name) of the current unit
+  var pendingIdx = -1             # `file_names[N]:` awaiting its `name:`
+  var inTable = false
+
+  proc fileName(files: seq[(int, string)], idx: int): string =
+    for (i, n) in files:
+      if i == idx: return n
+    ""
+
+  for raw in output.splitLines:
+    let stripped = raw.strip
+    if stripped.startsWith("debug_line["):
+      files.setLen 0
+      pendingIdx = -1
+      inTable = false
+    elif stripped.startsWith("file_names["):
+      let close = stripped.find(']')
+      pendingIdx = -1
+      if close > 0:
+        try: pendingIdx = parseInt(stripped["file_names[".len ..< close].strip)
+        except ValueError: discard
+    elif stripped.startsWith("name:") and pendingIdx >= 0:
+      files.add (pendingIdx, stripped["name:".len .. ^1].strip.strip(chars = {'"'}))
+      pendingIdx = -1
+    elif stripped.startsWith("Address") and "Line" in stripped and
+        "File" in stripped:
+      inTable = true
+    elif inTable and stripped.startsWith("0x"):
       let parts = stripped.splitWhitespace
-      if parts.len < 3: continue
-      if not parts[2].startsWith("0x"): continue
+      if parts.len < 4: continue
       try:
+        let address = parseHexInt(parts[0])
         let line = parseInt(parts[1])
-        let address = parseHexInt(parts[2])
-        result.add (address: address, line: line, file: parts[0])
+        let file = fileName(files, parseInt(parts[3]))
+        if file.len > 0:
+          result.add (address: address, line: line, file: file)
       except ValueError:
         discard
 
-  let bin = execCmdEx("objdump --dwarf=decodedline " & objFile)
-  if bin.exitCode == 0:
-    result = tryParse(bin.output)
+proc dumpDebugLine(objFile: string): seq[DwarfRow] =
+  ## Reads the `.debug_line` rows of `objFile` with whichever dumper the
+  ## host provides. GNU `objdump` is tried first (Linux). On darwin the
+  ## `objdump` on PATH is LLVM's, which rejects `--dwarf=decodedline` with
+  ## a non-zero exit, so the test falls through to `llvm-dwarfdump` (put in
+  ## the darwin dev shell by `flake.nix`) and parses LLVM's own format.
+  let gnu = execCmdEx("objdump --dwarf=decodedline " & quoteShell(objFile))
+  if gnu.exitCode == 0:
+    result = parseGnuDecodedLine(gnu.output)
     if result.len > 0: return
-  let llvm = execCmdEx("llvm-dwarfdump --debug-line " & objFile)
+  let llvm = execCmdEx("llvm-dwarfdump --debug-line " & quoteShell(objFile))
   if llvm.exitCode == 0:
-    result = tryParse(llvm.output)
+    result = parseLlvmDebugLine(llvm.output)
 
 proc main() =
   let nim = getCurrentCompilerExe()
@@ -209,9 +264,18 @@ proc main() =
     $cLinesForNimBody & " but no DWARF row in " & actualObjPath &
     " references those lines. Nim → C → assembly chain is broken."
 
-  removeDir(buildDir)
   echo "3-way DWARF integration test passed (Nim line ",
        pickedNimLine, ", matched ", cLinesForNimBody.len,
        " candidate C lines, ", dwarf.len, " DWARF rows scanned)"
 
-main()
+# `buildDir` lies inside this test category, and testament collects every
+# `t*.nim` under it recursively (`isTestFile` in testament/categories.nim),
+# so a `three_way_test.nim` left behind would run as an extra test on the
+# next `koch tests cat sourcemap`. The directory is therefore removed
+# whether `main` passes or fails, and also before it starts, in case an
+# earlier run was killed before its `finally` could run.
+removeDir(buildDir)
+try:
+  main()
+finally:
+  removeDir(buildDir)

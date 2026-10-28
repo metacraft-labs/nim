@@ -86,6 +86,16 @@
               # X11 headers (xorg category in testament). On unstable
               # the package was renamed from `xorg.libX11` to `libx11`.
               libx11.dev
+            ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              # Darwin-only: the `objdump` the toolchain wrapper puts on
+              # PATH there is LLVM's, which rejects GNU's
+              # `--dwarf=decodedline`. tests/sourcemap/tc_three_way_dwarf.nim
+              # then reads `.debug_line` with `llvm-dwarfdump`, which this
+              # package provides. It is the same LLVM the wrapper's
+              # `objdump` comes from, and its binaries are all `llvm-*`
+              # prefixed, so nothing on PATH is shadowed. Linux keeps GNU
+              # binutils' `objdump` and needs nothing extra.
+              llvm
             ];
 
             # Libraries that Nim code dlopen()s at runtime (rather than

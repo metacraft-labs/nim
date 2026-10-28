@@ -78,4 +78,11 @@ proc main() =
   echo "Basic sourcemap coverage test passed"
 
 when isMainModule:
-  main()
+  # `buildDir` lies inside this test category, and testament collects every
+  # `t*.nim` under it recursively (`isTestFile` in testament/categories.nim),
+  # so the generated `test_prog.nim` would run as an extra test on the next
+  # `koch tests cat sourcemap` if it were left behind, pass or fail.
+  try:
+    main()
+  finally:
+    removeDir(buildDir)
