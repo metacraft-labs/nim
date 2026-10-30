@@ -136,6 +136,6 @@ jobs:
           name: vccexe-paths-windows-x64
           path: |
             nim/build/test-tools/evidence/**
-            nim/.repro/**/path-only-tool-identities.inspect.json
+            nim/.repro/**/*-tool-identities.inspect.json
           include-hidden-files: true
           if-no-files-found: warn
