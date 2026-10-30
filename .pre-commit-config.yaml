@@ -1,0 +1,85 @@
+# THE MCL STANDARD HOOK SET (`mcl-standard-hooks`), portable committed form --
+# PARTIAL ADOPTION, AND THE SHORTFALL IS STATED RATHER THAN HIDDEN.
+#
+# metacraft-dev-guidelines/policies/repo-requirements.md §4 requires the whole
+# set, so this file is a RECORDED SHORTFALL, not a claim of compliance. What it
+# carries is the committed-binaries tier of §4.3 -- the two mandatory refusals.
+# What it does not carry is the formatting tier, for the reason below.
+#
+# THIS REPOSITORY IS A PRODUCT-ADAPTED THIRD-PARTY FORK. Its mainline and agent
+# landing branch is the product-named adaptation branch `codetracer`, not
+# `dev` and not `agents`: branching-policy.md "Product-Adapted Third-Party
+# Forks" / "Agent Landing Branch", and `agents` / `agents-to-dev-*` are
+# FORBIDDEN names in this class (`forbiddenBranches`, branchClasses.product-fork
+# in branch-protection-policy.json, operator decision 2026-09-30). The ruleset
+# that refuses them is the policy working as designed.
+#
+# UPSTREAM CARRIED NO PRE-COMMIT CONFIGURATION OF ITS OWN at 7f7bfc4a6aa1ead6259f4f3d77f493835a864296: no
+# `.pre-commit-config.yaml`, no `prek.toml`, no `.pre-commit-hooks.yaml`
+# anywhere in the tree (measured with `git ls-files`). This file is therefore
+# a Metacraft addition that conflicts with nothing upstream maintains, which is
+# what makes a root-level config safe to add to a vendored fork at all. If a
+# future upstream merge introduces one, MERGE the two blocks -- do not let
+# either side clobber the other.
+#
+# MEASURED STATE OF THIS REPOSITORY WHEN THE HOOKS WERE ADOPTED:
+# At 7f7bfc4a6aa1ead6259f4f3d77f493835a864296 this repository tracked 4089 file(s), of which
+# 0 are `*.ct` recording(s) and 1 exceed the 1024 KB ceiling. Neither
+# count can be failed by these hooks: both act only on files a commit ADDS.
+#
+# §4.1 says which adoption form is ours. This repository does not install the
+# standard set through the devops-modules flake, so the form is the portable
+# one: the block from devops-modules' `git-hooks/mcl-standard-hooks.yaml`, with
+# `rev:` pinned to a devops-modules sha. §4.1 is explicit that a repo which is
+# flake-free, or whose flake does not wire hooks, is not thereby defective --
+# "its fix is a committed config, not a new flake". Having NO hooks was the
+# defect: before this file there was no `.pre-commit-config.yaml` here, so
+# §4.3 was satisfied on paper by nothing at all.
+#
+# Install:  prek install --install-hooks      (or: pre-commit install)
+# Run:      prek run --all-files
+#
+# ON NixOS, `uv` MUST BE ON PATH BEFORE EITHER OF THOSE. prek otherwise
+# downloads its own `uv`, which is a generic-linux dynamically linked binary and
+# cannot exec on NixOS. The hooks then fail to INSTALL and the commit fails for
+# a reason that has nothing to do with its content -- a gate that refuses
+# everything is not a gate, it is an outage. prek consults PATH first, so
+# `nix shell nixpkgs#uv` is the whole fix; "prek cannot bootstrap on NixOS" was
+# right about the symptom and wrong about the cause.
+#
+# WHY THESE TWO CAN LAND WITH NOTHING ELSE MOVING. Both act on ADDED files only
+# (`git diff --staged --diff-filter=A`), never on files already tracked, so they
+# cannot rewrite a byte of this repository and cannot retroactively fail
+# whatever it already carries -- which is what makes adoption safe in a fork
+# whose history is upstream's. `--enforce-all` is deliberately not passed and
+# must not be added to "tighten" it.
+#
+# WHAT IS MISSING, AND WHY. Absent members of the set: `end-of-file-fixer`,
+# `editorconfig-checker`, `nixfmt`, `terraform-format`, `prettier`. All five are
+# FORMATTERS -- they rewrite files on first adoption. In a vendored fork that is
+# worse than noise: gratuitous reformatting widens the diff against upstream for
+# every future rebase of this adaptation branch, a cost paid forever for a
+# cosmetic gain. They want a deliberate decision, not a hook-adoption side
+# effect.
+#
+# TO FINISH THE ADOPTION: add the `- repo: local` block from
+# `git-hooks/mcl-standard-hooks.yaml` verbatim plus `end-of-file-fixer`, deal
+# with the upstream-diff cost above, and delete this paragraph.
+
+minimum_pre_commit_version: '3.0.0'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # 1024 KB passed explicitly because UPSTREAM'S DEFAULT IS 500 KB; dropping
+      # the argument silently halves the ceiling.
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+
+  - repo: https://github.com/metacraft-labs/devops-modules
+    # Pinned to a sha, never to a branch: a hook set that changes under a repo
+    # without a commit in that repo is a hook set nobody can bisect.
+    rev: 6ba34072850f7348e1669a6daf8a0acb79669434
+    hooks:
+      - id: ban-added-ct-recordings

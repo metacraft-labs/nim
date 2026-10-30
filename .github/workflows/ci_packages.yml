@@ -1,5 +1,6 @@
 name: Packages CI
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -15,6 +16,8 @@ concurrency:
 
 jobs:
   build:
+    # Preserve this upstream job's prior event set; manual qualification is separate.
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -78,3 +81,71 @@ jobs:
       - name: 'koch, Run CI'
         shell: bash
         run: . ci/funs.sh && nimInternalBuildKochAndRunCI
+
+  windows-prefix:
+    name: Complete Nim 2.2.10 maintenance prefix (Windows x64)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, Windows, X64, dev-env-ready]
+    timeout-minutes: 60
+    env:
+      REPRO_TOOL_PROVISIONING: tarball
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: nim
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: nim
+          persist-credentials: false
+      - name: Mint installation token
+        id: ci_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_TOKEN_PROVIDER_APP_ID }}
+          private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
+          owner: metacraft-labs
+      - name: Setup declared factory tools
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@387fee68b58afd2542695709eb2e6681b0cd9888
+        with:
+          env-flavor: reprobuild
+          repro-version: v0.2.17
+          consumer-directory: nim
+          workspace-directory: .
+          gh-token: ${{ steps.ci_token.outputs.token }}
+      - name: Build and qualify the complete prefix
+        shell: pwsh
+        run: |
+          $hostImage = [Environment]::ProcessPath
+          dev-exec $hostImage -NoProfile -File ./scripts/qualify-windows-prefix.ps1
+          exit $LASTEXITCODE
+      - name: Preserve complete qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nim-2.2.10-maintenance-windows-x64
+          retention-days: 1
+          if-no-files-found: warn
+          path: |
+            nim/build/windows-prefix-qualification/*.json
+            nim/build/windows-prefix-qualification/*.stdout
+            nim/build/windows-prefix-qualification/*.stderr
+            nim/build/windows-prefix-qualification/*.log
+            nim/build/windows-prefix-qualification/*.zip
+            nim/build/windows-prefix-qualification/old-wrapper/**
+            nim/build/windows-prefix-qualification/packaged-wrapper/**
+            nim/.repro/dev-env/**/*-tool-identities.inspect.json
+      - name: Mirror qualification to the durable artifact store
+        if: always()
+        continue-on-error: true
+        uses: metacraft-labs/metacraft-github-actions/mirror-artifacts-s3@f091edcf0de4b0458883ff498ed372b112827aea
+        with:
+          path: nim/build/windows-prefix-qualification
+          prefix: nim-maintenance-prefix/${{ github.run_id }}
+          endpoint: ${{ vars.MCL_S3_ARTIFACTS_ENDPOINT }}
+          bucket: ${{ vars.MCL_S3_ARTIFACTS_BUCKET }}
+          region: ${{ vars.MCL_S3_ARTIFACTS_REGION }}
+          access-key-id: ${{ secrets.MCL_S3_ARTIFACTS_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.MCL_S3_ARTIFACTS_SECRET_ACCESS_KEY }}

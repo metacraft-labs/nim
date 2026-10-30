@@ -1,4 +1,5 @@
 import strutils, strtabs, os, osproc, vcvarsall, vccenv, vccvswhere
+import std/tempfiles
 
 type
   VccVersion* = enum ## VCC compiler backend versions
@@ -211,27 +212,46 @@ when isMainModule:
   if verboseArg:
     vccOptions.incl poEchoCmd
 
-  let currentDir = getCurrentDir()
-  for arg in clArgs.mitems:
-    if fileExists(arg):
-      arg = relativePath(arg, currentDir)
-
-  # Default to the cl.exe command if no secondary command was specified
-  if commandArg.len < 1:
+  # Keep caller paths unchanged. Relative conversion fixed command-line size
+  # in #22025, but makes a valid absolute source unusable from a deep cwd.
+  # CL's supported response-file interface handles size without changing paths:
+  # https://learn.microsoft.com/cpp/build/reference/at-specify-a-compiler-response-file
+  let defaultCompiler = commandArg.len < 1
+  if defaultCompiler:
     commandArg = "cl.exe"
 
   if not noCommandArg:
-    # Run VCC command with the VCC process environment
+    var responsePath = ""
+    var exitCode: int
     try:
-      let vccProcess = startProcess(
-          commandArg,
-          args = clArgs,
-          options = vccOptions
-        )
-      quit vccProcess.waitForExit()
+      var childArgs = clArgs
+      if defaultCompiler:
+        let response = createTempFile("vccexe_", ".rsp")
+        responsePath = response.path
+        try:
+          # BOM-marked UTF-8 preserves Unicode paths. Use the existing Windows
+          # argv quoting, including spaces, empty values and embedded quotes.
+          response.cfile.write("\xEF\xBB\xBF" & quoteShellCommand(clArgs))
+        finally:
+          response.cfile.close()
+        childArgs = @["@" & responsePath]
+      # An explicit --command has no response-file contract. Pass its original
+      # arguments directly, without imposing CL-specific parsing on that tool.
+      let vccProcess = startProcess(commandArg, args = childArgs,
+                                    options = vccOptions)
+      try:
+        exitCode = vccProcess.waitForExit()
+      finally:
+        vccProcess.close()
     except:
       if vcvarsallArg.len != 0:
         echo "Hint: using " & vcvarsallArg
       else:
         echo "Hint: vcvarsall.bat was not found"
       raise
+    finally:
+      # Wait before removing: CL/link must retain access throughout execution,
+      # including a failed compilation. quit cannot appear inside this finally.
+      if responsePath.len > 0:
+        removeFile(responsePath)
+    quit exitCode
