@@ -8,3 +8,6 @@ package nimMaintenancePrefix:
     "gcc >=12"
     "git"
     "7zip"
+
+  devEnv:
+    discard
