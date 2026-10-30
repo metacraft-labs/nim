@@ -5,7 +5,7 @@
 ## For that purpose the VCC compiler ships with the vcvarsall utility which is an executable
 ## batch script that can be used to properly set up an Command Prompt environment.
 
-import strtabs, strutils, os, osproc
+import strtabs, strutils, os, osproc, encodings, streams
 
 const
   comSpecEnvKey = "ComSpec" ## Environment Variable that specifies the command-line application path in Windows
@@ -83,12 +83,36 @@ proc vccVarsAll*(path: string, arch: VccArch = vccarchUnspecified, platform_type
   
   # Run the Windows Command Prompt with the /C argument
   # Execute vcvarsall with its command-line arguments
-  # and then execute the SET command to list all environment variables
-  let comSpecExec = "\"$1\" /C \"$2 && SET\"" % [comSpecCmd, vcvarsExec]
+  # and then execute the SET command to list all environment variables.
+  # SET is an internal CMD command: /U makes its redirected output UTF-16LE,
+  # independent of the current OEM code page. Nim strings passed to putEnv
+  # are UTF-8, so decode this boundary rather than corrupt inherited Unicode.
+  # https://learn.microsoft.com/windows-server/administration/windows-commands/cmd
+  let comSpecExec = "\"$1\" /U /C \"$2 && SET\"" % [comSpecCmd, vcvarsExec]
   var comSpecOpts = {poEvalCommand, poDaemon, poStdErrToStdOut}
   if verbose:
     comSpecOpts.incl poEchoCmd
-  let comSpecOut = execProcess(comSpecExec, options = comSpecOpts)
+  # execProcess reads lines and normalizes CR/LF bytes, which corrupts a
+  # UTF-16 stream before decoding. Drain raw bytes through the same process
+  # boundary; keep stderr merged so setup failure diagnostics remain visible.
+  let comSpecProcess = startProcess(comSpecExec, options = comSpecOpts)
+  var comSpecOut: string
+  try:
+    let output = comSpecProcess.outputStream
+    var bytes: string
+    var chunk: array[4096, char]
+    while true:
+      let count = output.readData(addr chunk[0], chunk.len)
+      if count == 0: break
+      # A short pipe read is not EOF. Keep draining before waiting, otherwise
+      # the child can block on the remainder of its environment output.
+      let previous = bytes.len
+      bytes.setLen(previous + count)
+      copyMem(addr bytes[previous], addr chunk[0], count)
+    comSpecOut = convert(bytes, destEncoding = "UTF-8", srcEncoding = "UTF-16")
+    discard comSpecProcess.waitForExit()
+  finally:
+    comSpecProcess.close()
 
   result = newStringTable(modeCaseInsensitive)
 

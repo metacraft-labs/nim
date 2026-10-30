@@ -1,7 +1,8 @@
 # Windows maintenance-prefix qualification
 
 This branch starts at upstream Nim v2.2.10 (`bfeb3146`) and backports the
-`vccexe` argument/response-file repair from `92455417`. It is a modified
+`vccexe` argument/response-file repair from `92455417` and the native-qualified
+Unicode environment capture correction from `c994ccb1`. It is a modified
 2.2.10 maintenance build, not an unmodified official archive or a 2.3.1 build.
 
 From its declared Windows development environment, run one command:
@@ -23,12 +24,12 @@ image hashes must match the existing standard activation inspection before boot;
 a same-version ambient compiler does not satisfy this qualification.
 
 Qualification requires the original bootstrap wrapper's real failing absolute
-path case and passing same-CL control. It then checks the complete extracted
-prefix, packaged source hashes, x64 executable headers, compiler version and
+path case, independent failing Unicode environment control, and passing same-CL
+control. It then checks the complete extracted prefix, packaged source hashes, x64 executable headers, compiler version and
 compiled Git hash. Both GCC and MSVC must compile and run a standard-library
 smoke program from an isolated scratch directory. The packaged wrapper must
 pass the existing Unicode, quoted-argument, deep-path, missing-input, long-link
-and cleanup controls unchanged.
+and cleanup controls unchanged, plus the independent Unicode environment control.
 
 `build/windows-prefix-qualification` retains full stage stdout/stderr, the
 prefix file manifest, source/tool identities, timings and the original factory

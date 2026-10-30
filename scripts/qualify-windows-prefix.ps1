@@ -106,8 +106,9 @@ try {
     $oldProof = Get-Content -LiteralPath (Join-Path $evidence 'old-wrapper/source-paths/receipt.json') -Raw | ConvertFrom-Json
     $absolute = @($oldProof.cases | Where-Object name -eq 'absolute')
     $direct = @($oldProof.cases | Where-Object name -eq 'direct')
-    if ($old.exit -eq 0 -or $absolute.Count -ne 1 -or $absolute[0].exit -eq 0 -or $direct.Count -ne 1 -or $direct[0].exit -ne 0 -or -not $direct[0].object) { throw 'Old failure did not have its real same-CL positive control' }
-    $receipt.oldControl = 'real absolute-path RED with same-CL positive'
+    $unicode = @($oldProof.cases | Where-Object name -eq 'unicode-env')
+    if ($old.exit -eq 0 -or $absolute.Count -ne 1 -or $absolute[0].exit -eq 0 -or $direct.Count -ne 1 -or $direct[0].exit -ne 0 -or -not $direct[0].object -or $unicode.Count -ne 1 -or $unicode[0].exit -eq 0) { throw 'Old failure did not have its real same-CL positive control' }
+    $receipt.oldControl = 'real absolute-path and Unicode-env RED with same-CL positive'
 
     if ((Test-Path 'bin/nim.exe') -or (Test-Path 'build/nim-2.2.10.zip')) { throw 'Factory outputs must start absent' }
     $null = Require-Success 'build-koch' $bootstrap @('c', '--lib:lib', '-d:release', '--out:koch.exe', 'koch.nim')
@@ -128,10 +129,10 @@ try {
     $extract = Join-Path $evidence 'extracted'
     Expand-Archive -LiteralPath $zip -DestinationPath $extract
     $prefix = Join-Path $extract 'nim-2.2.10'
-    foreach ($relative in @('bin/nim.exe', 'bin/vccexe.exe', 'bin/nimble.exe', 'bin/atlas.exe', 'bin/nimsuggest.exe', 'bin/nimgrep.exe', 'bin/nimgrab.exe', 'bin/nimpretty.exe', 'bin/testament.exe', 'koch.exe', 'finish.exe', 'lib/system.nim', 'lib/system/compilation.nim', 'config/nim.cfg', 'compiler/nim.nim', 'tools/vccexe/vccexe.nim')) {
+    foreach ($relative in @('bin/nim.exe', 'bin/vccexe.exe', 'bin/nimble.exe', 'bin/atlas.exe', 'bin/nimsuggest.exe', 'bin/nimgrep.exe', 'bin/nimgrab.exe', 'bin/nimpretty.exe', 'bin/testament.exe', 'koch.exe', 'finish.exe', 'lib/system.nim', 'lib/system/compilation.nim', 'config/nim.cfg', 'compiler/nim.nim', 'tools/vccexe/vccexe.nim', 'tools/vccexe/vcvarsall.nim')) {
         if (-not (Test-Path -LiteralPath (Join-Path $prefix $relative) -PathType Leaf)) { throw "Incomplete prefix: $relative" }
     }
-    foreach ($relative in @('lib/system/compilation.nim', 'tools/vccexe/vccexe.nim')) {
+    foreach ($relative in @('lib/system/compilation.nim', 'tools/vccexe/vccexe.nim', 'tools/vccexe/vcvarsall.nim')) {
         if ((Get-FileHash (Join-Path $prefix $relative)).Hash -cne (Get-FileHash (Join-Path $root $relative)).Hash) { throw "Packaged source differs: $relative" }
     }
     foreach ($image in Get-ChildItem -LiteralPath (Join-Path $prefix 'bin') -Filter '*.exe') { Assert-Amd64 $image.FullName }
