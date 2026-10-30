@@ -87,30 +87,41 @@ int path_control(void) { return 37; }', [Text.UTF8Encoding]::new($false))
     }
 
     # The wrapper's documented --command interface supplies the SAME MSVC
-    # environment. Pass the source through this child's environment so vccexe
-    # cannot rewrite it before the real cl.exe absolute-path control sees it.
+    # environment. EncodedCommand carries literal paths inside the script so
+    # vccexe cannot rewrite them or depend on CMD's environment text encoding.
     # This is fixture observation, never a production compilation workaround.
     $direct = @'
 $ErrorActionPreference = 'Stop'
+$sourcePath = '__SOURCE_PATH__'
+$objectPath = '__OBJECT_PATH__'
+$observationPath = '__OBSERVATION_PATH__'
 $compiler = (Get-Command cl.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $cwd = [IO.Directory]::GetCurrentDirectory()
 $marker = [IO.File]::ReadAllText((Join-Path $cwd 'cwd-marker'))
 $observation = @{
     cwd = $cwd
     marker_matches = ($marker -ceq $env:CT_PATH_MARKER)
-    source_exists = [IO.File]::Exists($env:CT_PATH_SOURCE)
+    source_exists = [IO.File]::Exists($sourcePath)
+    source_env_value = $env:CT_PATH_SOURCE
+    source_env_matches_literal = ($env:CT_PATH_SOURCE -ceq $sourcePath)
     compiler = $compiler
     compiler_sha256 = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash
 }
-$observation | ConvertTo-Json | Set-Content -LiteralPath $env:CT_PATH_OBSERVATION -Encoding utf8
+$observation | ConvertTo-Json | Set-Content -LiteralPath $observationPath -Encoding utf8
 if (-not $observation.marker_matches -or -not $observation.source_exists) { throw 'actual child cwd/source control failed' }
-$arguments = @('/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + $env:CT_PATH_OBJECT), $env:CT_PATH_SOURCE)
+$arguments = @('/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + $objectPath), $sourcePath)
 & $compiler @arguments
 exit $LASTEXITCODE
 '@
     $shellImage = [Environment]::ProcessPath
     $receipt.driver = @{ path = $shellImage; sha256 = (Get-FileHash -LiteralPath $shellImage -Algorithm SHA256).Hash }
-    $arguments = @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $direct)
+    # Single-quoted PowerShell literals double apostrophes; encode the resulting
+    # script as UTF-16LE per PowerShell's documented EncodedCommand interface.
+    $direct = $direct.Replace('__SOURCE_PATH__', $source.Replace("'", "''"))
+    $direct = $direct.Replace('__OBJECT_PATH__', (Join-Path $scratch 'direct.obj').Replace("'", "''"))
+    $direct = $direct.Replace('__OBSERVATION_PATH__', (Join-Path $evidence 'direct-observation.json').Replace("'", "''"))
+    $encodedDirect = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($direct))
+    $arguments = @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedDirect)
     $directResult = Invoke-PathControl 'direct' $arguments
     $receipt.cases += $directResult
 
