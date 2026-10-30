@@ -98,8 +98,18 @@ proc vccVarsAll*(path: string, arch: VccArch = vccarchUnspecified, platform_type
   let comSpecProcess = startProcess(comSpecExec, options = comSpecOpts)
   var comSpecOut: string
   try:
-    comSpecOut = convert(comSpecProcess.outputStream.readAll(),
-                        destEncoding = "UTF-8", srcEncoding = "UTF-16")
+    let output = comSpecProcess.outputStream
+    var bytes: string
+    var chunk: array[4096, char]
+    while true:
+      let count = output.readData(addr chunk[0], chunk.len)
+      if count == 0: break
+      # A short pipe read is not EOF. Keep draining before waiting, otherwise
+      # the child can block on the remainder of its environment output.
+      let previous = bytes.len
+      bytes.setLen(previous + count)
+      copyMem(addr bytes[previous], addr chunk[0], count)
+    comSpecOut = convert(bytes, destEncoding = "UTF-8", srcEncoding = "UTF-16")
     discard comSpecProcess.waitForExit()
   finally:
     comSpecProcess.close()
