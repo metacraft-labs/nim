@@ -99,12 +99,13 @@ jobs:
     runs-on: [self-hosted, Windows, X64, dev-env-ready]
     defaults:
       run:
-        working-directory: ci/vccexe
+        working-directory: nim
     env:
       REPRO_TOOL_PROVISIONING: tarball
     steps:
       - uses: actions/checkout@v6
         with:
+          path: nim
           persist-credentials: false
       - name: 'Mint installation token'
         id: ci_token
@@ -118,8 +119,8 @@ jobs:
         with:
           env-flavor: reprobuild
           repro-version: v0.2.17
-          consumer-directory: ci/vccexe
-          workspace-directory: ci
+          consumer-directory: nim
+          workspace-directory: .
           gh-token: ${{ steps.ci_token.outputs.token }}
       - name: 'Build the owning wrapper and run native controls'
         shell: pwsh
@@ -128,12 +129,12 @@ jobs:
           $powerShellImage = [Environment]::ProcessPath
           dev-exec repro build .#test-builds
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dev-exec $powerShellImage -NoProfile -File ../../tests/tools/vccexe/test.ps1 -WrapperPath ./vccexe-under-test.exe -EvidenceRoot ./evidence -TargetTriple x86_64-pc-windows-msvc
+          dev-exec $powerShellImage -NoProfile -File ./tests/tools/vccexe/test.ps1 -WrapperPath ./build/test-tools/vccexe-under-test.exe -EvidenceRoot ./build/test-tools/evidence -TargetTriple x86_64-pc-windows-msvc
           exit $LASTEXITCODE
       - name: 'Preserve native wrapper evidence'
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vccexe-paths-windows-x64
-          path: ci/vccexe/evidence/**
+          path: nim/build/test-tools/evidence/**
           if-no-files-found: warn
