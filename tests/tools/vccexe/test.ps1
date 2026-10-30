@@ -15,7 +15,8 @@ $platform = switch -Regex ($TargetTriple) {
     '^i[3-6]86-.*-windows-msvc$' { 'x86'; break }
     default { throw "No existing vccexe platform mapping for selected target $TargetTriple" }
 }
-$evidence = Join-Path $EvidenceRoot 'source-paths'
+# Child controls deliberately run from another cwd; evidence stays at the caller's root.
+$evidence = Join-Path ([IO.Path]::GetFullPath($EvidenceRoot)) 'source-paths'
 if ([IO.Directory]::Exists($evidence)) { throw 'source-path evidence already exists' }
 [IO.Directory]::CreateDirectory($evidence) | Out-Null
 $identity = [Guid]::NewGuid().ToString('N')
