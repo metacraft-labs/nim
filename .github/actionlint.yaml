@@ -1,0 +1,6 @@
+# Exactly the fleet labels used by the owning workflows.
+self-hosted-runner:
+  labels:
+    - eph-linux-x64
+    - eph-macos-arm64
+    - dev-env-ready

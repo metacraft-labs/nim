@@ -1,5 +1,6 @@
 name: Packages CI
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -84,6 +85,7 @@ jobs:
       - name: 'Build csources + koch, run packages CI (inside nix dev shell)'
         shell: bash
         run: |
+          # shellcheck disable=SC2016 # The declared child Bash expands this script.
           dev-exec bash -euo pipefail -c '
             . ci/funs.sh
             nimCiSystemInfo
@@ -91,3 +93,47 @@ jobs:
             export PATH="$PWD/bin:$PATH"
             nimInternalBuildKochAndRunCI
           '
+
+  vccexe-paths:
+    name: 'MSVC wrapper source paths (Windows x64)'
+    runs-on: [self-hosted, Windows, X64, dev-env-ready]
+    defaults:
+      run:
+        working-directory: ci/vccexe
+    env:
+      REPRO_TOOL_PROVISIONING: tarball
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: 'Mint installation token'
+        id: ci_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_TOKEN_PROVIDER_APP_ID }}
+          private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
+          owner: metacraft-labs
+      - name: 'Setup declared regression tools'
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@387fee68b58afd2542695709eb2e6681b0cd9888
+        with:
+          env-flavor: reprobuild
+          repro-version: v0.2.17
+          consumer-directory: ci/vccexe
+          workspace-directory: .
+          gh-token: ${{ steps.ci_token.outputs.token }}
+      - name: 'Build the owning wrapper and run native controls'
+        shell: pwsh
+        run: |
+          # Bind the actual interpreter supplied by this workflow's pwsh shell.
+          $powerShellImage = [Environment]::ProcessPath
+          dev-exec repro build .#test-builds
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dev-exec $powerShellImage -NoProfile -File ../../tests/tools/vccexe/test.ps1 -WrapperPath ./vccexe-under-test.exe -EvidenceRoot ./evidence -TargetTriple x86_64-pc-windows-msvc
+          exit $LASTEXITCODE
+      - name: 'Preserve native wrapper evidence'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vccexe-paths-windows-x64
+          path: ci/vccexe/evidence/**
+          if-no-files-found: warn

@@ -71,7 +71,12 @@
               SDL
               sfml   # nixpkgs renamed SFML -> sfml on unstable
 
+              # The committed portable hook configuration requires these tools.
+              prek
+              uv
+
               # Test tools
+              actionlint
               gdb
               nodejs
               python3
