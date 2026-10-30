@@ -119,7 +119,7 @@ jobs:
           env-flavor: reprobuild
           repro-version: v0.2.17
           consumer-directory: ci/vccexe
-          workspace-directory: .
+          workspace-directory: ci
           gh-token: ${{ steps.ci_token.outputs.token }}
       - name: 'Build the owning wrapper and run native controls'
         shell: pwsh
