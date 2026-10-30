@@ -109,6 +109,7 @@ $observation = @{
 }
 $observation | ConvertTo-Json | Set-Content -LiteralPath $observationPath -Encoding utf8
 if (-not $observation.marker_matches -or -not $observation.source_exists) { throw 'actual child cwd/source control failed' }
+if (-not $observation.source_env_matches_literal) { throw 'inherited Unicode source value was changed' }
 $arguments = @('/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + $objectPath), $sourcePath)
 & $compiler @arguments
 exit $LASTEXITCODE
