@@ -125,6 +125,20 @@ exit $LASTEXITCODE
     $directResult = Invoke-PathControl 'direct' $arguments
     $receipt.cases += $directResult
 
+    # Independent from direct CL: old path baselines still exercise CL even
+    # when the environment loader corrupts an unrelated Unicode value.
+    $unicodeCheck = @'
+$expected = '__SOURCE_PATH__'
+$matches = ($env:CT_PATH_SOURCE -ceq $expected)
+@{ source_env_value = $env:CT_PATH_SOURCE; source_env_matches_literal = $matches } | ConvertTo-Json -Compress
+if (-not $matches) { exit 9 }
+exit 0
+'@
+    $unicodeCheck = $unicodeCheck.Replace('__SOURCE_PATH__', $source.Replace("'", "''"))
+    $encodedUnicode = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($unicodeCheck))
+    $unicodeResult = Invoke-PathControl 'unicode-env' @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedUnicode)
+    $receipt.cases += $unicodeResult
+
     $arguments = @("--platform:$platform", '/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + (Join-Path $scratch 'absolute.obj')), $source)
     $absoluteResult = Invoke-PathControl 'absolute' $arguments
     $receipt.cases += $absoluteResult
@@ -161,19 +175,6 @@ exit $LASTEXITCODE
     $linkResult.expanded_units = $content.Length
     $receipt.cases += $linkResult
     if ($linkResult.exit -ne 0 -or -not $linkResult.dll_exists) { throw 'long real response-file object link failed' }
-    # Independent from direct CL: old path baselines still exercise CL even
-    # when the environment loader corrupts an unrelated Unicode value.
-    $unicodeCheck = @'
-$expected = '__SOURCE_PATH__'
-$matches = ($env:CT_PATH_SOURCE -ceq $expected)
-@{ source_env_value = $env:CT_PATH_SOURCE; source_env_matches_literal = $matches } | ConvertTo-Json -Compress
-if (-not $matches) { exit 9 }
-exit 0
-'@
-    $unicodeCheck = $unicodeCheck.Replace('__SOURCE_PATH__', $source.Replace("'", "''"))
-    $encodedUnicode = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($unicodeCheck))
-    $unicodeResult = Invoke-PathControl 'unicode-env' @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedUnicode)
-    $receipt.cases += $unicodeResult
     foreach ($case in $receipt.cases) {
         if ($case.response_files_after -ne 0) { throw 'wrapper left an owned response file after its child exited' }
     }
