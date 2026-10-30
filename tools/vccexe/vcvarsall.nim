@@ -5,7 +5,7 @@
 ## For that purpose the VCC compiler ships with the vcvarsall utility which is an executable
 ## batch script that can be used to properly set up an Command Prompt environment.
 
-import strtabs, strutils, os, osproc, encodings
+import strtabs, strutils, os, osproc, encodings, streams
 
 const
   comSpecEnvKey = "ComSpec" ## Environment Variable that specifies the command-line application path in Windows
@@ -92,8 +92,17 @@ proc vccVarsAll*(path: string, arch: VccArch = vccarchUnspecified, platform_type
   var comSpecOpts = {poEvalCommand, poDaemon, poStdErrToStdOut}
   if verbose:
     comSpecOpts.incl poEchoCmd
-  let comSpecOut = convert(execProcess(comSpecExec, options = comSpecOpts),
-                            destEncoding = "UTF-8", srcEncoding = "UTF-16")
+  # execProcess reads lines and normalizes CR/LF bytes, which corrupts a
+  # UTF-16 stream before decoding. Drain raw bytes through the same process
+  # boundary; keep stderr merged so setup failure diagnostics remain visible.
+  let comSpecProcess = startProcess(comSpecExec, options = comSpecOpts)
+  var comSpecOut: string
+  try:
+    comSpecOut = convert(comSpecProcess.outputStream.readAll(),
+                        destEncoding = "UTF-8", srcEncoding = "UTF-16")
+    discard comSpecProcess.waitForExit()
+  finally:
+    comSpecProcess.close()
 
   result = newStringTable(modeCaseInsensitive)
 

@@ -109,7 +109,6 @@ $observation = @{
 }
 $observation | ConvertTo-Json | Set-Content -LiteralPath $observationPath -Encoding utf8
 if (-not $observation.marker_matches -or -not $observation.source_exists) { throw 'actual child cwd/source control failed' }
-if (-not $observation.source_env_matches_literal) { throw 'inherited Unicode source value was changed' }
 $arguments = @('/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + $objectPath), $sourcePath)
 & $compiler @arguments
 exit $LASTEXITCODE
@@ -162,6 +161,19 @@ exit $LASTEXITCODE
     $linkResult.expanded_units = $content.Length
     $receipt.cases += $linkResult
     if ($linkResult.exit -ne 0 -or -not $linkResult.dll_exists) { throw 'long real response-file object link failed' }
+    # Independent from direct CL: old path baselines still exercise CL even
+    # when the environment loader corrupts an unrelated Unicode value.
+    $unicodeCheck = @'
+$expected = '__SOURCE_PATH__'
+$matches = ($env:CT_PATH_SOURCE -ceq $expected)
+@{ source_env_value = $env:CT_PATH_SOURCE; source_env_matches_literal = $matches } | ConvertTo-Json -Compress
+if (-not $matches) { exit 9 }
+exit 0
+'@
+    $unicodeCheck = $unicodeCheck.Replace('__SOURCE_PATH__', $source.Replace("'", "''"))
+    $encodedUnicode = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($unicodeCheck))
+    $unicodeResult = Invoke-PathControl 'unicode-env' @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedUnicode)
+    $receipt.cases += $unicodeResult
     foreach ($case in $receipt.cases) {
         if ($case.response_files_after -ne 0) { throw 'wrapper left an owned response file after its child exited' }
     }
@@ -172,6 +184,7 @@ exit $LASTEXITCODE
     if ($missingResult.exit -eq 0 -or $missingResult.object) { throw 'missing-file negative control falsely succeeded' }
     if (-not $receipt.source.exists_after -or -not $receipt.source.hash_unchanged) { throw 'source changed during compilation' }
     if ($absoluteResult.exit -ne 0 -or -not $absoluteResult.object) { throw 'vccexe rejected the existing short absolute source from a valid deep cwd' }
+    if ($unicodeResult.exit -ne 0) { throw 'inherited Unicode source value was changed' }
     $receipt.complete = $true
     Write-Host 'PASS real MSVC absolute/deep-cwd, relative and missing-file controls'
 } finally {
