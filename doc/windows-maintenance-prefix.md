@@ -35,7 +35,9 @@ and cleanup controls unchanged, plus the independent Unicode environment control
 
 `build/windows-prefix-qualification` retains full stage stdout/stderr, the
 prefix file manifest, source/tool identities, timings and the original factory
-ZIP's SHA-256. CI keeps a one-day convenience artifact and attempts the existing
+ZIP's SHA-256. Standard ZIP APIs preserve legacy CP437 and flagged UTF-8 names;
+qualification requires exact member-name and content equality after extraction.
+CI keeps a one-day convenience artifact and attempts the existing
 non-blocking durable-store mirror. A skipped or failed mirror is recorded as
 such; it is not durable publication.
 

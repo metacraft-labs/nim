@@ -119,15 +119,26 @@ try {
     $receipt.factory = @{ exit = $factory.exit; seconds = $factory.seconds }
     $zip = Join-Path $root 'build/nim-2.2.10.zip'
     if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'The koch factory produced no complete ZIP' }
-    $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+    # The owner's 7-Zip factory emits legacy CP437 names unless EFS marks
+    # UTF-8. The standard overload honors EFS while supplying that fallback.
+    $entryEncoding = [Text.Encoding]::GetEncoding(437)
+    $archive = [IO.Compression.ZipFile]::Open($zip, [IO.Compression.ZipArchiveMode]::Read, $entryEncoding)
+    $archiveFiles = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
     try {
         foreach ($entry in $archive.Entries) {
             $name = $entry.FullName.Replace('\', '/')
             if (-not $name.StartsWith('nim-2.2.10/') -or $name.Contains(':') -or ($name.Split('/') -contains '..')) { throw "Unexpected factory archive path: $name" }
+            if ($entry.Name.Length -eq 0) { continue }
+            $relative = $name.Substring('nim-2.2.10/'.Length)
+            if ($archiveFiles.ContainsKey($relative)) { throw "Duplicate factory archive member: $relative" }
+            $stream = $entry.Open()
+            try { $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)) }
+            finally { $stream.Dispose() }
+            $archiveFiles.Add($relative, @{ bytes = $entry.Length; sha256 = $digest })
         }
     } finally { $archive.Dispose() }
     $extract = Join-Path $evidence 'extracted'
-    Expand-Archive -LiteralPath $zip -DestinationPath $extract
+    [IO.Compression.ZipFile]::ExtractToDirectory($zip, $extract, $entryEncoding)
     $prefix = Join-Path $extract 'nim-2.2.10'
     foreach ($relative in @('bin/nim.exe', 'bin/vccexe.exe', 'bin/nimble.exe', 'bin/atlas.exe', 'bin/nimsuggest.exe', 'bin/nimgrep.exe', 'bin/nimgrab.exe', 'bin/nimpretty.exe', 'bin/testament.exe', 'koch.exe', 'finish.exe', 'lib/system.nim', 'lib/system/compilation.nim', 'config/nim.cfg', 'compiler/nim.nim', 'tools/vccexe/vccexe.nim', 'tools/vccexe/vcvarsall.nim')) {
         if (-not (Test-Path -LiteralPath (Join-Path $prefix $relative) -PathType Leaf)) { throw "Incomplete prefix: $relative" }
@@ -160,7 +171,14 @@ echo "complete-prefix-stdlib-ok"
         if ($run.output -notmatch 'complete-prefix-stdlib-ok') { throw "$backend stdlib result missing" }
     }
     $null = Require-Success 'packaged-wrapper-control' $hostImage @('-NoProfile', '-File', $test, '-WrapperPath', (Join-Path $prefix 'bin/vccexe.exe'), '-EvidenceRoot', (Join-Path $evidence 'packaged-wrapper'), '-TargetTriple', 'x86_64-pc-windows-msvc')
-    $files = @(Get-ChildItem -LiteralPath $prefix -File -Recurse | Sort-Object FullName | ForEach-Object { @{ path = [IO.Path]::GetRelativePath($prefix, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } })
+    $files = @(Get-ChildItem -LiteralPath $prefix -File -Recurse -Force | Sort-Object FullName | ForEach-Object { @{ path = [IO.Path]::GetRelativePath($prefix, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } })
+    if ($files.Count -ne $archiveFiles.Count) { throw 'Extracted file membership differs from the factory archive' }
+    foreach ($file in $files) {
+        if (-not $archiveFiles.ContainsKey($file.path)) { throw "Extracted member name differs: $($file.path)" }
+        $member = $archiveFiles[$file.path]
+        if ($file.bytes -ne $member.bytes -or $file.sha256 -cne $member.sha256) { throw "Extracted member content differs: $($file.path)" }
+    }
+    $receipt.extraction = @{ losslessMemberNamesAndContents = $true; files = $files.Count; legacyEntryEncoding = 'CP437'; utf8FlagHonored = $true }
     $files | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidence 'prefix-manifest.json') -Encoding utf8
     $artifact = Join-Path $evidence "nim-2.2.10-vccexe-$revision-windows-x64.zip"
     Copy-Item -LiteralPath $zip -Destination $artifact
