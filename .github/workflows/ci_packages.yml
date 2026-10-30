@@ -126,6 +126,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nim-2.2.10-maintenance-windows-x64
+          include-hidden-files: true
           retention-days: 1
           if-no-files-found: warn
           path: |

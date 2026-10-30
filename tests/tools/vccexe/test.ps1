@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$EvidenceRoot,
     [Parameter(Mandatory = $true)][string]$WrapperPath,
-    [Parameter(Mandatory = $true)][string]$TargetTriple
+    [Parameter(Mandatory = $true)][string]$TargetTriple,
+    [switch]$BuildSubject
 )
 $ErrorActionPreference = 'Stop'
 # Use the actual target already selected by the native CRT driver, including
@@ -14,7 +15,8 @@ $platform = switch -Regex ($TargetTriple) {
     '^i[3-6]86-.*-windows-msvc$' { 'x86'; break }
     default { throw "No existing vccexe platform mapping for selected target $TargetTriple" }
 }
-$evidence = Join-Path $EvidenceRoot 'source-paths'
+# Child controls deliberately run from another cwd; evidence stays at the caller's root.
+$evidence = Join-Path ([IO.Path]::GetFullPath($EvidenceRoot)) 'source-paths'
 if ([IO.Directory]::Exists($evidence)) { throw 'source-path evidence already exists' }
 [IO.Directory]::CreateDirectory($evidence) | Out-Null
 $identity = [Guid]::NewGuid().ToString('N')
@@ -23,10 +25,21 @@ if ([IO.Directory]::Exists($scratch)) { throw 'source-path scratch already exist
 [IO.Directory]::CreateDirectory($scratch) | Out-Null
 $receipt = @{ complete = $false; source_revision = (& git rev-parse HEAD); target = $TargetTriple; compiler_platform = $platform; cases = @() }
 try {
-    $wrapper = (Resolve-Path -LiteralPath $WrapperPath).Path
     $nim = (Get-Command nim.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-    $receipt.wrapper = @{ path = $wrapper; sha256 = (Get-FileHash -LiteralPath $wrapper -Algorithm SHA256).Hash }
     $receipt.nim = @{ path = $nim; sha256 = (Get-FileHash -LiteralPath $nim -Algorithm SHA256).Hash }
+    $receipt.nim.version_output = @(& $nim --version)
+    $receipt.nim.version_exit = $LASTEXITCODE
+    Write-Host ('Selected test compiler: ' + ($receipt.nim | ConvertTo-Json -Compress))
+    if ($receipt.nim.version_exit -ne 0) { throw 'selected Nim version probe failed' }
+    if ($BuildSubject) {
+        # The compiler owner's normal koch buildVccTool compilation route.
+        # Bind the exact measured executable, not another PATH lookup.
+        & $nim c ('-o:' + $WrapperPath) tools/vccexe/vccexe.nim
+        $receipt.subject_build_exit = $LASTEXITCODE
+        if ($receipt.subject_build_exit -ne 0) { throw 'owning wrapper compilation failed' }
+    }
+    $wrapper = (Resolve-Path -LiteralPath $WrapperPath).Path
+    $receipt.wrapper = @{ path = $wrapper; sha256 = (Get-FileHash -LiteralPath $wrapper -Algorithm SHA256).Hash }
     $source = Join-Path $scratch '@mgenerated source é.nim.c'
     [IO.File]::WriteAllText($source, '#ifndef TEST_MESSAGE
 #error Missing quoted definition
@@ -74,30 +87,41 @@ int path_control(void) { return 37; }', [Text.UTF8Encoding]::new($false))
     }
 
     # The wrapper's documented --command interface supplies the SAME MSVC
-    # environment. Pass the source through this child's environment so vccexe
-    # cannot rewrite it before the real cl.exe absolute-path control sees it.
+    # environment. EncodedCommand carries literal paths inside the script so
+    # vccexe cannot rewrite them or depend on CMD's environment text encoding.
     # This is fixture observation, never a production compilation workaround.
     $direct = @'
 $ErrorActionPreference = 'Stop'
+$sourcePath = '__SOURCE_PATH__'
+$objectPath = '__OBJECT_PATH__'
+$observationPath = '__OBSERVATION_PATH__'
 $compiler = (Get-Command cl.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
 $cwd = [IO.Directory]::GetCurrentDirectory()
 $marker = [IO.File]::ReadAllText((Join-Path $cwd 'cwd-marker'))
 $observation = @{
     cwd = $cwd
     marker_matches = ($marker -ceq $env:CT_PATH_MARKER)
-    source_exists = [IO.File]::Exists($env:CT_PATH_SOURCE)
+    source_exists = [IO.File]::Exists($sourcePath)
+    source_env_value = $env:CT_PATH_SOURCE
+    source_env_matches_literal = ($env:CT_PATH_SOURCE -ceq $sourcePath)
     compiler = $compiler
     compiler_sha256 = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash
 }
-$observation | ConvertTo-Json | Set-Content -LiteralPath $env:CT_PATH_OBSERVATION -Encoding utf8
+$observation | ConvertTo-Json | Set-Content -LiteralPath $observationPath -Encoding utf8
 if (-not $observation.marker_matches -or -not $observation.source_exists) { throw 'actual child cwd/source control failed' }
-$arguments = @('/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + $env:CT_PATH_OBJECT), $env:CT_PATH_SOURCE)
+$arguments = @('/nologo', '/c', '/DTEST_MESSAGE="quoted value"', ('/Fo' + $objectPath), $sourcePath)
 & $compiler @arguments
 exit $LASTEXITCODE
 '@
     $shellImage = [Environment]::ProcessPath
     $receipt.driver = @{ path = $shellImage; sha256 = (Get-FileHash -LiteralPath $shellImage -Algorithm SHA256).Hash }
-    $arguments = @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $direct)
+    # Single-quoted PowerShell literals double apostrophes; encode the resulting
+    # script as UTF-16LE per PowerShell's documented EncodedCommand interface.
+    $direct = $direct.Replace('__SOURCE_PATH__', $source.Replace("'", "''"))
+    $direct = $direct.Replace('__OBJECT_PATH__', (Join-Path $scratch 'direct.obj').Replace("'", "''"))
+    $direct = $direct.Replace('__OBSERVATION_PATH__', (Join-Path $evidence 'direct-observation.json').Replace("'", "''"))
+    $encodedDirect = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($direct))
+    $arguments = @("--platform:$platform", "--command:$shellImage", '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedDirect)
     $directResult = Invoke-PathControl 'direct' $arguments
     $receipt.cases += $directResult
 
