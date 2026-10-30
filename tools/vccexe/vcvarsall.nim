@@ -5,7 +5,7 @@
 ## For that purpose the VCC compiler ships with the vcvarsall utility which is an executable
 ## batch script that can be used to properly set up an Command Prompt environment.
 
-import strtabs, strutils, os, osproc, encodings
+import strtabs, strutils, os, osproc
 
 const
   comSpecEnvKey = "ComSpec" ## Environment Variable that specifies the command-line application path in Windows
@@ -83,17 +83,12 @@ proc vccVarsAll*(path: string, arch: VccArch = vccarchUnspecified, platform_type
   
   # Run the Windows Command Prompt with the /C argument
   # Execute vcvarsall with its command-line arguments
-  # and then execute the SET command to list all environment variables.
-  # SET is an internal CMD command: /U makes its redirected output UTF-16LE,
-  # independent of the current OEM code page. Nim strings passed to putEnv
-  # are UTF-8, so decode this boundary rather than corrupt inherited Unicode.
-  # https://learn.microsoft.com/windows-server/administration/windows-commands/cmd
-  let comSpecExec = "\"$1\" /U /C \"$2 && SET\"" % [comSpecCmd, vcvarsExec]
+  # and then execute the SET command to list all environment variables
+  let comSpecExec = "\"$1\" /C \"$2 && SET\"" % [comSpecCmd, vcvarsExec]
   var comSpecOpts = {poEvalCommand, poDaemon, poStdErrToStdOut}
   if verbose:
     comSpecOpts.incl poEchoCmd
-  let comSpecOut = convert(execProcess(comSpecExec, options = comSpecOpts),
-                            destEncoding = "UTF-8", srcEncoding = "UTF-16")
+  let comSpecOut = execProcess(comSpecExec, options = comSpecOpts)
 
   result = newStringTable(modeCaseInsensitive)
 
