@@ -127,15 +127,15 @@ jobs:
         run: |
           # Bind the actual interpreter supplied by this workflow's pwsh shell.
           $powerShellImage = [Environment]::ProcessPath
-          # Match koch.nim buildVccTool: compile the owning tool as the test subject.
-          dev-exec nim c '-o:build/test-tools/vccexe-under-test.exe' tools/vccexe/vccexe.nim
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dev-exec $powerShellImage -NoProfile -File ./tests/tools/vccexe/test.ps1 -WrapperPath ./build/test-tools/vccexe-under-test.exe -EvidenceRoot ./build/test-tools/evidence -TargetTriple x86_64-pc-windows-msvc
+          dev-exec $powerShellImage -NoProfile -File ./tests/tools/vccexe/test.ps1 -WrapperPath ./build/test-tools/vccexe-under-test.exe -EvidenceRoot ./build/test-tools/evidence -TargetTriple x86_64-pc-windows-msvc -BuildSubject
           exit $LASTEXITCODE
       - name: 'Preserve native wrapper evidence'
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vccexe-paths-windows-x64
-          path: nim/build/test-tools/evidence/**
+          path: |
+            nim/build/test-tools/evidence/**
+            nim/.repro/**/path-only-tool-identities.inspect.json
+          include-hidden-files: true
           if-no-files-found: warn

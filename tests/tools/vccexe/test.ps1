@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$EvidenceRoot,
     [Parameter(Mandatory = $true)][string]$WrapperPath,
-    [Parameter(Mandatory = $true)][string]$TargetTriple
+    [Parameter(Mandatory = $true)][string]$TargetTriple,
+    [switch]$BuildSubject
 )
 $ErrorActionPreference = 'Stop'
 # Use the actual target already selected by the native CRT driver, including
@@ -23,10 +24,21 @@ if ([IO.Directory]::Exists($scratch)) { throw 'source-path scratch already exist
 [IO.Directory]::CreateDirectory($scratch) | Out-Null
 $receipt = @{ complete = $false; source_revision = (& git rev-parse HEAD); target = $TargetTriple; compiler_platform = $platform; cases = @() }
 try {
-    $wrapper = (Resolve-Path -LiteralPath $WrapperPath).Path
     $nim = (Get-Command nim.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
-    $receipt.wrapper = @{ path = $wrapper; sha256 = (Get-FileHash -LiteralPath $wrapper -Algorithm SHA256).Hash }
     $receipt.nim = @{ path = $nim; sha256 = (Get-FileHash -LiteralPath $nim -Algorithm SHA256).Hash }
+    $receipt.nim.version_output = @(& $nim --version)
+    $receipt.nim.version_exit = $LASTEXITCODE
+    Write-Host ('Selected test compiler: ' + ($receipt.nim | ConvertTo-Json -Compress))
+    if ($receipt.nim.version_exit -ne 0) { throw 'selected Nim version probe failed' }
+    if ($BuildSubject) {
+        # The compiler owner's normal koch buildVccTool compilation route.
+        # Bind the exact measured executable, not another PATH lookup.
+        & $nim c ('-o:' + $WrapperPath) tools/vccexe/vccexe.nim
+        $receipt.subject_build_exit = $LASTEXITCODE
+        if ($receipt.subject_build_exit -ne 0) { throw 'owning wrapper compilation failed' }
+    }
+    $wrapper = (Resolve-Path -LiteralPath $WrapperPath).Path
+    $receipt.wrapper = @{ path = $wrapper; sha256 = (Get-FileHash -LiteralPath $wrapper -Algorithm SHA256).Hash }
     $source = Join-Path $scratch '@mgenerated source é.nim.c'
     [IO.File]::WriteAllText($source, '#ifndef TEST_MESSAGE
 #error Missing quoted definition
