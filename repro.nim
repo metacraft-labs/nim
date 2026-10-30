@@ -12,9 +12,3 @@ package codetracernimEnvironment:
   devEnv:
     when not defined(windows):
       useFlakeDevShell()
-
-  build:
-    when defined(windows):
-      let wrapper = nim.c(source = "tools/vccexe/vccexe.nim",
-                          binary = "build/test-tools/vccexe-under-test")
-      discard collect("test-builds", @[wrapper])
