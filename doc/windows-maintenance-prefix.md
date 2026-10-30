@@ -18,7 +18,9 @@ The driver uses the repository's normal stable `koch boot` and `koch zip`
 commands. It does not run `--latest`, an installer, or `finish.exe`, and does not
 replace an installed compiler or helper. Factory dependencies remain pinned by
 `koch.nim`. Nim, GCC, Git and 7-Zip come from the declared store tool profiles;
-the MSVC controls locate an existing supported platform facility.
+the MSVC controls locate an existing supported platform facility. Actual invoked
+image hashes must match the existing standard activation inspection before boot;
+a same-version ambient compiler does not satisfy this qualification.
 
 Qualification requires the original bootstrap wrapper's real failing absolute
 path case and passing same-CL control. It then checks the complete extracted

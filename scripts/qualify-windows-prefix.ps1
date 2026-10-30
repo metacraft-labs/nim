@@ -76,6 +76,25 @@ try {
     $bootstrapVersion = Require-Success 'bootstrap-version' $bootstrap @('--version')
     if ($bootstrapVersion.output -notmatch 'Nim Compiler Version 2\.2\.10\b') { throw 'Bootstrap must be the declared Nim 2.2.10' }
     $receipt.bootstrapVersion = $bootstrapVersion.output
+    # Bind the invoked images to the EXISTING standard activation receipt.
+    # A same-version ambient compiler is not canonical provisioning evidence.
+    $inspectionPath = Join-Path $root '.repro/dev-env/default/tarball-tool-identities.inspect.json'
+    if (-not (Test-Path -LiteralPath $inspectionPath -PathType Leaf)) { throw 'Canonical activation inspection is missing' }
+    Copy-Item -LiteralPath $inspectionPath -Destination (Join-Path $evidence 'bootstrap-tool-identities.inspect.json')
+    $inspection = Get-Content -LiteralPath $inspectionPath -Raw | ConvertFrom-Json
+    if ($inspection.partial -eq $true) { throw 'Partial activation cannot qualify the factory inputs' }
+    $selectors = @{ 'nim.exe' = 'nim'; 'gcc.exe' = 'gcc'; 'git.exe' = 'git'; '7z.exe' = '7zip' }
+    foreach ($name in $selectors.Keys) {
+        $profiles = @($inspection.profiles | Where-Object { $_.packageSelector -eq $selectors[$name] -and $_.installMethod -eq 'tarball' })
+        if ($profiles.Count -ne 1) { throw "No unique canonical profile for $name" }
+        $profile = $profiles[0]
+        if (-not (Test-Path -LiteralPath $profile.resolvedExecutablePath -PathType Leaf)) { throw "Profile image is absent for $name" }
+        if ((Get-FileHash -LiteralPath $profile.resolvedExecutablePath -Algorithm SHA256).Hash -cne $receipt.tools[$name].sha256) { throw "Invoked image differs from selected profile: $name" }
+        $receipt.tools[$name].profilePath = $profile.resolvedExecutablePath
+        $receipt.tools[$name].profileDigest = $profile.resolvedExecutableDigest
+        $receipt.tools[$name].archiveSha256 = $profile.tarballSha256
+    }
+    if ($receipt.tools['nim.exe'].archiveSha256 -ine 'fe0686a9b298e5b13d0a983df37e002a8c6320f8b16cc45a51d15cf4046a109f') { throw 'Bootstrap is not the declared official2.2.10 archive' }
     $null = Require-Success 'gcc-version' $receipt.tools['gcc.exe'].path @('--version')
     $null = Require-Success 'git-version' $receipt.tools['git.exe'].path @('--version')
     $null = Require-Success '7zip-version' $receipt.tools['7z.exe'].path @('i')
