@@ -151,7 +151,11 @@ proc fileInfoKind*(conf: ConfigRef; fileIdx: FileIndex): FileInfoKind =
 
 proc newLineInfo*(fileInfoIdx: FileIndex, line, col: int): TLineInfo =
   result = TLineInfo(fileIndex: fileInfoIdx)
-  if line < int high(uint32):
+  # Compared in 64 bits: `int high(uint32)` is not representable where `int`
+  # is 32 bits wide, which made the compiler itself fail to build for a
+  # 32-bit target ("cannot convert 4294967295 to int"). There every `line`
+  # fits, so the comparison only has to compile.
+  if int64(line) < int64(high(uint32)):
     result.line = uint32(line)
   else:
     result.line = high(uint32)
