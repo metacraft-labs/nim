@@ -300,6 +300,8 @@ type
                                # and parsed; usually "" but is used
                                # for 'nimsuggest'
     hash*: string              # the checksum of the file
+    typeHashPath*: string      # cached: how type hashes name this file
+                               # (sighashes.typeHashPath); "" until first use
     dirty*: bool               # for 'nimpretty' like tooling
     kind*: FileInfoKind        # distinguishes real files from NIF suffixes
     when defined(nimpretty):
