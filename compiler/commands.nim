@@ -675,6 +675,13 @@ proc processSwitch*(switch, arg: string, pass: TCmdLinePass, info: TLineInfo;
   of "clearnimblepath":
     expectNoArg(conf, switch, arg, pass, info)
     clearNimblePath(conf)
+  of "typehashpathmap":
+    expectArg(conf, switch, arg, pass, info)
+    let eq = arg.find('=')
+    if eq <= 0:
+      localError(conf, info, "--typeHashPathMap expects OLD=NEW, got: " & arg)
+    else:
+      conf.typeHashPathMaps.add((old: arg[0 ..< eq], new: arg[eq + 1 .. ^1]))
   of "excludepath":
     expectArg(conf, switch, arg, pass, info)
     let path = processPath(conf, arg, info)

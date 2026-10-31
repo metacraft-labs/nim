@@ -12,8 +12,7 @@
 import ast, ropes, modulegraphs, options, msgs, pathutils, lineinfos
 from std/hashes import Hash
 import std/tables
-from std/os import isAbsolute
-from std/strutils import replace
+from std/strutils import startsWith
 import types
 import ../dist/checksums/src/checksums/md5
 
@@ -62,25 +61,29 @@ proc hashSym(c: var MD5Context, s: PSym) =
     c &= s.disamb
 
 proc typeHashPath(conf: ConfigRef; idx: FileIndex): string =
-  ## The defining file of a type as the type's hash sees it. It used to be
-  ## the absolute path (``customPath`` only abbreviates the home directory),
-  ## so every RTTI hash -- compiled into each ``of`` check and type display
-  ## -- changed with the directory a project was checked out in, and two
-  ## checkouts of one commit produced different binaries. The canonical
-  ## module path (``--filenames:canonical``: ``std/tables``, a path relative
-  ## to the nimble package root or to the search path that found the file)
-  ## names the file without naming the machine. The file's absolute path is
-  ## kept only when no canonical rendering exists. Two types still differ
-  ## when their canonical paths agree: the rest of the hash covers the
-  ## owner chain (module and package names) and the symbol's disambiguator.
-  ## Cached per file: the rendering walks the file system for a nimble file.
+  ## The defining file of a type as the type's hash sees it: its absolute
+  ## path (``customPath`` abbreviates only the home directory), as upstream
+  ## Nim hashes it -- two different files never share it, so two types
+  ## that differ only by the file defining them never share a hash.
+  ##
+  ## ``--typeHashPathMap:OLD=NEW`` (``conf.typeHashPathMaps``) rewrites a
+  ## leading OLD to NEW first, the way a C compiler's ``-ffile-prefix-map``
+  ## does, so a build can hash its checkout under a fixed name and give the
+  ## same binary wherever the checkout lives. Like ``-ffile-prefix-map``
+  ## it must be applied uniformly: files whose mapped paths agree collide,
+  ## so a map must not send two different trees to one prefix. The first
+  ## matching map applies. Cached per file.
   if idx.int32 < 0 or idx.int >= conf.m.fileInfos.len:
     return customPath(conf.toFullPath(idx))
   if conf.m.fileInfos[idx.int].typeHashPath.len == 0:
-    var p = toFilenameOption(conf, idx, foCanonical)
+    let full = conf.toFullPath(idx)
+    var mapped = ""
+    for m in conf.typeHashPathMaps:
+      if m.old.len > 0 and full.startsWith(m.old):
+        mapped = "//mapped/" & m.new & full[m.old.len .. ^1]
+        break
     conf.m.fileInfos[idx.int].typeHashPath =
-      if p.len == 0 or p.isAbsolute: customPath(conf.toFullPath(idx))
-      else: "//canonical/" & p.replace('\\', '/')
+      if mapped.len > 0: mapped else: customPath(full)
   result = conf.m.fileInfos[idx.int].typeHashPath
 
 proc hashTypeSym(c: var MD5Context, s: PSym; conf: ConfigRef) =

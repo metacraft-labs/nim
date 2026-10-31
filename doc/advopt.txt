@@ -152,6 +152,13 @@ Advanced options:
   --expandArc:PROCNAME      show how PROCNAME looks like after diverse optimizations
                             before the final backend phase (mostly ARC/ORC specific)
   --excludePath:PATH        exclude a path from the list of search paths
+  --typeHashPathMap:OLD=NEW
+                            when the absolute path of a type's defining file
+                            starts with OLD, hash it with NEW in its place
+                            (like a C compiler's -ffile-prefix-map); type
+                            hashes then do not depend on where the project
+                            lives. Apply it uniformly: two files whose mapped
+                            paths agree get colliding type hashes
   --dynlibOverride:SYMBOL   marks SYMBOL so that dynlib:SYMBOL
                             has no effect and can be statically linked instead;
                             symbol matching is fuzzy so

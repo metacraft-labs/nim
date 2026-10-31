@@ -3,29 +3,34 @@ discard """
   joinable: false
 """
 
-## A type's hash must not depend on where the project is checked out.
+## What a type's hash may and may not depend on.
 ##
 ## `sighashes.hashTypeSym` feeds every RTTI hash: the `display` tables of
-## `TNimTypeV2` and the token each `of` check compares against. It used to
-## hash the defining file's absolute path (`customPath` only abbreviates the
-## home directory), so the same commit built in two checkouts produced two
-## different binaries -- measured on a 4.5 MB static program: ~500 bytes of
-## `.text` operands and `.rodata` tables differed, nothing else. It now hashes
-## the canonical module path (`--filenames:canonical`).
+## `TNimTypeV2` and the token each `of` check compares against. It hashes the
+## absolute path of the type's defining file, as upstream Nim does, so two
+## types that differ only by the file defining them never share a hash. That
+## makes the hashes depend on where a project is checked out; a build that
+## must not (a reproducible release artefact) passes
+## `--typeHashPathMap:OLD=NEW`, which rewrites a leading OLD the way a C
+## compiler's `-ffile-prefix-map` does.
 ##
-## Part 1 compiles one fixture package at two paths of different depth and
-## requires the generated display tables to be identical. The compiler built
-## before the change fails it (the display constants differ beyond the root
-## entry). Part 2 is the guard against a hash that stopped distinguishing
-## anything: two types of the same name in two same-named modules of one
-## project must still be told apart by `of` at run time.
+## 1. Two copies of one package -- same nimble name, same in-package path,
+##    same module and type name, in different directories -- define two
+##    distinct types, by default and under a map of their common parent.
+##    (A rendering by canonical module path once gave them one hash: `of`
+##    answered `true` for the wrong type, and with different fields the
+##    two types became one C struct and the C compile failed.)
+## 2. With different fields they compile, and run, as two types.
+## 3. One fixture at two paths gives identical display tables under the
+##    map of each path to one name, and different ones without it -- the
+##    latter shows the check looks at what the map changes.
 ##
 ## No mocks: real compiler invocations on real files.
 
 import std/[assertions, os, osproc, strutils, tempfiles]
 
 const
-  nimble = "version = \"0.1.0\"\nauthor = \"nim\"\ndescription = \"fixture\"\nlicense = \"MIT\"\n"
+  dupNimble = "version = \"0.1.0\"\nauthor = \"nim\"\ndescription = \"dup\"\nlicense = \"MIT\"\n"
   main = """
 type
   Base* = ref object of RootObj
@@ -35,47 +40,66 @@ let b: Base = Derived()
 echo isDerived(b)
 """
 
-proc displayTables(dir: string): seq[string] =
-  ## Every `NU32 ...[n] = {...}` initializer of the main module's C file,
-  ## with the C identifier dropped (it is a per-module counter).
-  let (output, code) = execCmdEx(quoteShell(getCurrentCompilerExe()) &
-    " c --hints:off --compileOnly --nimcache:" & quoteShell(dir / "nc") & " " &
-    quoteShell(dir / "main.nim"))
+proc nimc(args: string): tuple[output: string; exitCode: int] =
+  execCmdEx(quoteShell(getCurrentCompilerExe()) & " --hints:off " & args)
+
+proc twoCopies(root, fieldA, fieldB: string) =
+  for (copy, field) in [("a", fieldA), ("b", fieldB)]:
+    createDir(root / "vendor" / copy / "src")
+    writeFile(root / "vendor" / copy / "dup.nimble", dupNimble)
+    writeFile(root / "vendor" / copy / "src" / "m.nim",
+              "type T* = ref object of RootObj\n  " & field & "\n")
+
+proc runMain(root, mainText, extra: string): string =
+  writeFile(root / "main.nim", mainText)
+  let (output, code) = nimc("r " & extra & " --nimcache:" &
+    quoteShell(root / "nc" & $extra.len) & " " & quoteShell(root / "main.nim"))
   doAssert code == 0, output
-  let c = readFile(dir / "nc" / "@mmain.nim.c")
-  for line in c.splitLines():
+  output.strip()
+
+block twoCopiesOfOnePackageStayDistinct:
+  let root = createTempDir("ttypehash_dup_", "")
+  twoCopies(root, "x*: int", "x*: int")
+  let m = "import vendor/a/src/m as ma\nimport vendor/b/src/m as mb\n" &
+    "let x: RootRef = ma.T(x: 42)\necho x of mb.T, \" \", x of ma.T\n"
+  doAssert runMain(root, m, "").endsWith("false true")
+  doAssert runMain(root, m, "--typeHashPathMap:" & root & "=/fixture")
+    .endsWith("false true")
+  removeDir(root)
+
+block twoCopiesWithDifferentFieldsCompile:
+  let root = createTempDir("ttypehash_dupfields_", "")
+  twoCopies(root, "x*: int", "y*: string")
+  let m = "import vendor/a/src/m as ma\nimport vendor/b/src/m as mb\n" &
+    "let x: RootRef = ma.T(x: 42)\nlet y: RootRef = mb.T(y: \"s\")\n" &
+    "echo x of mb.T, \" \", y of ma.T, \" \", ma.T(x).x, \" \", mb.T(y).y\n"
+  doAssert runMain(root, m, "").endsWith("false false 42 s")
+  removeDir(root)
+
+proc displayTables(dir, extra: string): seq[string] =
+  ## Every `NU32 ...[n] = {...}` initializer of the main module's C file,
+  ## the C identifier dropped (it is a per-module counter).
+  removeDir(dir / "nc")
+  let (output, code) = nimc("c --compileOnly " & extra & " --nimcache:" &
+    quoteShell(dir / "nc") & " " & quoteShell(dir / "main.nim"))
+  doAssert code == 0, output
+  for line in readFile(dir / "nc" / "@mmain.nim.c").splitLines():
     let i = line.find("NU32 TM__")
     let j = line.find("] = {")
     if i >= 0 and j > i:
       result.add(line[j .. ^1])
   doAssert result.len > 0, "no display table in the generated C"
 
-block checkoutPathIndependence:
+block checkoutPathIndependenceUnderTheMap:
   let root = createTempDir("ttypehash_", "")
   let a = root / "one" / "fixturepkg"
   let b = root / "two" / "deeper" / "still" / "fixturepkg"
   for d in [a, b]:
     createDir(d)
-    writeFile(d / "fixturepkg.nimble", nimble)
+    writeFile(d / "fixturepkg.nimble", dupNimble)
     writeFile(d / "main.nim", main)
-  let ta = displayTables(a)
-  let tb = displayTables(b)
-  doAssert ta == tb, "type hashes depend on the checkout path:\n" &
-    ta.join("\n") & "\n--- vs ---\n" & tb.join("\n")
-  removeDir(root)
-
-block sameNamedTypesStayDistinct:
-  let root = createTempDir("ttypehash_names_", "")
-  createDir(root / "a")
-  createDir(root / "b")
-  writeFile(root / "fixturepkg.nimble", nimble)
-  writeFile(root / "a" / "m.nim", "type T* = ref object of RootObj\n")
-  writeFile(root / "b" / "m.nim", "type T* = ref object of RootObj\n")
-  writeFile(root / "main.nim", "import a/m as ma\nimport b/m as mb\n" &
-    "let x: RootRef = ma.T()\necho x of mb.T, \" \", x of ma.T\n")
-  let (output, code) = execCmdEx(quoteShell(getCurrentCompilerExe()) &
-    " r --hints:off --nimcache:" & quoteShell(root / "nc") & " " &
-    quoteShell(root / "main.nim"))
-  doAssert code == 0, output
-  doAssert output.strip().endsWith("false true"), output
+  doAssert displayTables(a, "--typeHashPathMap:" & a & "=/fixture") ==
+           displayTables(b, "--typeHashPathMap:" & b & "=/fixture")
+  doAssert displayTables(a, "") != displayTables(b, ""),
+    "without the map the hashes must still follow the path"
   removeDir(root)

@@ -469,6 +469,10 @@ type
     packageCache*: StringTableRef
     nimblePaths*: seq[AbsoluteDir]
     searchPaths*: seq[AbsoluteDir]
+    typeHashPathMaps*: seq[tuple[old, new: string]]
+      ## ``--typeHashPathMap:OLD=NEW``: rewrites applied, in the order given,
+      ## to the path of a type's defining file before it is hashed
+      ## (``sighashes.typeHashPath``). Empty by default.
     lazyPaths*: seq[AbsoluteDir]
     outFile*: RelativeFile
     outDir*: AbsoluteDir
