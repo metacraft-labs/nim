@@ -54,7 +54,14 @@ proc run(args: seq[string]; cwd = proj): RunResult =
   var p = startProcess(nim, workingDir = cwd, args = args,
                        options = {poStdErrToStdOut})
   defer: p.close()
-  result.output = p.outputStream.readAll()
+  # Drain to EOF. `Stream.readAll` stops at the first short read, and a
+  # Windows pipe read returns whatever is available, so it truncated the
+  # compiler's output and then deadlocked once the compiler filled the pipe.
+  var buffer = newString(4096)
+  while true:
+    let n = p.outputStream.readData(addr buffer[0], buffer.len)
+    if n <= 0: break
+    result.output.add buffer[0 ..< n]
   result.exitCode = p.waitForExit()
 
 proc writeArgsFile(name: string; argv: seq[string]): string =
