@@ -5,6 +5,18 @@ This branch starts at upstream Nim v2.2.10 (`bfeb3146`) and backports the
 Unicode environment capture correction from `c994ccb1`. It is a modified
 2.2.10 maintenance build, not an unmodified official archive or a 2.3.1 build.
 
+On top of the accepted prefix source `9bd1e7af` it adds the compiler argument
+file transport, `nim --compilerArgsFile:<path>` (`compiler/argsfile.nim`): when
+it is the only physical argument, the compiler reads a version-1 JSON file
+(`{"version":1,"argv":[...]}`) once, before the first command-line pass, and
+uses that logical vector for both passes and for NimScript `paramCount` /
+`paramStr`. It lets a build tool pass argument vectors longer than Windows'
+32,767-unit `CreateProcessW` limit without changing their meaning.
+`tests/misc/tcompilerargsfile.nim` holds its real-compiler controls; the
+qualification runs them with the packaged compiler, checks that the official
+bootstrap compiler refuses the option, and allows only the enumerated new
+prefix members over the accepted 4,820.
+
 From its declared Windows development environment, run one command:
 
 ```powershell

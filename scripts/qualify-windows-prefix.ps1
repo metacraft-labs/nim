@@ -17,7 +17,7 @@ if (Read-Git $root @('status', '--porcelain', '--untracked-files=no')) { throw '
 $evidence = [IO.Path]::GetFullPath((Join-Path $root $EvidenceRoot))
 if (Test-Path -LiteralPath $evidence) { throw 'Qualification output already exists' }
 [IO.Directory]::CreateDirectory($evidence) | Out-Null
-$receipt = @{ complete = $false; version = '2.2.10'; source = $revision; upstreamCommit = 'bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef'; backportedFix = '92455417a79cd3263975b21a97d6062683f2a195'; tree = (Read-Git $root @('rev-parse', 'HEAD^{tree}')); tools = @{} }
+$receipt = @{ complete = $false; version = '2.2.10'; source = $revision; upstreamCommit = 'bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef'; backportedFix = '92455417a79cd3263975b21a97d6062683f2a195'; acceptedBase = '9bd1e7afec4d751a51cbe64da5c694f37fa93ee0'; tree = (Read-Git $root @('rev-parse', 'HEAD^{tree}')); tools = @{} }
 $originalPath = $env:PATH
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('nim-prefix-' + [Guid]::NewGuid().ToString('N'))
 $hostImage = [Environment]::ProcessPath
@@ -109,6 +109,13 @@ try {
     $unicode = @($oldProof.cases | Where-Object name -eq 'unicode-env')
     if ($old.exit -eq 0 -or $absolute.Count -ne 1 -or $absolute[0].exit -eq 0 -or $direct.Count -ne 1 -or $direct[0].exit -ne 0 -or -not $direct[0].object -or $unicode.Count -ne 1 -or $unicode[0].exit -eq 0) { throw 'Old failure did not have its real same-CL positive control' }
     $receipt.oldControl = 'real absolute-path and Unicode-env RED with same-CL positive'
+    # The official 2.2.10 compiler has no argument-file transport. It must
+    # refuse the option clearly; a matching version string is no capability proof.
+    $oldArgsFile = Join-Path $evidence 'old-compiler-args.json'
+    [IO.File]::WriteAllText($oldArgsFile, '{"version":1,"argv":["--version"]}')
+    $oldArgs = Invoke-Logged 'old-compiler-args-file-refusal' $bootstrap @("--compilerArgsFile:$oldArgsFile")
+    if ($oldArgs.exit -eq 0 -or ((Get-Content -LiteralPath (Join-Path $evidence 'old-compiler-args-file-refusal.stdout') -Raw) + (Get-Content -LiteralPath (Join-Path $evidence 'old-compiler-args-file-refusal.stderr') -Raw)) -notmatch 'compilerArgsFile') { throw 'The official compiler did not refuse --compilerArgsFile clearly' }
+    $receipt.oldArgsFileControl = 'official 2.2.10 refuses --compilerArgsFile'
 
     if ((Test-Path 'bin/nim.exe') -or (Test-Path 'build/nim-2.2.10.zip')) { throw 'Factory outputs must start absent' }
     $null = Require-Success 'build-koch' $bootstrap @('c', '--lib:lib', '-d:release', '--out:koch.exe', 'koch.nim')
@@ -143,7 +150,7 @@ try {
     foreach ($relative in @('bin/nim.exe', 'bin/vccexe.exe', 'bin/nimble.exe', 'bin/atlas.exe', 'bin/nimsuggest.exe', 'bin/nimgrep.exe', 'bin/nimgrab.exe', 'bin/nimpretty.exe', 'bin/testament.exe', 'koch.exe', 'finish.exe', 'lib/system.nim', 'lib/system/compilation.nim', 'config/nim.cfg', 'compiler/nim.nim', 'tools/vccexe/vccexe.nim', 'tools/vccexe/vcvarsall.nim')) {
         if (-not (Test-Path -LiteralPath (Join-Path $prefix $relative) -PathType Leaf)) { throw "Incomplete prefix: $relative" }
     }
-    foreach ($relative in @('lib/system/compilation.nim', 'tools/vccexe/vccexe.nim', 'tools/vccexe/vcvarsall.nim')) {
+    foreach ($relative in @('lib/system/compilation.nim', 'tools/vccexe/vccexe.nim', 'tools/vccexe/vcvarsall.nim', 'compiler/argsfile.nim', 'compiler/nim.nim', 'compiler/commands.nim', 'compiler/options.nim', 'compiler/scriptconfig.nim', 'doc/advopt.txt')) {
         if ((Get-FileHash (Join-Path $prefix $relative)).Hash -cne (Get-FileHash (Join-Path $root $relative)).Hash) { throw "Packaged source differs: $relative" }
     }
     foreach ($image in Get-ChildItem -LiteralPath (Join-Path $prefix 'bin') -Filter '*.exe') { Assert-Amd64 $image.FullName }
@@ -170,6 +177,14 @@ echo "complete-prefix-stdlib-ok"
         $run = Require-Success "run-$backend" $binary @() $scratch
         if ($run.output -notmatch 'complete-prefix-stdlib-ok') { throw "$backend stdlib result missing" }
     }
+    # Real compiler controls for --compilerArgsFile, built and run by the
+    # packaged compiler itself: differential direct/file runs, both passes,
+    # configuration phases, every refusal, and a >32,767-unit vector that
+    # must fail directly with 206 and succeed through the file.
+    $argsTest = Join-Path $root 'tests/misc/tcompilerargsfile.nim'
+    $argsRun = Require-Success 'compiler-args-file-controls' $nim @('r', '--hints:off', '--cc:gcc', "--nimcache:$(Join-Path $scratch 'cache-argsfile')", "--out:$(Join-Path $scratch 'tcompilerargsfile.exe')", $argsTest) $scratch
+    if ($argsRun.output -notmatch 'compiler argument file controls passed') { throw 'Compiler argument file controls did not report success' }
+    $receipt.compilerArgsFileControls = 'passed'
     $null = Require-Success 'packaged-wrapper-control' $hostImage @('-NoProfile', '-File', $test, '-WrapperPath', (Join-Path $prefix 'bin/vccexe.exe'), '-EvidenceRoot', (Join-Path $evidence 'packaged-wrapper'), '-TargetTriple', 'x86_64-pc-windows-msvc')
     $files = @(Get-ChildItem -LiteralPath $prefix -File -Recurse -Force | Sort-Object FullName | ForEach-Object { @{ path = [IO.Path]::GetRelativePath($prefix, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } })
     if ($files.Count -ne $archiveFiles.Count) { throw 'Extracted file membership differs from the factory archive' }
@@ -178,6 +193,13 @@ echo "complete-prefix-stdlib-ok"
         $member = $archiveFiles[$file.path]
         if ($file.bytes -ne $member.bytes -or $file.sha256 -cne $member.sha256) { throw "Extracted member content differs: $($file.path)" }
     }
+    # The accepted 9bd1e7af prefix had 4,820 members. The argument-file patch
+    # set may add only these enumerated members.
+    $baselineMembers = 4820
+    $intentionalAdditions = @('compiler/argsfile.nim', 'tests/misc/tcompilerargsfile.nim')
+    $presentAdditions = @($intentionalAdditions | Where-Object { $archiveFiles.ContainsKey($_) })
+    if ($files.Count -ne $baselineMembers + $presentAdditions.Count) { throw "Prefix membership $($files.Count) differs from the 4,820 baseline plus enumerated additions ($($presentAdditions -join ', '))" }
+    $receipt.membership = @{ baseline = $baselineMembers; additions = $presentAdditions; files = $files.Count }
     $receipt.extraction = @{ losslessMemberNamesAndContents = $true; files = $files.Count; legacyEntryEncoding = 'CP437'; utf8FlagHonored = $true }
     $files | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidence 'prefix-manifest.json') -Encoding utf8
     $artifact = Join-Path $evidence "nim-2.2.10-vccexe-$revision-windows-x64.zip"
