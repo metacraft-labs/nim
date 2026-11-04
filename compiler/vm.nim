@@ -83,7 +83,8 @@ when not defined(nimHasCallsitePragma):
 
 template stackTrace(c: PCtx, tos: PStackFrame, pc: int,
                     msg: string, lineInfo: TLineInfo = TLineInfo.default) {.callsite.} =
-  stackTraceImpl(c, tos, pc, msg, lineInfo, instantiationInfo(-2, fullPaths = true))
+  stackTraceImpl(c, tos, pc, msg, lineInfo,
+    compilerRelativeLoc(instantiationInfo(-2, fullPaths = true)))
   return
 
 proc bailOut(c: PCtx; tos: PStackFrame) =
