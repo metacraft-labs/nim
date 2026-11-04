@@ -146,10 +146,23 @@ proc setupVM*(module: PSym; cache: IdentCache; scriptName: string;
     setResult(a, options.existsConfigVar(conf, a.getString 0))
   cbconf nimcacheDir:
     setResult(a, options.getNimcacheDir(conf).string)
+  # With `--compilerArgsFile` the script observes the logical argument
+  # vector, exactly as for the equivalent direct invocation; argv0 is still
+  # the running compiler executable.
   cbconf paramStr:
-    setResult(a, os.paramStr(int a.getInt 0))
+    let i = int a.getInt 0
+    if conf.useLogicalCmdLine and i != 0:
+      if i < 0 or i > conf.logicalCmdLine.len:
+        raise newException(IndexDefect,
+          formatErrorIndexBound(i, conf.logicalCmdLine.len))
+      setResult(a, conf.logicalCmdLine[i - 1])
+    else:
+      setResult(a, os.paramStr(i))
   cbconf paramCount:
-    setResult(a, os.paramCount())
+    if conf.useLogicalCmdLine:
+      setResult(a, conf.logicalCmdLine.len)
+    else:
+      setResult(a, os.paramCount())
   cbconf cmpIgnoreStyle:
     setResult(a, strutils.cmpIgnoreStyle(a.getString 0, a.getString 1))
   cbconf cmpIgnoreCase:

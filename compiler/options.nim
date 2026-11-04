@@ -414,6 +414,14 @@ type
     command*: string # the main command (e.g. cc, check, scan, etc)
     commandArgs*: seq[string] # any arguments after the main command
     commandLine*: string
+    logicalCmdLine*: seq[string]
+      ## The logical argument vector (excluding argv0) read from a
+      ## `--compilerArgsFile:<path>` transport. Meaningful only when
+      ## `useLogicalCmdLine` is set; it is written once, before the first
+      ## command-line pass, and never modified afterwards.
+    useLogicalCmdLine*: bool
+      ## Both command-line passes and the NimScript argument APIs read
+      ## `logicalCmdLine` instead of the operating system's argv.
     extraCmds*: seq[string] # for writeJsonBuildInstructions
     implicitImports*: seq[string] # modules that are to be implicitly imported
     implicitIncludes*: seq[string] # modules that are to be implicitly included

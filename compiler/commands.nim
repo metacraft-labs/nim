@@ -632,6 +632,15 @@ proc processSwitch*(switch, arg: string, pass: TCmdLinePass, info: TLineInfo;
   var key = ""
   var val = ""
   case switch.normalize
+  of "compilerargsfile":
+    # The argument-file transport is recognized only as the sole physical
+    # argument, before any pass runs (see `compiler/argsfile.nim`). Reaching
+    # it here means it was combined with other options, nested inside an
+    # argument file or set from a configuration file; none of those is
+    # supported, so there is no recursive or partial expansion.
+    localError(conf, info, "--compilerArgsFile must be the only compiler " &
+      "argument; it cannot be combined with other options, nested in an " &
+      "argument file or set from a configuration file")
   of "eval":
     expectArg(conf, switch, arg, pass, info)
     conf.projectIsCmd = true

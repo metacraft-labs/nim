@@ -26,7 +26,7 @@ when defined(windows):
 
 import
   commands, options, msgs, extccomp, main, idents, lineinfos, cmdlinehelper,
-  pathutils, modulegraphs
+  pathutils, modulegraphs, argsfile
 
 from std/browsers import openDefaultBrowser
 from nodejs import findNodeJs
@@ -48,13 +48,22 @@ proc nimbleLockExists(config: ConfigRef): bool =
   return fileExists(pd.string / nimbleLock)
 
 proc processCmdLine(pass: TCmdLinePass, cmd: string; config: ConfigRef) =
-  var p = parseopt.initOptParser(cmd)
+  # With an argument file the retained logical vector replaces the OS argv.
+  # `initOptParser` treats an empty vector as "use the OS argv", which would
+  # reparse the physical transport option, so an empty logical vector is
+  # given no tokens at all instead.
+  let noTokens = config.useLogicalCmdLine and config.logicalCmdLine.len == 0
+  var p =
+    if config.useLogicalCmdLine and not noTokens:
+      parseopt.initOptParser(config.logicalCmdLine)
+    else:
+      parseopt.initOptParser(cmd)
   var argsCount = 0
 
   config.commandLine.setLen 0
     # bugfix: otherwise, config.commandLine ends up duplicated
 
-  while true:
+  while not noTokens:
     parseopt.next(p)
     case p.kind
     of cmdEnd: break
@@ -101,7 +110,24 @@ proc handleCmdLine(cache: IdentCache; conf: ConfigRef) =
     processCmdLine: processCmdLine
   )
   self.initDefinesProg(conf, "nim_compiler")
-  if paramCount() == 0:
+  # `nim --compilerArgsFile:<path>`: the physical argv is exactly this one
+  # option, and the file carries the logical vector. It is read and validated
+  # once, here, before the no-arguments check and the first pass, against the
+  # caller's current directory.
+  if paramCount() == 1:
+    var physical = parseopt.initOptParser(@[paramStr(1)])
+    physical.next()
+    if physical.kind == cmdLongOption and
+        physical.key.normalize == ArgsFileSwitch.normalize:
+      try:
+        conf.logicalCmdLine = readCompilerArgsFile(physical.val)
+      except ArgsFileError:
+        rawMessage(conf, errGenerated, getCurrentExceptionMsg())
+        return
+      conf.useLogicalCmdLine = true
+  let argumentCount =
+    if conf.useLogicalCmdLine: conf.logicalCmdLine.len else: paramCount()
+  if argumentCount == 0:
     writeCommandLineUsage(conf)
     return
 
