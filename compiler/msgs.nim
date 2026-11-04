@@ -19,7 +19,27 @@ when defined(nimPreviewSlimSystem):
 
 
 type InstantiationInfo* = typeof(instantiationInfo())
-template instLoc*(): InstantiationInfo = instantiationInfo(-2, fullPaths = true)
+
+const nimSourceRoot = currentSourcePath().parentDir.parentDir & DirSep
+  ## The Nim tree this compiler is built from. Only compile-time code reads
+  ## it, so it is not part of the binary.
+
+proc compilerRelativeLoc*(loc: InstantiationInfo): InstantiationInfo
+    {.compileTime.} =
+  ## `loc` with its file named relative to the Nim source root
+  ## (`compiler/msgs.nim`) instead of absolutely. These locations are
+  ## compiled into the compiler binary; an absolute one is the path of the
+  ## tree the compiler was built in, which then ships with the binary. A
+  ## path relative to the root still says which module raised a message.
+  ## A file outside the root keeps its path.
+  result = loc
+  if result.filename.startsWith(nimSourceRoot):
+    result.filename = result.filename[nimSourceRoot.len .. ^1]
+
+template instLoc*(): InstantiationInfo =
+  ## Where in the compiler a message is raised (for `--hint:msgOrigin` and
+  ## internal errors), relative to the Nim source root.
+  compilerRelativeLoc(instantiationInfo(-2, fullPaths = true))
 
 template toStdOrrKind(stdOrr): untyped =
   if stdOrr == stdout: stdOrrStdout else: stdOrrStderr
