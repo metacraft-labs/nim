@@ -182,8 +182,15 @@ echo "complete-prefix-stdlib-ok"
     # configuration phases, every refusal, and a >32,767-unit vector that
     # must fail directly with 206 and succeed through the file.
     $argsTest = Join-Path $root 'tests/misc/tcompilerargsfile.nim'
-    $argsRun = Require-Success 'compiler-args-file-controls' $nim @('r', '--hints:off', '--cc:gcc', "--nimcache:$(Join-Path $scratch 'cache-argsfile')", "--out:$(Join-Path $scratch 'tcompilerargsfile.exe')", $argsTest) $scratch
-    if ($argsRun.output -notmatch 'compiler argument file controls passed') { throw 'Compiler argument file controls did not report success' }
+    # Streamed rather than captured, so the job log shows each control live.
+    $argsLog = Join-Path $evidence 'compiler-args-file-controls.log'
+    Push-Location $scratch
+    try {
+        & $nim r --hints:off --cc:gcc "--nimcache:$(Join-Path $scratch 'cache-argsfile')" "--out:$(Join-Path $scratch 'tcompilerargsfile.exe')" $argsTest 2>&1 | Tee-Object -FilePath $argsLog
+        $argsExit = $LASTEXITCODE
+    } finally { Pop-Location }
+    if ($argsExit -ne 0) { throw "compiler-args-file-controls exited $argsExit" }
+    if ((Get-Content -LiteralPath $argsLog -Raw) -notmatch 'compiler argument file controls passed') { throw 'Compiler argument file controls did not report success' }
     $receipt.compilerArgsFileControls = 'passed'
     $null = Require-Success 'packaged-wrapper-control' $hostImage @('-NoProfile', '-File', $test, '-WrapperPath', (Join-Path $prefix 'bin/vccexe.exe'), '-EvidenceRoot', (Join-Path $evidence 'packaged-wrapper'), '-TargetTriple', 'x86_64-pc-windows-msvc')
     $files = @(Get-ChildItem -LiteralPath $prefix -File -Recurse -Force | Sort-Object FullName | ForEach-Object { @{ path = [IO.Path]::GetRelativePath($prefix, $_.FullName).Replace('\', '/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } })

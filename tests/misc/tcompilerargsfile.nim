@@ -42,7 +42,15 @@ type RunResult = object
   exitCode: int
   output: string
 
+proc progress(what: string) =
+  # Progress goes to stderr unbuffered, so a qualification log streaming this
+  # test shows which compiler run is in flight.
+  stderr.writeLine "[tcompilerargsfile] ", what
+  stderr.flushFile()
+
 proc run(args: seq[string]; cwd = proj): RunResult =
+  progress("run " & (if args.len > 0: args[0] else: "<no args>") & " (" &
+    $args.len & " args) in " & cwd)
   var p = startProcess(nim, workingDir = cwd, args = args,
                        options = {poStdErrToStdOut})
   defer: p.close()
@@ -189,6 +197,7 @@ let targetArgs = @["", "with space", "$HOME", "%PATH%", "@resp",
 # --------------------------------------------------------------------------
 
 block compileAndRun:
+  progress("case compileAndRun")
   var expect = @["CFG cfg-import-ok", "CFG project nims",
     "CFG paramCount=" & $(common.len + 2 + targetArgs.len),
     "PROGRAM libmod-relative unimod-ok",
@@ -205,26 +214,31 @@ block compileAndRun:
   differential("style", argv, expect, physicalName = "compiler_args_file=")
 
 block compileOnly:
+  progress("case compileOnly")
   differential("compile", @["c"] & common & @["main.nim"],
     @["CFG cfg-import-ok", "PROGRAM commandLine=\" c --skipUserCfg",
       "PROGRAM sval=" & sval.escape])
 
 block emptyVector:
+  progress("case emptyVector")
   # An empty logical vector takes the ordinary no-arguments usage path; it
   # must not reparse the physical option.
   differential("empty", @[], @["nim command [options] [projectfile] [arguments]"])
 
 block diagnostics:
+  progress("case diagnostics")
   # A module reachable only through an excluded path stays unresolved, and the
   # diagnostic is identical.
   differential("broken", @["c"] & common & @["broken.nim"],
                @["onlyexcluded"], status = 1)
 
 block nimscriptMain:
+  progress("case nimscriptMain")
   differential("script", @["--hints:off", "script.nims", "a", "b c", ""],
                @["SCRIPT argc=5", "SCRIPT arg 4=\"b c\"", "SCRIPT arg 5=\"\""])
 
 block secondPassIsRetained:
+  progress("case secondPassIsRetained")
   # Configuration replaces, then removes, the argument file between the
   # passes. The second pass must still see the vector read before pass 1.
   let argv = @["r"] & common & @["main.nim", "x"]
@@ -253,6 +267,7 @@ block secondPassIsRetained:
         "replace: config did not run"
 
 block absolutePath:
+  progress("case absolutePath")
   clean()
   discard writeArgsFile("absolute.json", @["c"] & common & @["main.nim"])
   let r = run(@["--compilerArgsFile:" & (argsDir / "absolute.json")])
@@ -260,6 +275,7 @@ block absolutePath:
   check fileExists(proj / "build" / "main" & exeSuffix), "absolute path: no output"
 
 block longVector:
+  progress("case longVector")
   # Many search roots and defines, as a build tool's provider compile carries.
   var argv = @["r", "--skipUserCfg", "--hints:off", "--colors:off",
                "--nimcache:cache", "--out:" & "build" / "main" & exeSuffix]
@@ -293,6 +309,7 @@ block longVector:
 # --------------------------------------------------------------------------
 
 block refusals:
+  progress("case refusals")
   let ok = "\"argv\":[\"c\",\"main.nim\"]"
   negative("bom.json", "\xEF\xBB\xBF{\"version\":1," & ok & "}", "byte order mark")
   negative("utf8.json", "{\"version\":1,\"argv\":[\"\xFF\"]}", "invalid UTF-8")
