@@ -886,6 +886,15 @@ when hasSpawnH:
   proc posix_spawn_file_actions_addopen*(a1: var Tposix_spawn_file_actions,
             a2: cint, a3: cstring, a4: cint, a5: Mode): cint {.
             importc, header: "<spawn.h>".}
+  when defined(linux) and not defined(android) or defined(macosx):
+    # Nonstandard chdir file action: the child enters `a2` before exec,
+    # leaving the parent's process-wide current directory alone. Binding it
+    # makes glibc >= 2.29, musl >= 1.1.24 and a macOS deployment target
+    # >= 10.15 a requirement of `osproc` (and so of the compiler itself).
+    # https://man7.org/linux/man-pages/man3/posix_spawn_file_actions_addchdir_np.3.html
+    proc posix_spawn_file_actions_addchdir_np*(
+      a1: var Tposix_spawn_file_actions,
+      a2: cstring): cint {.importc, header: "<spawn.h>".}
   proc posix_spawn_file_actions_destroy*(
     a1: var Tposix_spawn_file_actions): cint {.importc, header: "<spawn.h>".}
   proc posix_spawn_file_actions_init*(

@@ -124,7 +124,9 @@ proc startProcess*(command: string, workingDir: string = "",
                    tags: [ExecIOEffect, ReadEnvEffect, RootEffect].}
   ## Starts a process. `Command` is the executable file, `workingDir` is the
   ## process's working directory. If ``workingDir == ""`` the current directory
-  ## is used (default). `args` are the command line arguments that are passed to the
+  ## is used (default). `workingDir` is applied in the child only: the
+  ## caller's current directory never changes, so relative paths in other
+  ## threads are unaffected. `args` are the command line arguments that are passed to the
   ## process. On many operating systems, the first command line argument is the
   ## name of the executable. `args` should *not* contain this argument!
   ## `env` is the environment that will be passed to the process.
@@ -946,10 +948,18 @@ elif not defined(useNimRtl):
 
   const useProcessAuxSpawn = declared(posix_spawn) and not defined(useFork) and
                              not (defined(useClone) and defined(linux))
+  # The current directory belongs to the whole process, so `workingDir` is
+  # only ever applied inside the child: changing it in the parent around the
+  # spawn would make every other thread resolve relative paths against the
+  # child's directory for that window. posix_spawn can do this only through
+  # the chdir file action; where the platform lacks it, a spawn that needs a
+  # `workingDir` goes through fork, whose child calls `chdir` itself.
+  const spawnCanChdir = useProcessAuxSpawn and
+                        declared(posix_spawn_file_actions_addchdir_np)
   when useProcessAuxSpawn:
     proc startProcessAuxSpawn(data: StartProcessData): Pid {.
       raises: [OSError], tags: [ExecIOEffect, ReadEnvEffect, ReadDirEffect, RootEffect], gcsafe.}
-  else:
+  when not spawnCanChdir:
     proc startProcessAuxFork(data: StartProcessData): Pid {.
       raises: [OSError], tags: [ExecIOEffect, ReadEnvEffect, ReadDirEffect, RootEffect], gcsafe.}
     {.push stacktrace: off, profiler: off.}
@@ -1007,11 +1017,13 @@ elif not defined(useNimRtl):
     data.workingDir = workingDir
     data.options = options
 
-    when useProcessAuxSpawn:
-      var currentDir = getCurrentDir()
+    when spawnCanChdir:
       pid = startProcessAuxSpawn(data)
+    elif useProcessAuxSpawn:
       if workingDir.len > 0:
-        setCurrentDir(currentDir)
+        pid = startProcessAuxFork(data)
+      else:
+        pid = startProcessAuxSpawn(data)
     else:
       pid = startProcessAuxFork(data)
 
@@ -1077,11 +1089,18 @@ elif not defined(useNimRtl):
         else:
           chck posix_spawn_file_actions_adddup2(fops, data.pStderr[writeIdx], 2)
 
+      # Without the chdir file action `startProcess` never routes a
+      # `workingDir` here (it uses the fork path instead).
+      when spawnCanChdir:
+        if data.workingDir.len > 0:
+          chck posix_spawn_file_actions_addchdir_np(fops, data.workingDir)
+
       var res: cint
-      if data.workingDir.len > 0:
-        setCurrentDir($data.workingDir)
       var pid: Pid
 
+      # glibc and musl run the chdir action in the child before exec, so a
+      # relative `sysCommand` resolves against `workingDir`, as on the fork
+      # path.
       if (poUsePath in data.options):
         res = posix_spawnp(pid, data.sysCommand.cstring, fops, attr, data.sysArgs, data.sysEnv)
       else:
@@ -1089,10 +1108,17 @@ elif not defined(useNimRtl):
 
       discard posix_spawn_file_actions_destroy(fops)
       discard posix_spawnattr_destroy(attr)
-      if res != 0'i32: raiseOSError(OSErrorCode(res), data.sysCommand)
+      if res != 0'i32:
+        # A failed chdir action is reported like a failed exec, so name the
+        # directory too: the error may be about it rather than the command.
+        if data.workingDir.len > 0:
+          raiseOSError(OSErrorCode(res), data.sysCommand &
+            " (working directory: " & $data.workingDir & ")")
+        else:
+          raiseOSError(OSErrorCode(res), data.sysCommand)
 
       return pid
-  else:
+  when not spawnCanChdir:
     proc startProcessAuxFork(data: StartProcessData): Pid =
       if pipe(data.pErrorPipe) != 0:
         raiseOSError(osLastError())
@@ -1156,6 +1182,13 @@ elif not defined(useNimRtl):
             startProcessFail(data)
         else:
           if dup2(data.pStderr[writeIdx], 2) < 0:
+            startProcessFail(data)
+
+      # `poDaemon` gets its own process group here too, as the spawn path's
+      # POSIX_SPAWN_SETPGROUP gives it.
+      when not defined(nuttx):
+        if poDaemon in data.options:
+          if setpgid(0, 0) < 0:
             startProcessFail(data)
 
       if data.workingDir.len > 0:
