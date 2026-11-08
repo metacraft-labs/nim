@@ -222,7 +222,18 @@ proc fromJson*[T](a: var T, b: JsonNode, opt = Joptions()) =
     of JString: a = parseEnum[T](b.getStr())
     else: checkJson false, "Expecting int/string for " & $T & " got " & b.pretty()
   elif T is uint|uint64: a = T(to(b, uint64))
-  elif T is Ordinal: a = cast[T](to(b, int))
+  elif T is Ordinal:
+    # `to(b, int)` range-checks against `int`. Where `int` is 32 bits (wasm32,
+    # i386, JS) that rejected an `int64` above `int.high` and a `uint32` above
+    # `int32.high`, although the destination holds them, so a type wider than
+    # `int`, or unsigned and as wide, is read through `BiggestInt`. Every other
+    # type keeps the `int` path, so where `int` is 64 bits nothing changes, and
+    # an `int` destination still rejects a value it cannot hold rather than
+    # wrapping it.
+    when sizeof(T) > sizeof(int) or (T is SomeUnsignedInt and sizeof(T) == sizeof(int)):
+      a = cast[T](to(b, BiggestInt))
+    else:
+      a = cast[T](to(b, int))
   elif T is pointer: a = cast[pointer](to(b, int))
   elif T is distinct: a.distinctBase.fromJson(b)
   elif T is string|SomeNumber: a = to(b,T)

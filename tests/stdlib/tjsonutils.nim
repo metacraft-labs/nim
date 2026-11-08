@@ -142,6 +142,31 @@ template fn() =
       else:
         testRoundtrip(a): "[9223372036854775807,18446744073709551615]"
 
+  block: # fixed-width integers wider than a 32-bit `int` (wasm32, i386, JS)
+    # `fromJson` read every Ordinal through `int`, so where `int` is 32 bits
+    # these raised a RangeDefect although the destination holds them.
+    # 93823560585216 (0x555500001000) is a typical x86_64 ASLR address and
+    # stays below 2^53, so the JS target represents it exactly.
+    type Wire = object
+      address: int64
+      offsets: seq[int64]
+      mask: uint32
+    let j = parseJson(
+      """{"address":93823560585216,"offsets":[-93823560585217],"mask":4294967295}""")
+    let w = j.jsonTo(Wire)
+    doAssert w.address == 93823560585216'i64
+    doAssert w.offsets == @[-93823560585217'i64]
+    doAssert w.mask == 4294967295'u32
+    doAssert parseJson("93823560585216").jsonTo(int64) == 93823560585216'i64
+    doAssert parseJson("4294967295").jsonTo(uint32) == uint32.high
+    # An `int` destination still rejects what it cannot hold instead of
+    # wrapping it.
+    when nimvm: discard
+    else:
+      when sizeof(int) == 4:
+        doAssertRaises RangeDefect:
+          discard parseJson("2147483648").jsonTo(int)
+
   block: # bug #18007
     testRoundtrip((NaN, Inf, -Inf, 0.0, -0.0, 1.0)): """["nan","inf","-inf",0.0,-0.0,1.0]"""
     testRoundtrip((float32(NaN), Inf, -Inf, 0.0, -0.0, 1.0)): """["nan","inf","-inf",0.0,-0.0,1.0]"""
