@@ -1225,8 +1225,16 @@ elif not defined(useNimRtl):
       discard close(dataCopy.pErrorPipe[writeIdx])
       if pid < 0: raiseOSError(osLastError())
 
+      # Blocks until the child either execs, which closes its close-on-exec
+      # write end (end-of-file), or reports its errno. A signal handled
+      # without SA_RESTART interrupts the wait with EINTR. That says nothing
+      # about the child, so the read is retried: taken as end-of-file, it
+      # would return a `Process` for a child that failed.
       var error: cint = cint(0)
-      let sizeRead = read(dataCopy.pErrorPipe[readIdx], addr error, sizeof(error))
+      var sizeRead: int
+      while true:
+        sizeRead = read(dataCopy.pErrorPipe[readIdx], addr error, sizeof(error))
+        if sizeRead >= 0 or errno != EINTR: break
       if sizeRead == sizeof(error):
         # The child reported a failure and exits (`startProcessFail`). The
         # caller gets no `Process`, and so no pid to wait for, so the child
