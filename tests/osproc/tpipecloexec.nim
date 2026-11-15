@@ -1,5 +1,5 @@
 discard """
-  matrix: "; -d:useFork"
+  matrix: "; -d:useFork; -d:useClone"
   output: ""
 """
 
@@ -10,8 +10,7 @@ discard """
 # cannot tell that its child has exited.
 #
 # The default leg drives the posix_spawn path, `-d:useFork` the fork/exec
-# path. (`-d:useClone` is left out: that path crashes in `dealloc(stack)`
-# right after the clone, with or without this fix.)
+# path, and `-d:useClone` the same path with the child created by `clone`.
 #
 # No mocks: every case spawns real processes. The child that reports its
 # descriptors is this test program itself, started in "report" mode.

@@ -1,5 +1,5 @@
 discard """
-  matrix: "; -d:useFork"
+  matrix: "; -d:useFork; -d:useClone"
   output: ""
 """
 
@@ -11,8 +11,7 @@ discard """
 # retries a failing start would otherwise run out of descriptors.
 #
 # The default leg drives the posix_spawn path, `-d:useFork` the fork/exec
-# path. (`-d:useClone` is left out: that path crashes in `dealloc(stack)`
-# right after the clone, independently of this test.)
+# path, and `-d:useClone` the same path with the child created by `clone`.
 #
 # No mocks: every case makes a real `startProcess` call and compares the
 # parent's open descriptors before and after it.

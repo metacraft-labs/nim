@@ -1196,13 +1196,19 @@ elif not defined(useNimRtl):
 
       when defined(useClone) and defined(linux):
         const stackSize = 65536
-        let stackEnd = cast[clong](alloc(stackSize))
-        let stack = cast[pointer](stackEnd + stackSize)
-        let fn: pointer = startProcessAfterFork
-        pid = clone(fn, stack,
+        # The stack grows down, so `clone` takes the address just past the
+        # top of the allocation, but `dealloc` needs the pointer `alloc`
+        # returned. CLONE_VFORK keeps the parent here until the child has
+        # exec'd or exited, so the child is off this stack before it is freed.
+        let stackBase = alloc(stackSize)
+        let stackTop = cast[pointer](cast[uint](stackBase) + uint(stackSize))
+        # A proc is not implicitly a `pointer` under
+        # `-d:nimPreviewProcConversion`, so convert it explicitly.
+        let fn = cast[pointer](startProcessAfterFork)
+        pid = clone(fn, stackTop,
                     cint(CLONE_VM or CLONE_VFORK or SIGCHLD),
                     pointer(addr dataCopy), nil, nil, nil)
-        dealloc(stack)
+        dealloc(stackBase)
       else:
         pid = fork()
         if pid == 0:
