@@ -150,6 +150,13 @@ proc startProcess*(command: string, workingDir: string = "",
   ## Return value: The newly created process object. Nil is never returned,
   ## but ``OSError`` is raised in case of an error.
   ##
+  ## On POSIX, a start that raises leaves nothing behind for the caller to
+  ## clean up, since the caller has no process object to clean up with: the
+  ## descriptors it created are closed, and a child that was created but
+  ## could not run the command (it failed to exec, to change to
+  ## `workingDir`, to set up its streams or, for `poDaemon`, its process
+  ## group) has been reaped, so no zombie is left.
+  ##
   ## See also:
   ## * `execProcesses proc <#execProcesses,openArray[string],proc(int),proc(int,Process)>`_
   ## * `execProcess proc
@@ -1221,6 +1228,15 @@ elif not defined(useNimRtl):
       var error: cint = cint(0)
       let sizeRead = read(dataCopy.pErrorPipe[readIdx], addr error, sizeof(error))
       if sizeRead == sizeof(error):
+        # The child reported a failure and exits (`startProcessFail`). The
+        # caller gets no `Process`, and so no pid to wait for, so the child
+        # is reaped here; otherwise every failed start leaves a zombie until
+        # this process exits. It has already written its error, so the wait
+        # is short. An `EINTR` (a signal handler ran) is retried, as the
+        # child is still ours to reap; any other error means it is no longer
+        # waitable (e.g. SIGCHLD is ignored and the kernel reaped it).
+        var status: cint
+        while waitpid(pid, status, 0) < 0 and errno == EINTR: discard
         raiseOSError(OSErrorCode(error),
                       "Could not find command: '" & $data.sysCommand & "'. OS error: " & $strerror(error))
 
