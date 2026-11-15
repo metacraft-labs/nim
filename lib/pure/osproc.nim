@@ -30,6 +30,8 @@ else:
 
 when defined(linux) and defined(useClone):
   import std/linux
+elif defined(linux):
+  from std/linux import pipe2
 
 when defined(nimPreviewSlimSystem):
   import std/[syncio, assertions]
@@ -948,6 +950,47 @@ elif not defined(useNimRtl):
 
   const useProcessAuxSpawn = declared(posix_spawn) and not defined(useFork) and
                              not (defined(useClone) and defined(linux))
+
+  proc createChildPipe(fds: var array[0..1, cint]): OSErrorCode =
+    ## Creates a pipe whose two ends are close-on-exec and numbered above the
+    ## standard streams. Returns the error, or `OSErrorCode(0)` on success,
+    ## in which case nothing is left open.
+    ##
+    ## The child gets its standard streams by `dup2`, which clears
+    ## close-on-exec on the copy only, so the copies on fd 0, 1 and 2 are the
+    ## only descriptors on the pipe that survive `exec`. Without the flag the
+    ## originals survive too, every grandchild inherits them, and one that
+    ## outlives the child keeps the parent's read end from seeing end-of-file.
+    ## An end on fd 0, 1 or 2 (the parent had closed its own) is moved up:
+    ## `dup2` onto the same number is a no-op that would leave the flag set,
+    ## and the stream would close at `exec`.
+    fds = [cint(-1), cint(-1)]
+    template fail() =
+      result = osLastError()
+      for fd in fds:
+        if fd >= 0: discard close(fd)
+      fds = [cint(-1), cint(-1)]
+      return
+
+    # pipe2 sets the flag atomically, so a child that another thread starts
+    # in between cannot inherit the ends. Elsewhere there is a short window.
+    when declared(pipe2):
+      if pipe2(fds, O_CLOEXEC) != 0'i32: fail()
+    else:
+      if pipe(fds) != 0'i32: fail()
+      for fd in fds:
+        if fcntl(fd, F_SETFD, FD_CLOEXEC) < 0'i32: fail()
+    for fd in fds.mitems:
+      if fd <= 2:
+        # posix_other_consts spells F_DUPFD_CLOEXEC as plain F_DUPFD, and
+        # posix_nintendoswitch_consts lacks it, hence the F_SETFD below.
+        let dupCmd = when declared(F_DUPFD_CLOEXEC): F_DUPFD_CLOEXEC
+                     else: F_DUPFD
+        let moved = fcntl(fd, dupCmd, 3'i32)
+        if moved < 0'i32: fail()
+        discard close(fd)
+        fd = moved
+        if fcntl(fd, F_SETFD, FD_CLOEXEC) < 0'i32: fail()
   # The current directory belongs to the whole process, so `workingDir` is
   # only ever applied inside the child: changing it in the parent around the
   # spawn would make every other thread resolve relative paths against the
@@ -978,9 +1021,17 @@ elif not defined(useNimRtl):
     result.exitFlag = true
 
     if poParentStreams notin options:
-      if pipe(pStdin) != 0'i32 or pipe(pStdout) != 0'i32 or
-         pipe(pStderr) != 0'i32:
-        raiseOSError(osLastError())
+      var err = createChildPipe(pStdin)
+      if err == OSErrorCode(0):
+        err = createChildPipe(pStdout)
+        if err == OSErrorCode(0):
+          err = createChildPipe(pStderr)
+          if err != OSErrorCode(0):
+            for fd in pStdout: discard close(fd)
+        if err != OSErrorCode(0):
+          for fd in pStdin: discard close(fd)
+      if err != OSErrorCode(0):
+        raiseOSError(err)
 
     var data: StartProcessData = default(StartProcessData)
     var sysArgsRaw: seq[string]
@@ -1120,14 +1171,16 @@ elif not defined(useNimRtl):
       return pid
   when not spawnCanChdir:
     proc startProcessAuxFork(data: StartProcessData): Pid =
-      if pipe(data.pErrorPipe) != 0:
-        raiseOSError(osLastError())
+      # The child reads its copy of `data`, error pipe included.
+      var dataCopy = data
+      let err = createChildPipe(dataCopy.pErrorPipe)
+      if err != OSErrorCode(0):
+        raiseOSError(err)
 
       defer:
-        discard close(data.pErrorPipe[readIdx])
+        discard close(dataCopy.pErrorPipe[readIdx])
 
       var pid: Pid
-      var dataCopy = data
 
       when defined(useClone) and defined(linux):
         const stackSize = 65536
@@ -1137,7 +1190,6 @@ elif not defined(useNimRtl):
         pid = clone(fn, stack,
                     cint(CLONE_VM or CLONE_VFORK or SIGCHLD),
                     pointer(addr dataCopy), nil, nil, nil)
-        discard close(data.pErrorPipe[writeIdx])
         dealloc(stack)
       else:
         pid = fork()
@@ -1145,11 +1197,11 @@ elif not defined(useNimRtl):
           startProcessAfterFork(addr(dataCopy))
           exitnow(1)
 
-      discard close(data.pErrorPipe[writeIdx])
+      discard close(dataCopy.pErrorPipe[writeIdx])
       if pid < 0: raiseOSError(osLastError())
 
       var error: cint = cint(0)
-      let sizeRead = read(data.pErrorPipe[readIdx], addr error, sizeof(error))
+      let sizeRead = read(dataCopy.pErrorPipe[readIdx], addr error, sizeof(error))
       if sizeRead == sizeof(error):
         raiseOSError(OSErrorCode(error),
                       "Could not find command: '" & $data.sysCommand & "'. OS error: " & $strerror(error))
@@ -1195,8 +1247,9 @@ elif not defined(useNimRtl):
         if chdir(data.workingDir) < 0:
           startProcessFail(data)
 
+      # The error pipe was created close-on-exec, so a successful `exec`
+      # closes the write end and the parent reads end-of-file.
       discard close(data.pErrorPipe[readIdx])
-      discard fcntl(data.pErrorPipe[writeIdx], F_SETFD, FD_CLOEXEC)
 
       if (poUsePath in data.options):
         when defined(uClibc) or defined(linux) or defined(haiku):
