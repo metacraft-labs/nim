@@ -1033,6 +1033,17 @@ elif not defined(useNimRtl):
       if err != OSErrorCode(0):
         raiseOSError(err)
 
+    # Until the child is running, nothing but this call holds the six pipe
+    # ends: if building its arguments or spawning it raises (a command that
+    # does not exist, a full descriptor table on the fork path's error pipe),
+    # they are closed here before the error reaches the caller. Otherwise
+    # every failed start would leak six descriptors.
+    var started = false
+    defer:
+      if not started and poParentStreams notin options:
+        for fds in [pStdin, pStdout, pStderr]:
+          for fd in fds: discard close(fd)
+
     var data: StartProcessData = default(StartProcessData)
     var sysArgsRaw: seq[string]
     if poEvalCommand in options:
@@ -1077,6 +1088,7 @@ elif not defined(useNimRtl):
         pid = startProcessAuxSpawn(data)
     else:
       pid = startProcessAuxFork(data)
+    started = true
 
     # Parent process. Copy process information.
     if poEchoCmd in options:
