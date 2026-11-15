@@ -926,6 +926,16 @@ elif not defined(useNimRtl):
   proc isExitStatus(status: cint): bool =
     WIFEXITED(status) or WIFSIGNALED(status)
 
+  proc waitpidRetrying(pid: Pid; status: var cint; options: cint): Pid =
+    ## `waitpid`, retried while it fails with `EINTR`. A signal handled
+    ## without `SA_RESTART` interrupts a blocking `waitpid`, which says
+    ## nothing about the child: it is still ours to wait for, and giving up
+    ## would lose its exit status. Every other result is returned as is,
+    ## with `errno` still set by the failing call.
+    while true:
+      result = waitpid(pid, status, options)
+      if result >= 0 or errno != EINTR: return
+
   proc envToCStringArray(t: StringTableRef): cstringArray =
     result = cast[cstringArray](alloc0((t.len + 1) * sizeof(cstring)))
     var i = 0
@@ -1244,7 +1254,7 @@ elif not defined(useNimRtl):
         # child is still ours to reap; any other error means it is no longer
         # waitable (e.g. SIGCHLD is ignored and the kernel reaped it).
         var status: cint
-        while waitpid(pid, status, 0) < 0 and errno == EINTR: discard
+        discard waitpidRetrying(pid, status, 0)
         raiseOSError(OSErrorCode(error),
                       "Could not find command: '" & $data.sysCommand & "'. OS error: " & $strerror(error))
 
@@ -1373,7 +1383,7 @@ elif not defined(useNimRtl):
 
       if timeout == -1:
         var status: cint = 1
-        if waitpid(p.id, status, 0) < 0:
+        if waitpidRetrying(p.id, status, 0) < 0:
           raiseOSError(osLastError())
         p.exitFlag = true
         p.exitStatus = status
@@ -1407,14 +1417,14 @@ elif not defined(useNimRtl):
               # timeout expired, so we trying to kill process
               if posix.kill(p.id, SIGKILL) == -1:
                 raiseOSError(osLastError())
-              if waitpid(p.id, status, 0) < 0:
+              if waitpidRetrying(p.id, status, 0) < 0:
                 raiseOSError(osLastError())
               p.exitFlag = true
               p.exitStatus = status
               break
             else:
               if kevOut.ident == p.id.uint and kevOut.filter == EVFILT_PROC:
-                if waitpid(p.id, status, 0) < 0:
+                if waitpidRetrying(p.id, status, 0) < 0:
                   raiseOSError(osLastError())
                 p.exitFlag = true
                 p.exitStatus = status
@@ -1447,7 +1457,7 @@ elif not defined(useNimRtl):
 
       if timeout == -1:
         var status: cint = 1
-        if waitpid(p.id, status, 0) < 0:
+        if waitpidRetrying(p.id, status, 0) < 0:
           raiseOSError(osLastError())
         p.exitFlag = true
         p.exitStatus = status
@@ -1468,7 +1478,7 @@ elif not defined(useNimRtl):
               # timeout expired, so we try to kill the process
               if posix.kill(p.id, SIGKILL) == -1:
                 raiseOSError(osLastError())
-              if waitpid(p.id, status, 0) < 0:
+              if waitpidRetrying(p.id, status, 0) < 0:
                 raiseOSError(osLastError())
               p.exitFlag = true
               p.exitStatus = status
@@ -1476,7 +1486,7 @@ elif not defined(useNimRtl):
             elif err != EINTR:
               raiseOSError(err.OSErrorCode)
           elif count > 0:
-            if waitpid(p.id, status, 0) < 0:
+            if waitpidRetrying(p.id, status, 0) < 0:
               raiseOSError(osLastError())
             p.exitFlag = true
             p.exitStatus = status
@@ -1499,7 +1509,7 @@ elif not defined(useNimRtl):
         # handle cases where timeout == -1, but extend
         # to handle cases where timeout < 0
         var status: cint = cint(0)
-        if waitpid(p.id, status, 0) < 0:
+        if waitpidRetrying(p.id, status, 0) < 0:
           raiseOSError(osLastError())
         p.exitFlag = true
         p.exitStatus = status
