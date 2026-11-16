@@ -114,12 +114,16 @@ foreach ($icon in @('nim', 'koch')) {
 Copy-Item -LiteralPath (Join-Path $src 'icons/nim_icon.o') -Destination (Join-Path $seed 'nim_icon.o')
 
 # ── 3. Compile the seed natively ────────────────────────────────────────────
-# genScript wrote the Linux source root into every -I; point them here.
-$linuxRoot = (Get-Content -LiteralPath (Join-Path $seed 'SOURCE_ROOT') -Raw).Trim()
+# genScript wrote the generating host's source root into every -I; point
+# them at this host's checkout of the same commit.
+$seedRootPath = (Get-Content -LiteralPath (Join-Path $seed 'SOURCE_ROOT') -Raw).Trim()
 $script = Join-Path $seed 'compile_nim.bat'
 $text = [IO.File]::ReadAllText($script)
-$rewritten = $text.Replace("-I$linuxRoot/", "-I$($src.Replace('\', '/'))/")
-if ($rewritten -eq $text) { throw "the seed script names no -I$linuxRoot/ include root" }
+$rewritten = $text
+foreach ($sep in @('\', '/')) {
+    $rewritten = $rewritten.Replace("-I$seedRootPath$sep", "-I$src\")
+}
+if ($rewritten -eq $text) { throw "the seed script names no -I$seedRootPath include root" }
 [IO.File]::WriteAllText($script, $rewritten)
 $null = Invoke-Step 'seed-compile' 'cmd.exe' @('/d', '/c', 'compile_nim.bat') $seed
 Assert-Arm64 (Join-Path $seed 'nim.exe')
