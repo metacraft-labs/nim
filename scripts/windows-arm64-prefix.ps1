@@ -153,7 +153,7 @@ if ($versionText -notmatch "git hash: $Commit") { throw 'bin/nim.exe does not na
 # koch zip builds the tools and assembles build/nim-<version>; its last step
 # shells out to 7z, which this host need not have and whose absence niminst
 # only reports. The tree is zipped with .NET instead, UTF-8 names.
-$null = Invoke-Step 'koch-zip' (Join-Path $src 'koch.exe') @('zip', '-d:release', '--cc:gcc', '--hints:off', '--passL:-Wl,--no-insert-timestamp') $src
+$null = Invoke-Step 'koch-zip' (Join-Path $src 'koch.exe') @('zip', '-d:release', '--cc:gcc', '--passL:-Wl,--no-insert-timestamp') $src
 $tree = Join-Path $src "build/nim-$Version"
 foreach ($relative in @('bin/nim.exe', 'bin/nimble.exe', 'bin/nimsuggest.exe', 'bin/vccexe.exe', 'lib/system.nim', 'config/nim.cfg', 'compiler/nim.nim')) {
     if (-not (Test-Path -LiteralPath (Join-Path $tree $relative) -PathType Leaf)) { throw "the distribution lacks $relative" }

@@ -46,6 +46,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Probe branch only: the probe reuses the seeds this earlier run generated
+  # (the x64 runners queue), so its seed job is skipped. The factory branch
+  # always generates its own seeds.
+  REUSE_SEED_RUN: "43889125817"
   # W1: the windows-aarch64 C compiler, the same pin as reprobuild's
   # LLVM_MINGW_WIN_ARM64_* in windows/toolchain-versions.env.
   LLVM_MINGW_RELEASE: "20261104"
@@ -54,6 +58,7 @@ env:
 jobs:
   seed:
     name: Seed ${{ matrix.label }} (Windows x64, windows/arm64 C)
+    if: github.ref_name == 'factory/windows-arm64-prefix'
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 60
     strategy:
@@ -133,6 +138,7 @@ jobs:
   prefix:
     name: Prefix ${{ matrix.label }} (Windows ARM64)
     needs: seed
+    if: ${{ !cancelled() && (needs.seed.result == 'success' || needs.seed.result == 'skipped') }}
     # The factory branch builds on the fleet's Windows-ARM class. The probe
     # branch exists only while that class is down (2026-11-16, m3 GARM
     # stopped) and uses GitHub's hosted windows-11-arm image -- a documented
