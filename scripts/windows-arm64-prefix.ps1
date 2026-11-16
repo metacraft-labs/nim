@@ -52,6 +52,8 @@ function Invoke-Step {
     ## nonzero exit. Returns the combined output.
     param([string]$Name, [string]$Image, [string[]]$Arguments, [string]$Directory)
     $log = Join-Path $Evidence "$Label-$Name.log"
+    # Tee-Object creates no file for a command that prints nothing.
+    Set-Content -LiteralPath $log -Value $null
     $started = Get-Date
     Push-Location $Directory
     try {
