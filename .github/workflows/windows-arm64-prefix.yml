@@ -161,6 +161,9 @@ jobs:
             repo: https://github.com/metacraft-labs/nim.git
             commit: 8910b50d2d21ca1a3e982fe8b8b9bf0d8832e633
             version: 2.2.10
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         shell: pwsh
@@ -169,10 +172,18 @@ jobs:
         with:
           path: factory
           persist-credentials: false
+      - name: Which run's seeds
+        id: seedrun
+        run: |
+          $id = if ($env:GITHUB_REF_NAME -ne 'factory/windows-arm64-prefix' -and $env:REUSE_SEED_RUN) { $env:REUSE_SEED_RUN } else { $env:GITHUB_RUN_ID }
+          "id=$id" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "seeds from run $id"
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.label }}-seed
           path: ${{ runner.temp }}/seed-artifact
+          run-id: ${{ steps.seedrun.outputs.id }}
+          github-token: ${{ github.token }}
       - name: Build and qualify
         run: |
           & ./factory/scripts/windows-arm64-prefix.ps1 `
