@@ -1,0 +1,182 @@
+# Native Windows ARM64 Nim prefixes for reprobuild's windows-aarch64 leg.
+#
+# reprobuild-pm spec/Distribution-And-Packaging.md §7.1, decision W2 (approved
+# by Zahary Karadjov, 2026-11-16). nim-lang publishes no Windows ARM64 archive
+# and csources_v3 carries no windows/arm64 C code, so each prefix is made in
+# three steps, none of which runs an emulated image:
+#
+#   1. seed (Linux): the source's own Nim, built from its pinned csources_v3,
+#      generates the compiler's C sources for --os:windows --cpu:arm64.
+#   2. prefix (Windows ARM64): llvm-mingw compiles the seed into nim.exe, koch
+#      boot rebuilds it natively until two iterations are byte-identical,
+#      koch zip assembles the distribution, and smokes qualify it.
+#   3. publish (factory branch only): the qualified ZIP becomes a release
+#      asset, with its sha256 in SHA256SUMS.
+#
+# One prefix per Nim that reprobuild's x64 leg uses, so the two legs never run
+# different compilers: the cold start's NIM_VERSION (upstream v2.2.8, the
+# official nim-2.2.8_x64.zip), and the engine's bootstrap Nim (this fork's
+# 2.2.10 maintenance source, the x64 nim-2.2.10-vccexe-8910b50d prefix).
+name: Windows ARM64 Nim prefix
+
+on:
+  push:
+    branches:
+      - factory/windows-arm64-prefix
+      - factory/windows-arm64-prefix-probe
+    paths:
+      - .github/workflows/windows-arm64-prefix.yml
+      - scripts/windows-arm64-prefix.ps1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-arm64-prefix-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # W1: the windows-aarch64 C compiler, the same pin as reprobuild's
+  # LLVM_MINGW_WIN_ARM64_* in windows/toolchain-versions.env.
+  LLVM_MINGW_RELEASE: "20261104"
+  LLVM_MINGW_SHA256: 7d7f8387a8706639b0b47a629d6e23f8b3ef9acce67e9832b8cd4c5bb2816eab
+
+jobs:
+  seed:
+    name: Seed ${{ matrix.label }} (Linux, windows/arm64 C)
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: nim-2.2.8
+            repo: https://github.com/nim-lang/Nim.git
+            commit: 4f500679b196fad944caa50a753f5bbfaefda001 # tag v2.2.8
+            version: 2.2.8
+          - label: nim-2.2.10-vccexe-8910b50d
+            repo: https://github.com/metacraft-labs/nim.git
+            commit: 8910b50d2d21ca1a3e982fe8b8b9bf0d8832e633
+            version: 2.2.10
+    steps:
+      - name: Generate the seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/seed-${{ matrix.label }}"
+          rm -rf "$root"; mkdir -p "$root"
+          git init -q "$root/src"
+          git -C "$root/src" fetch -q --depth 1 "${{ matrix.repo }}" "${{ matrix.commit }}"
+          git -C "$root/src" checkout -q FETCH_HEAD
+          test "$(git -C "$root/src" rev-parse HEAD)" = "${{ matrix.commit }}"
+          cd "$root/src"
+          # The source's own pinned csources_v3 (config/build_config.txt) and
+          # checksums (koch.nim's ChecksumsStableCommit): nothing floating.
+          checksums="$(sed -n 's/^ *ChecksumsStableCommit = "\([0-9a-f]\{40\}\)".*/\1/p' koch.nim)"
+          test -n "$checksums"
+          git clone -q https://github.com/nim-lang/checksums.git dist/checksums
+          git -C dist/checksums checkout -q "$checksums"
+          nix shell nixpkgs#gcc nixpkgs#gnumake nixpkgs#git --command bash -c \
+            '. ci/funs.sh && nimBuildCsourcesIfNeeded'
+          # Iteration 1 of `koch boot`, retargeted: the same options koch passes
+          # the start compiler, plus the target.
+          bin/nim c --compileOnly --genScript --os:windows --cpu:arm64 --cc:gcc \
+            -d:release --skipUserCfg --skipParentCfg -d:nimKochBootstrap \
+            --hints:off --nimcache:"$root/seed" compiler/nim.nim
+          test -f "$root/seed/compile_nim.bat"
+          printf '%s\n' "$root/src" > "$root/seed/SOURCE_ROOT"
+          printf 'repo=%s\ncommit=%s\nversion=%s\nchecksums=%s\n' \
+            "${{ matrix.repo }}" "${{ matrix.commit }}" "${{ matrix.version }}" "$checksums" \
+            > "$root/seed/SEED_SOURCE"
+          tar -C "$root" -czf "$RUNNER_TEMP/${{ matrix.label }}-seed.tgz" seed
+          sha256sum "$RUNNER_TEMP/${{ matrix.label }}-seed.tgz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}-seed
+          path: ${{ runner.temp }}/${{ matrix.label }}-seed.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  prefix:
+    name: Prefix ${{ matrix.label }} (Windows ARM64)
+    needs: seed
+    # The factory branch builds on the fleet's Windows-ARM class. The probe
+    # branch exists only while that class is down (2026-11-16, m3 GARM
+    # stopped) and uses GitHub's hosted windows-11-arm image -- a documented
+    # exception per metacraft-dev-guidelines ci-workflow-standards.md: named
+    # leg "Windows ARM64 Nim prefix (probe)", owner the windows-aarch64 leg
+    # (reprobuild-pm Distribution-And-Packaging.md §7.1), follow-up: delete the
+    # probe branch once eph-win-arm64 builds the factory branch. Nothing the
+    # probe builds is published.
+    runs-on: ${{ github.ref_name == 'factory/windows-arm64-prefix' && fromJSON('["self-hosted","windows","arm64"]') || 'windows-11-arm' }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: nim-2.2.8
+            repo: https://github.com/nim-lang/Nim.git
+            commit: 4f500679b196fad944caa50a753f5bbfaefda001
+            version: 2.2.8
+          - label: nim-2.2.10-vccexe-8910b50d
+            repo: https://github.com/metacraft-labs/nim.git
+            commit: 8910b50d2d21ca1a3e982fe8b8b9bf0d8832e633
+            version: 2.2.10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: factory
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.label }}-seed
+          path: ${{ runner.temp }}/seed-artifact
+      - name: Build and qualify
+        run: |
+          & ./factory/scripts/windows-arm64-prefix.ps1 `
+            -Label '${{ matrix.label }}' -Repo '${{ matrix.repo }}' `
+            -Commit '${{ matrix.commit }}' -Version '${{ matrix.version }}' `
+            -SeedArchive (Join-Path $env:RUNNER_TEMP 'seed-artifact/${{ matrix.label }}-seed.tgz') `
+            -LlvmMingwRelease $env:LLVM_MINGW_RELEASE -LlvmMingwSha256 $env:LLVM_MINGW_SHA256 `
+            -WorkRoot (Join-Path $env:RUNNER_TEMP 'w') `
+            -Evidence (Join-Path $env:GITHUB_WORKSPACE 'evidence') `
+            -FactoryRevision '${{ github.sha }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.label }}-windows-arm64
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    name: Publish (factory branch only)
+    needs: prefix
+    if: github.ref_name == 'factory/windows-arm64-prefix'
+    runs-on: [self-hosted, linux, x64]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-windows-arm64'
+          path: prefixes
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(prefixes/*/*-windows-arm64.zip)
+          test "${#zips[@]}" -eq 2
+          tag="nim-windows-arm64-prefixes-${GITHUB_SHA::12}"
+          (cd "$(dirname "${zips[0]}")/.." && sha256sum */*.zip | sed 's| [^ ]*/| |') > SHA256SUMS
+          cat SHA256SUMS
+          notes="Native Windows ARM64 Nim prefixes built by factory revision ${GITHUB_SHA} (run ${GITHUB_RUN_ID}): each compiled from a Linux-generated seed with llvm-mingw ${LLVM_MINGW_RELEASE}, rebuilt by koch boot to a byte-identical fixpoint, and qualified natively. See each prefix's receipt.json."
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Nim Windows ARM64 prefixes (${GITHUB_SHA::12})" --notes "$notes" \
+            "${zips[@]}" prefixes/*/receipt-*.json SHA256SUMS
