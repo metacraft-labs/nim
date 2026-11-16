@@ -135,10 +135,16 @@ Copy-Item -LiteralPath (Join-Path $seed 'nim.exe') -Destination (Join-Path $src 
 # ── 4. koch boot to a byte-identical fixpoint ───────────────────────────────
 # --no-insert-timestamp: the PE link timestamp alone makes two otherwise
 # identical iterations differ, and koch is silent about inequality on Windows.
+# --stack: the compiler's deep semantic recursion overruns the linker-default
+# 1 MB main-thread stack (measured: the ARM64 nim.exe died silently compiling
+# tools/niminst under koch zip). 128 MB is the reserve reprobuild already gives
+# the x64 nim.exe after the fact (windows/raise-nim-stack.ps1); here it is
+# linked in, so every image the prefix ships carries it.
+$linkFlags = @('--passL:-Wl,--no-insert-timestamp', '--passL:-Wl,--stack,134217728')
 $nim = Join-Path $src 'bin/nim.exe'
 $null = Invoke-Step 'build-koch' $nim @('c', '-d:release', '--hints:off', '--out:koch.exe', 'koch.nim') $src
 Assert-Arm64 (Join-Path $src 'koch.exe')
-$boot = Invoke-Step 'koch-boot' (Join-Path $src 'koch.exe') @('boot', '-d:release', '--cc:gcc', '--hints:off', '--passL:-Wl,--no-insert-timestamp') $src
+$boot = Invoke-Step 'koch-boot' (Join-Path $src 'koch.exe') (@('boot', '-d:release', '--cc:gcc', '--hints:off') + $linkFlags) $src
 if ($boot -notmatch 'executables are equal: SUCCESS!') {
     throw 'koch boot did not reach a byte-identical fixpoint (no "executables are equal: SUCCESS!")'
 }
@@ -153,7 +159,7 @@ if ($versionText -notmatch "git hash: $Commit") { throw 'bin/nim.exe does not na
 # koch zip builds the tools and assembles build/nim-<version>; its last step
 # shells out to 7z, which this host need not have and whose absence niminst
 # only reports. The tree is zipped with .NET instead, UTF-8 names.
-$null = Invoke-Step 'koch-zip' (Join-Path $src 'koch.exe') @('zip', '-d:release', '--cc:gcc', '--passL:-Wl,--no-insert-timestamp') $src
+$null = Invoke-Step 'koch-zip' (Join-Path $src 'koch.exe') (@('zip', '-d:release', '--cc:gcc') + $linkFlags) $src
 $tree = Join-Path $src "build/nim-$Version"
 foreach ($relative in @('bin/nim.exe', 'bin/nimble.exe', 'bin/nimsuggest.exe', 'bin/vccexe.exe', 'lib/system.nim', 'config/nim.cfg', 'compiler/nim.nim')) {
     if (-not (Test-Path -LiteralPath (Join-Path $tree $relative) -PathType Leaf)) { throw "the distribution lacks $relative" }
