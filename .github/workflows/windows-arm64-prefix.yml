@@ -368,13 +368,26 @@ jobs:
           $tagRef = Invoke-GitHub -Uri "$api/git/ref/tags/$tag" -Allow 404
           "tag ${tag}: $(if ($tagRef.Status -eq 404) { 'absent; the release creates it at ' + $env:SOURCE_SHA } else { 'exists at ' + $tagRef.Body.object.sha })"
           if ($tagRef.Status -ne 404 -and $tagRef.Body.object.sha -ne $env:SOURCE_SHA) { throw "tag $tag exists at $($tagRef.Body.object.sha), not $env:SOURCE_SHA" }
+          # A tag that already exists here was created by hand: GITHUB_TOKEN can
+          # never hold the `workflows` permission, and GitHub refuses it a ref
+          # whose tree changes .github/workflows/ against the default branch,
+          # which every factory revision on this branch does (run 44454493957's
+          # create-release call failed with 403 for this reason). Say so in the
+          # provenance and the notes rather than let the tag read as the job's.
+          $tagNote = ''
+          if ($tagRef.Status -ne 404) {
+            $tagNote = "The tag $tag was created by hand at $env:SOURCE_SHA before this run, not by this job: GITHUB_TOKEN cannot create a ref whose tree changes workflow files (it never holds the workflows permission), and this factory revision's tree does. The ZIPs, their checksums and their verification against the receipts are this job's."
+            $provJson = Get-Content -Raw out/PROVENANCE.json | ConvertFrom-Json
+            $provJson | Add-Member -NotePropertyName tag -NotePropertyValue ([ordered]@{ name = $tag; sha = $env:SOURCE_SHA; createdBy = 'hand, before the publishing run'; reason = 'GITHUB_TOKEN cannot create a ref whose tree changes workflow files' })
+            $provJson | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 out/PROVENANCE.json
+          }
           $body = @(
             "Native Windows ARM64 Nim prefixes from factory revision $env:SOURCE_SHA. Each was compiled on eph-win-arm64 with llvm-mingw $env:LLVM_MINGW_RELEASE from a seed that the pinned x64 compiler of the same source generated on Windows x64, rebuilt by koch boot to a byte-identical fixpoint, and qualified natively. Published by run $env:GITHUB_RUN_ID ($env:GITHUB_EVENT_NAME).",
             ''
           ) + $lines + @(
             '',
             'Each receipt-*.json records the build steps and, under producedBy, the run, attempt and job that built its ZIP; PROVENANCE.json lists the same for both.'
-          ) -join "`n"
+          ) + $(if ($tagNote) { @('', $tagNote) } else { @() }) -join "`n"
           $rel = (Invoke-GitHub -Method Post -Uri "$api/releases" -Body (@{
             tag_name = $tag; target_commitish = $env:SOURCE_SHA; name = "Nim Windows ARM64 prefixes ($short)"; body = $body } | ConvertTo-Json)).Body
           $upload = $rel.upload_url -replace '\{.*\}$', ''
