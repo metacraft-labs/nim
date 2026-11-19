@@ -260,9 +260,26 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $api = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY"
           $h = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          # Every GitHub REST call goes through Invoke-GitHub: on an HTTP error it
+          # logs the status, the full response body and the permission headers
+          # GitHub returns (x-accepted-github-permissions names what a 403 needed),
+          # then throws. Invoke-RestMethod's own error display truncates the body.
+          function Invoke-GitHub([string]$Method = 'Get', [string]$Uri, $Body = $null, [string]$ContentType = 'application/json', [string]$InFile = '', [int[]]$Allow = @()) {
+            $p = @{ Method = $Method; Uri = $Uri; Headers = $h; SkipHttpErrorCheck = $true; StatusCodeVariable = 'sc'; ResponseHeadersVariable = 'rh' }
+            if ($null -ne $Body) { $p.Body = $Body; $p.ContentType = $ContentType }
+            if ($InFile) { $p.InFile = $InFile; $p.ContentType = $ContentType }
+            $resp = Invoke-RestMethod @p
+            if ($sc -ge 400 -and $Allow -notcontains $sc) {
+              Write-Host "GitHub API $Method $Uri -> HTTP $sc"
+              foreach ($k in 'x-accepted-github-permissions', 'x-oauth-scopes', 'x-github-request-id') { if ($rh -and $rh[$k]) { Write-Host "  ${k}: $($rh[$k] -join ', ')" } }
+              Write-Host ('  body: ' + $(if ($resp -is [string]) { $resp } else { $resp | ConvertTo-Json -Depth 8 -Compress }))
+              throw "GitHub API $Method $Uri failed with HTTP $sc"
+            }
+            return [pscustomobject]@{ Status = $sc; Body = $resp }
+          }
           $runId = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:FROM_RUN.Trim() } else { $env:GITHUB_RUN_ID }
           if ($runId -notmatch '^[0-9]+$') { throw "publish_from_run is not a run id: '$runId'" }
-          $run = Invoke-RestMethod -Headers $h -Uri "$api/actions/runs/$runId"
+          $run = (Invoke-GitHub -Uri "$api/actions/runs/$runId").Body
           # Only a run of this same workflow on this same branch.
           if ($run.path -ne '.github/workflows/windows-arm64-prefix.yml') { throw "run $runId is workflow '$($run.path)', not windows-arm64-prefix.yml" }
           if ($run.head_branch -ne 'factory/windows-arm64-prefix') { throw "run $runId is on branch '$($run.head_branch)', not factory/windows-arm64-prefix" }
@@ -272,7 +289,7 @@ jobs:
           $jobs = @()
           $page = 1
           do {
-            $r = Invoke-RestMethod -Headers $h -Uri "$api/actions/runs/$runId/jobs?filter=all&per_page=100&page=$page"
+            $r = (Invoke-GitHub -Uri "$api/actions/runs/$runId/jobs?filter=all&per_page=100&page=$page").Body
             $jobs += $r.jobs
             $page++
           } while ($r.jobs.Count -eq 100)
@@ -301,6 +318,23 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $api = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY"
           $h = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          # Every GitHub REST call goes through Invoke-GitHub: on an HTTP error it
+          # logs the status, the full response body and the permission headers
+          # GitHub returns (x-accepted-github-permissions names what a 403 needed),
+          # then throws. Invoke-RestMethod's own error display truncates the body.
+          function Invoke-GitHub([string]$Method = 'Get', [string]$Uri, $Body = $null, [string]$ContentType = 'application/json', [string]$InFile = '', [int[]]$Allow = @()) {
+            $p = @{ Method = $Method; Uri = $Uri; Headers = $h; SkipHttpErrorCheck = $true; StatusCodeVariable = 'sc'; ResponseHeadersVariable = 'rh' }
+            if ($null -ne $Body) { $p.Body = $Body; $p.ContentType = $ContentType }
+            if ($InFile) { $p.InFile = $InFile; $p.ContentType = $ContentType }
+            $resp = Invoke-RestMethod @p
+            if ($sc -ge 400 -and $Allow -notcontains $sc) {
+              Write-Host "GitHub API $Method $Uri -> HTTP $sc"
+              foreach ($k in 'x-accepted-github-permissions', 'x-oauth-scopes', 'x-github-request-id') { if ($rh -and $rh[$k]) { Write-Host "  ${k}: $($rh[$k] -join ', ')" } }
+              Write-Host ('  body: ' + $(if ($resp -is [string]) { $resp } else { $resp | ConvertTo-Json -Depth 8 -Compress }))
+              throw "GitHub API $Method $Uri failed with HTTP $sc"
+            }
+            return [pscustomobject]@{ Status = $sc; Body = $resp }
+          }
           $prov = Get-Content -Raw out/PROVENANCE.json | ConvertFrom-Json
           $assets = @()
           $sums = @()
@@ -330,7 +364,10 @@ jobs:
           $assets += (Resolve-Path out/SHA256SUMS).Path, (Resolve-Path out/PROVENANCE.json).Path
           $short = $env:SOURCE_SHA.Substring(0, 12)
           $tag = "nim-windows-arm64-prefixes-$short"
-          try { Invoke-RestMethod -Headers $h -Uri "$api/releases/tags/$tag" | Out-Null; throw "release $tag already exists" } catch { if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw } }
+          if ((Invoke-GitHub -Uri "$api/releases/tags/$tag" -Allow 404).Status -ne 404) { throw "release $tag already exists" }
+          $tagRef = Invoke-GitHub -Uri "$api/git/ref/tags/$tag" -Allow 404
+          "tag ${tag}: $(if ($tagRef.Status -eq 404) { 'absent; the release creates it at ' + $env:SOURCE_SHA } else { 'exists at ' + $tagRef.Body.object.sha })"
+          if ($tagRef.Status -ne 404 -and $tagRef.Body.object.sha -ne $env:SOURCE_SHA) { throw "tag $tag exists at $($tagRef.Body.object.sha), not $env:SOURCE_SHA" }
           $body = @(
             "Native Windows ARM64 Nim prefixes from factory revision $env:SOURCE_SHA. Each was compiled on eph-win-arm64 with llvm-mingw $env:LLVM_MINGW_RELEASE from a seed that the pinned x64 compiler of the same source generated on Windows x64, rebuilt by koch boot to a byte-identical fixpoint, and qualified natively. Published by run $env:GITHUB_RUN_ID ($env:GITHUB_EVENT_NAME).",
             ''
@@ -338,12 +375,12 @@ jobs:
             '',
             'Each receipt-*.json records the build steps and, under producedBy, the run, attempt and job that built its ZIP; PROVENANCE.json lists the same for both.'
           ) -join "`n"
-          $rel = Invoke-RestMethod -Method Post -Headers $h -Uri "$api/releases" -ContentType 'application/json' -Body (@{
-            tag_name = $tag; target_commitish = $env:SOURCE_SHA; name = "Nim Windows ARM64 prefixes ($short)"; body = $body } | ConvertTo-Json)
+          $rel = (Invoke-GitHub -Method Post -Uri "$api/releases" -Body (@{
+            tag_name = $tag; target_commitish = $env:SOURCE_SHA; name = "Nim Windows ARM64 prefixes ($short)"; body = $body } | ConvertTo-Json)).Body
           $upload = $rel.upload_url -replace '\{.*\}$', ''
           foreach ($a in $assets) {
             $name = [IO.Path]::GetFileName($a)
-            $r = Invoke-RestMethod -Method Post -Headers $h -Uri "$upload`?name=$([uri]::EscapeDataString($name))" -ContentType 'application/octet-stream' -InFile $a
+            $r = (Invoke-GitHub -Method Post -Uri "$upload`?name=$([uri]::EscapeDataString($name))" -ContentType 'application/octet-stream' -InFile $a).Body
             "uploaded $($r.name) $($r.size) $($r.browser_download_url)"
           }
           Get-Content out/SHA256SUMS
