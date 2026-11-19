@@ -12,8 +12,10 @@
 #   2. prefix (Windows ARM64): llvm-mingw compiles the seed into nim.exe, koch
 #      boot rebuilds it natively until two iterations are byte-identical,
 #      koch zip assembles the distribution, and smokes qualify it.
-#   3. publish (factory branch only): the qualified ZIPs become release
-#      assets, with their sha256 in SHA256SUMS.
+#   3. publish (factory branch only, on Windows ARM64 like step 2, per the
+#      spec's step 3): the qualified ZIPs become release assets, with their
+#      sha256 in SHA256SUMS and, in each published receipt and the release
+#      notes, the run, attempt and job that produced the ZIP.
 #
 # Why the seed is generated on Windows x64 rather than Linux (amended
 # 2026-11-16 while implementing; the approved text says Linux): no Linux pool
@@ -25,6 +27,17 @@
 #
 # A push of the factory branch builds, qualifies and publishes; a push of the
 # probe branch builds and qualifies only (on the hosted image, reusing seeds).
+#
+# A workflow_dispatch on the factory branch with `publish_from_run` builds
+# nothing: it publishes the two prefix ZIPs an earlier run of this workflow on
+# this branch built and qualified. It exists because a build's own publish job
+# can be lost (run 43908894254's first publish job asked for a Linux pool that
+# does not serve this repository, see below) and rebuilding to publish would
+# change the ZIPs' bytes -- each build stamps its date into nim.exe, so the
+# sha256 differs between builds even though `koch boot` reaches a fixpoint.
+# The path refuses a run of any other workflow or branch, a run without a
+# successful prefix job for both labels, and any ZIP whose sha256 differs from
+# its receipt's zipSha256.
 #
 # One prefix per Nim that reprobuild's x64 leg uses, so the two legs never run
 # different compilers: the cold start's NIM_VERSION (upstream v2.2.8, the
@@ -40,6 +53,14 @@ on:
     paths:
       - .github/workflows/windows-arm64-prefix.yml
       - scripts/windows-arm64-prefix.ps1
+  workflow_dispatch:
+    inputs:
+      publish_from_run:
+        description: >-
+          Publish the prefix ZIPs of this earlier run of this workflow on the
+          factory branch, instead of building.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -61,7 +82,7 @@ env:
 jobs:
   seed:
     name: Seed ${{ matrix.label }} (Windows x64, windows/arm64 C)
-    if: github.ref_name == 'factory/windows-arm64-prefix'
+    if: github.event_name == 'push' && github.ref_name == 'factory/windows-arm64-prefix'
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 60
     strategy:
@@ -141,7 +162,7 @@ jobs:
   prefix:
     name: Prefix ${{ matrix.label }} (Windows ARM64)
     needs: seed
-    if: ${{ !cancelled() && (needs.seed.result == 'success' || needs.seed.result == 'skipped') }}
+    if: ${{ !cancelled() && github.event_name == 'push' && (needs.seed.result == 'success' || needs.seed.result == 'skipped') }}
     # The factory branch builds on the fleet's Windows-ARM class. The probe
     # branch exists only while that class is down (2026-11-16, m3 GARM
     # stopped) and uses GitHub's hosted windows-11-arm image -- a documented
@@ -208,28 +229,121 @@ jobs:
   publish:
     name: Publish (factory branch only)
     needs: prefix
-    if: github.ref_name == 'factory/windows-arm64-prefix'
-    runs-on: [self-hosted, linux, x64]
+    # Push: after this run's prefix jobs succeed. Dispatch: the prefix jobs are
+    # skipped, and the ZIPs come from the run named by publish_from_run.
+    if: >-
+      ${{ !cancelled() && github.ref_name == 'factory/windows-arm64-prefix' &&
+      ((github.event_name == 'push' && needs.prefix.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_from_run != '')) }}
+    # On eph-win-arm64, as the spec's step 3 places publication (reprobuild-pm
+    # Distribution-And-Packaging.md §7.1, W2). Not [self-hosted, linux, x64]:
+    # no Linux pool serves this repository (reprobuild-pm issue
+    # 2026-11-04-metacraft-labs-nim-ci-requests-runner-labels-no-pool-serves),
+    # and run 43908894254's publish job waited on that label indefinitely.
+    runs-on: [self-hosted, windows, arm64]
+    timeout-minutes: 30
     permissions:
       contents: write
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LABELS: nim-2.2.8 nim-2.2.10-vccexe-8910b50d
     steps:
+      - name: Resolve and check the producing run
+        id: source
+        env:
+          FROM_RUN: ${{ inputs.publish_from_run }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $api = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY"
+          $h = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $runId = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:FROM_RUN.Trim() } else { $env:GITHUB_RUN_ID }
+          if ($runId -notmatch '^[0-9]+$') { throw "publish_from_run is not a run id: '$runId'" }
+          $run = Invoke-RestMethod -Headers $h -Uri "$api/actions/runs/$runId"
+          # Only a run of this same workflow on this same branch.
+          if ($run.path -ne '.github/workflows/windows-arm64-prefix.yml') { throw "run $runId is workflow '$($run.path)', not windows-arm64-prefix.yml" }
+          if ($run.head_branch -ne 'factory/windows-arm64-prefix') { throw "run $runId is on branch '$($run.head_branch)', not factory/windows-arm64-prefix" }
+          if ($run.head_repository.full_name -ne $env:GITHUB_REPOSITORY) { throw "run $runId is from $($run.head_repository.full_name)" }
+          # Every attempt's jobs: a prefix job that succeeded in an earlier
+          # attempt is carried, not re-run, by later ones.
+          $jobs = @()
+          $page = 1
+          do {
+            $r = Invoke-RestMethod -Headers $h -Uri "$api/actions/runs/$runId/jobs?filter=all&per_page=100&page=$page"
+            $jobs += $r.jobs
+            $page++
+          } while ($r.jobs.Count -eq 100)
+          $provenance = [ordered]@{ repository = $env:GITHUB_REPOSITORY; run = [long]$runId; headSha = $run.head_sha; prefixes = [ordered]@{} }
+          foreach ($label in $env:LABELS.Split(' ')) {
+            $ok = @($jobs | Where-Object { $_.name -eq "Prefix $label (Windows ARM64)" -and $_.conclusion -eq 'success' } | Sort-Object completed_at -Descending)
+            if ($ok.Count -eq 0) { throw "run $runId has no successful prefix job for $label" }
+            $j = $ok[0]
+            $provenance.prefixes[$label] = [ordered]@{ run = [long]$runId; attempt = [int]$j.run_attempt; jobId = [long]$j.id; jobUrl = $j.html_url; runner = $j.runner_name; completedAt = $j.completed_at }
+            "$label <- run $runId attempt $($j.run_attempt) job $($j.id) on $($j.runner_name)"
+          }
+          New-Item -ItemType Directory -Force out | Out-Null
+          $provenance | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 out/PROVENANCE.json
+          "run=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "sha=$($run.head_sha)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - uses: actions/download-artifact@v4
         with:
           pattern: '*-windows-arm64'
           path: prefixes
-      - name: Create the release
-        shell: bash
+          run-id: ${{ steps.source.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: Verify the ZIPs against their receipts and create the release
         env:
-          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
         run: |
-          set -euo pipefail
-          shopt -s nullglob
-          zips=(prefixes/*/*-windows-arm64.zip)
-          test "${#zips[@]}" -eq 2
-          tag="nim-windows-arm64-prefixes-${GITHUB_SHA::12}"
-          (cd "$(dirname "${zips[0]}")/.." && sha256sum */*.zip | sed 's| [^ ]*/| |') > SHA256SUMS
-          cat SHA256SUMS
-          notes="Native Windows ARM64 Nim prefixes built by factory revision ${GITHUB_SHA} (run ${GITHUB_RUN_ID}): each compiled from a Linux-generated seed with llvm-mingw ${LLVM_MINGW_RELEASE}, rebuilt by koch boot to a byte-identical fixpoint, and qualified natively. See each prefix's receipt.json."
-          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Nim Windows ARM64 prefixes (${GITHUB_SHA::12})" --notes "$notes" \
-            "${zips[@]}" prefixes/*/receipt-*.json SHA256SUMS
+          $ErrorActionPreference = 'Stop'
+          $api = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY"
+          $h = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          $prov = Get-Content -Raw out/PROVENANCE.json | ConvertFrom-Json
+          $assets = @()
+          $sums = @()
+          $lines = @()
+          foreach ($label in $env:LABELS.Split(' ')) {
+            $dir = Join-Path prefixes "$label-windows-arm64"
+            $zips = @(Get-ChildItem -LiteralPath $dir -Filter '*-windows-arm64.zip' -File)
+            if ($zips.Count -ne 1) { throw "${label}: expected one ZIP in $dir, found $($zips.Count)" }
+            $receiptPath = Join-Path $dir "receipt-$label.json"
+            $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json
+            if ($receipt.label -ne $label) { throw "${label}: receipt names label '$($receipt.label)'" }
+            if ($receipt.zip -ne $zips[0].Name) { throw "${label}: receipt names '$($receipt.zip)', artifact holds '$($zips[0].Name)'" }
+            if ($receipt.factoryRevision -ne $env:SOURCE_SHA) { throw "${label}: receipt factoryRevision $($receipt.factoryRevision) is not the run's head $env:SOURCE_SHA" }
+            $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $zips[0].FullName).Hash.ToLowerInvariant()
+            if ($sha -ne $receipt.zipSha256) { throw "${label}: ZIP sha256 $sha does not match the receipt's zipSha256 $($receipt.zipSha256)" }
+            $p = $prov.prefixes.$label
+            $receipt | Add-Member -NotePropertyName producedBy -NotePropertyValue ([ordered]@{
+              repository = $prov.repository; run = $p.run; attempt = $p.attempt; jobId = $p.jobId; jobUrl = $p.jobUrl; runner = $p.runner })
+            New-Item -ItemType Directory -Force out | Out-Null
+            $receiptOut = Join-Path out "receipt-$label.json"
+            $receipt | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $receiptOut
+            $assets += $zips[0].FullName, (Resolve-Path $receiptOut).Path
+            $sums += "$sha  $($zips[0].Name)"
+            $lines += "- ``$($zips[0].Name)``: sha256 ``$sha``, built by run $($p.run) attempt $($p.attempt), job $($p.jobId) on ``$($p.runner)``."
+          }
+          $sums | Set-Content -Encoding ascii out/SHA256SUMS
+          $assets += (Resolve-Path out/SHA256SUMS).Path, (Resolve-Path out/PROVENANCE.json).Path
+          $short = $env:SOURCE_SHA.Substring(0, 12)
+          $tag = "nim-windows-arm64-prefixes-$short"
+          try { Invoke-RestMethod -Headers $h -Uri "$api/releases/tags/$tag" | Out-Null; throw "release $tag already exists" } catch { if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw } }
+          $body = @(
+            "Native Windows ARM64 Nim prefixes from factory revision $env:SOURCE_SHA. Each was compiled on eph-win-arm64 with llvm-mingw $env:LLVM_MINGW_RELEASE from a seed that the pinned x64 compiler of the same source generated on Windows x64, rebuilt by koch boot to a byte-identical fixpoint, and qualified natively. Published by run $env:GITHUB_RUN_ID ($env:GITHUB_EVENT_NAME).",
+            ''
+          ) + $lines + @(
+            '',
+            'Each receipt-*.json records the build steps and, under producedBy, the run, attempt and job that built its ZIP; PROVENANCE.json lists the same for both.'
+          ) -join "`n"
+          $rel = Invoke-RestMethod -Method Post -Headers $h -Uri "$api/releases" -ContentType 'application/json' -Body (@{
+            tag_name = $tag; target_commitish = $env:SOURCE_SHA; name = "Nim Windows ARM64 prefixes ($short)"; body = $body } | ConvertTo-Json)
+          $upload = $rel.upload_url -replace '\{.*\}$', ''
+          foreach ($a in $assets) {
+            $name = [IO.Path]::GetFileName($a)
+            $r = Invoke-RestMethod -Method Post -Headers $h -Uri "$upload`?name=$([uri]::EscapeDataString($name))" -ContentType 'application/octet-stream' -InFile $a
+            "uploaded $($r.name) $($r.size) $($r.browser_download_url)"
+          }
+          Get-Content out/SHA256SUMS
