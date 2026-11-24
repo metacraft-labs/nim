@@ -114,6 +114,8 @@ type
       offsetA*, offsetB*: int # used for pretty printing so that literals
                               # like 0b01 or  r"\L" are unaffected
       commentOffsetA*, commentOffsetB*: int
+      docComment*: bool ## a `##` comment, which the compiler's lexer also
+        ## returns as a token; the other comments exist only for nimpretty
 
   ErrorHandler* = proc (conf: ConfigRef; info: TLineInfo; msg: TMsgKind; arg: string)
   Lexer* = object of TBaseLexer
@@ -1081,6 +1083,7 @@ proc scanComment(L: var Lexer, tok: var Token) =
   assert L.buf[pos+1] == '#'
   when defined(nimpretty):
     tok.commentOffsetA = L.offsetBase + pos
+    tok.docComment = true
 
   if L.buf[pos+2] == '[':
     skipMultiLineComment(L, tok, pos+3, true)
@@ -1158,6 +1161,7 @@ proc skip(L: var Lexer, tok: var Token) =
             hasComment = true
             if tok.line < 0:
               tok.line = L.lineNumber
+              tok.col = getColNumber(L, pos)
               commentIndent = indent
           skipMultiLineComment(L, tok, pos+2, false)
           pos = L.bufpos
@@ -1177,6 +1181,10 @@ proc skip(L: var Lexer, tok: var Token) =
         hasComment = true
         if tok.line < 0:
           tok.line = L.lineNumber
+          # The comment's own column. For a comment after code on its line
+          # it differs from the line's indentation, and nimpretty aligns the
+          # comment's later lines against it.
+          tok.col = getColNumber(L, pos)
 
       if L.buf[pos+1] == '[':
         skipMultiLineComment(L, tok, pos+2, false)
@@ -1197,6 +1205,13 @@ proc skip(L: var Lexer, tok: var Token) =
     if hasComment:
       tok.commentOffsetB = L.offsetBase + pos - 1
       tok.tokType = tkComment
+      # The token after the comment starts a line exactly when the comment
+      # was followed by a line break, and `tok.indent` holds that line's
+      # indentation then (-1 otherwise). An inline `#[...]#` comment
+      # followed by more code on its line (`f(): auto #[ note ]# =`) must
+      # not give the next token an indentation: the parser would read it
+      # as the start of a new line and reject the source.
+      L.indentAhead = tok.indent
       tok.indent = commentIndent
 
 proc rawGetTok*(L: var Lexer, tok: var Token) =
@@ -1221,7 +1236,7 @@ proc rawGetTok*(L: var Lexer, tok: var Token) =
   skip(L, tok)
   when defined(nimpretty):
     if tok.tokType == tkComment:
-      L.indentAhead = L.currLineIndent
+      # `skip` has set `L.indentAhead` for the token after the comment.
       return
   let c = L.buf[L.bufpos]
   tok.line = L.lineNumber
@@ -1384,12 +1399,24 @@ proc getIndentWidth*(fileIdx: FileIndex, inputstream: PLLStream;
   var tok: Token = default(Token)
   openLexer(lex, fileIdx, inputstream, cache, config)
   var prevToken = tkEof
+  var lineIndent = 0 # the indentation of the line `prevToken` is on
   while tok.tokType != tkEof:
     rawGetTok(lex, tok)
-    if tok.indent > 0 and prevToken in {tkColon, tkEquals, tkType, tkConst, tkLet, tkVar, tkUsing}:
-      result = tok.indent
+    # The width is the step from the line that opens the first block to the
+    # block's first line, not the block's column: the first block can be
+    # nested (an object's `when` branch after its fields), and taking its
+    # column doubled the width on each pass of nimpretty over its own
+    # output.
+    if tok.indent > lineIndent and prevToken in {tkColon, tkEquals, tkType, tkConst, tkLet, tkVar, tkUsing}:
+      result = tok.indent - lineIndent
       if result > 0: break
-    prevToken = tok.tokType
+    # nimpretty's lexer returns comments as tokens. A comment is not code:
+    # an inline one after the `:` that opens a block (`when c: # note`)
+    # must not hide that `:`, or the width is taken from some later, deeper
+    # line instead of the block's first line.
+    if tok.tokType != tkComment:
+      prevToken = tok.tokType
+      if tok.indent >= 0: lineIndent = tok.indent
   closeLexer(lex)
 
 proc getPrecedence*(ident: PIdent): int =

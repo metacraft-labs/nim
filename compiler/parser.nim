@@ -141,8 +141,12 @@ proc getTok(p: var Parser) =
   when defined(nimpretty):
     emitTok(p.em, p.lex, p.tok)
     # skip the additional tokens that nimpretty needs but the parser has no
-    # interest in:
-    while p.tok.tokType == tkComment:
+    # interest in. Documentation comments (`##`) are not among them: the
+    # compiler's lexer returns them too, and the parser must see them as it
+    # does there, or a block that holds only documentation comments (a
+    # routine body that is just its `## doc`) parses as a missing block and
+    # a source the compiler accepts is rejected.
+    while p.tok.tokType == tkComment and not p.tok.docComment:
       rawGetTok(p.lex, p.tok)
       emitTok(p.em, p.lex, p.tok)
 
@@ -200,13 +204,13 @@ proc rawSkipComment(p: var Parser, node: PNode) =
   if p.tok.tokType == tkComment:
     if node != nil:
       var rhs = node.comment
-      when defined(nimpretty):
-        if p.tok.commentOffsetB > p.tok.commentOffsetA:
-          rhs.add fileSection(p.lex.config, p.lex.fileIdx, p.tok.commentOffsetA, p.tok.commentOffsetB)
-        else:
-          rhs.add p.tok.literal
-      else:
-        rhs.add p.tok.literal
+      # nimpretty lays comments out from the token stream and never reads
+      # `node.comment`, so it takes the token's text here like the compiler.
+      # Reading the comment back from the file instead gave nothing for a
+      # source that is not on disk, such as the formatted output nimpretty
+      # re-parses to check it, and the two parses then differed in
+      # `nfHasComment`.
+      rhs.add p.tok.literal
       node.comment = move rhs
     else:
       parMessage(p, errInternal, "skipComment")

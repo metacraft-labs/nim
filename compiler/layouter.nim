@@ -52,8 +52,10 @@ type
     outIndentStack: seq[int] ## the output indentation of each of those levels
     parDepth: int ## brackets open at the current token
     lineStarts: seq[LineStart] ## for each bracket depth, in increasing
-      ## order, the last line that started at it; a line that starts at a
-      ## depth discards the entries deeper than it
+      ## order, the last line that started a statement or element at it and
+      ## the continuation lines after that one; a line that starts at a
+      ## depth discards the entries deeper than it, and the entries at its
+      ## own depth unless it is a continuation
     fixedUntil: int # marks where we must not go in the content
     altSplitPos: array[SplitKind, int] # alternative split positions
     maxLineLen*: int
@@ -160,7 +162,7 @@ proc optionalIsGood(em: var Emitter; pos, currentLen: int): bool =
         em.tokens[nlPos] = repeat(' ', ourIndent)
         if em.kinds[nlPos+1] == ltSpaces:
           # inhibit extra spaces when concatenating two lines
-          em.tokens[nlPos+1] = if em.tokens[nlPos-2] == "," or
+          em.tokens[nlPos+1] = if em.tokens[nlPos-2] in [",", ";"] or
               em.kinds[nlPos-2] == ltKeyword: " " else: ""
       result = true
     elif em.tokens[p+1].len < ourIndent:
@@ -395,6 +397,16 @@ proc emitMultilineComment(em: var Emitter, lit: string, col: int; dontIndent: bo
     else:
       let stripped = commentLine.strip()
       if i == 0:
+        if em.kinds.len > 0 and em.kinds[^1] in {ltCrucialNewline,
+            ltSplittingNewline}:
+          # The comment starts its line in column 0. `renderTokens` knows a
+          # comment that starts its line by the indentation before it, and
+          # then ends the alignment of trailing comments; there is none in
+          # column 0, so mark the line start with an empty one. Without it
+          # the comment (one after a one-line `let` section, say) was
+          # aligned as a trailing comment, moved right, and read as an
+          # indented comment on the next pass.
+          wr(em, "", ltSpaces)
         if em.kinds.len > 0 and em.kinds[^1] != ltTab:
           wr(em, "", ltTab)
       elif stripped.len == 0:
@@ -439,8 +451,23 @@ proc endsInAlpha(em: Emitter): bool =
   while i >= 0 and em.kinds[i] in {ltBeginSection, ltEndSection}: dec(i)
   result = if i >= 0: em.tokens[i].lastChar in SymChars+{'_'} else: false
 
+proc renderedCol(em: Emitter): int =
+  ## The column the next token is rendered at when no optional newline on
+  ## the current line is taken. `em.col` also counts the optional newlines'
+  ## tokens, which hold the indentation for a split and are not rendered
+  ## otherwise.
+  result = em.col
+  var i = em.tokens.len-1
+  while i >= 0 and em.kinds[i] notin {ltCrucialNewline, ltSplittingNewline}:
+    if em.kinds[i] == ltOptionalNewline: dec result, em.tokens[i].len
+    dec i
+
 proc emitComment(em: var Emitter; tok: Token; dontIndent: bool) =
-  var col = em.col
+  # The later lines of a multi-line comment are placed relative to its first
+  # line's column. Measured with `em.col`, a comment after a line that has
+  # a possible split point started further right than it is rendered, and
+  # its later lines moved on every pass.
+  var col = em.renderedCol
   let lit = strip fileSection(em.config, em.fid, tok.commentOffsetA, tok.commentOffsetB)
   em.lineSpan = countNewlines(lit)
   if em.lineSpan > 0: calcCol(em, lit)
@@ -452,7 +479,11 @@ proc emitComment(em: var Emitter; tok: Token; dontIndent: bool) =
     if not endsInWhite(em):
       wrTab em
       inc col
-    emitMultilineComment(em, lit, col, dontIndent, tok.indent)
+    # The later lines are aligned against the comment's own first line, so
+    # pass its source column: for a comment after code (`x, # note` followed
+    # by `# more` lines) that is not the line's indentation, and measuring
+    # from the indentation moved those lines right on every pass.
+    emitMultilineComment(em, lit, col, dontIndent, tok.col)
 
 proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
   template wasExportMarker(em): bool =
@@ -483,9 +514,35 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
   elif tok.indent >= 0:
     var newlineKind = ltCrucialNewline
     if em.keepIndents > 0:
-      em.indentLevel = tok.indent
-    elif (em.lastTok in (splitters + oprSet) and
-        tok.tokType notin (closedPars - {tkBracketDotRi})):
+      # The construct being kept (a parameter list, a pragma, an `if` or
+      # `block` expression) keeps its source layout *relative to the block
+      # it is in*. That block may have been re-indented (a 4-space source
+      # normalized to 2, a body moved by the rules below), and the source
+      # column alone would then place the construct's later lines (an
+      # expression's `else:`, say) at a different offset from its first line
+      # than in the source, which changes or breaks the parse.
+      #
+      # The parser reads one token ahead, so the first line *after* such a
+      # construct is emitted here as well (`T =\n proc (): int` is followed
+      # by the next type's line, or by a doc comment). Outside brackets, a
+      # line that is not right of the current block ends that block's
+      # statements, so the levels it closes are closed here, as they would
+      # be below; otherwise they stay open and the next line's indentation
+      # is computed against levels that no longer exist.
+      if em.parDepth == 0:
+        while em.indentStack.len > 1 and em.indentStack[^1] > tok.indent:
+          discard em.indentStack.pop()
+          discard em.outIndentStack.pop()
+      em.indentLevel = max(0,
+        tok.indent - em.indentStack[^1] + em.outIndentStack[^1])
+    elif (em.lastTok in (splitters + oprSet + {tkDot}) or
+        tok.tokType == tkDot) and
+        tok.tokType notin (closedPars - {tkBracketDotRi}):
+      # A line after a trailing `.` (`a.\n  b()`), or one that starts with
+      # `.` (`a\n  .b()`), continues the expression before it, like a line
+      # after a trailing operator or comma. It opens no block: treating it
+      # as one would put the real block that follows (the body of a `for`
+      # or `if` whose header it continues) at the enclosing level.
       if tok.tokType in openPars and tok.indent > em.indentStack[^1]:
         while em.indentStack[^1] < tok.indent:
           em.indentStack.add(em.indentStack[^1] + em.indWidth)
@@ -506,6 +563,15 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
       em.indentLevel = tok.indent - em.indentStack[^1] + em.outIndentStack[^1]
       newlineKind = ltSplittingNewline
     else:
+      # Close the levels this line is left of first. A line can land between
+      # two open levels (a level opened for a line inside a bracket, such as
+      # a table constructor's value after `"key":`, is deeper than the body
+      # of the `for` whose header that bracket is in); it then opens a new
+      # block right of the level it returns to, instead of being placed at
+      # that level, which would move the body out of its statement.
+      while em.indentStack.len > 1 and em.indentStack[^1] > tok.indent:
+        discard em.indentStack.pop()
+        discard em.outIndentStack.pop()
       if tok.indent > em.indentStack[^1]:
         # A new block is normally one `indWidth` deeper than the block that
         # opens it. It must also stay right of the lines before it when the
@@ -532,13 +598,14 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
               min(em.indWidth, tok.indent - line.srcIndent))
         em.indentStack.add tok.indent
         em.outIndentStack.add outIndent
-      else:
-        # dedent?
-        while em.indentStack.len > 1 and em.indentStack[^1] > tok.indent:
-          discard em.indentStack.pop()
-          discard em.outIndentStack.pop()
       em.indentLevel = em.outIndentStack[^1]
-    while em.lineStarts.len > 0 and em.lineStarts[^1].depth >= em.parDepth:
+    # A continuation line (of a routine header whose pragma or return type
+    # is on a line of its own, say) does not replace the line its statement
+    # or element started on: a block opening after it must stay right of
+    # that first line, which a continuation far to the right would hide.
+    let continues = em.keepIndents > 0 or newlineKind == ltSplittingNewline
+    while em.lineStarts.len > 0 and (em.lineStarts[^1].depth > em.parDepth or
+        (em.lineStarts[^1].depth == em.parDepth and not continues)):
       discard em.lineStarts.pop()
     em.lineStarts.add LineStart(depth: em.parDepth, srcIndent: tok.indent,
                                 outIndent: em.indentLevel)
@@ -582,7 +649,12 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
     wrSpace em
   of tkSemiColon, tkComma:
     wr(em, $tok.tokType, ltOther)
-    rememberSplit(splitComma)
+    # Outside brackets a `;` separates statements (`var a: A; var b: B`).
+    # A line break after it is no continuation: the next statement would
+    # start on a deeper line, which does not parse. Inside brackets it
+    # separates parameters or elements and may be split like a comma.
+    if tok.tokType == tkComma or em.parDepth > 0:
+      rememberSplit(splitComma)
     wrSpace em
   of openPars:
     if tsLeading in tok.spacing and not em.endsInWhite and
