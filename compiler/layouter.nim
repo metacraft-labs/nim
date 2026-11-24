@@ -32,6 +32,11 @@ type
     ltOther, ltOpr, ltSomeParLe, ltSomeParRi,
     ltBeginSection, ltEndSection
 
+  LineStart = object
+    depth: int     ## brackets open where the line starts
+    srcIndent: int ## its source column
+    outIndent: int ## its output indentation
+
   Emitter* = object
     config: ConfigRef
     fid: FileIndex
@@ -43,7 +48,12 @@ type
     doIndentMore*: int
     kinds*: seq[LayoutToken]
     tokens*: seq[string]
-    indentStack: seq[int]
+    indentStack: seq[int] ## source columns of the open indentation levels
+    outIndentStack: seq[int] ## the output indentation of each of those levels
+    parDepth: int ## brackets open at the current token
+    lineStarts: seq[LineStart] ## for each bracket depth, in increasing
+      ## order, the last line that started at it; a line that starts at a
+      ## depth discards the entries deeper than it
     fixedUntil: int # marks where we must not go in the content
     altSplitPos: array[SplitKind, int] # alternative split positions
     maxLineLen*: int
@@ -62,6 +72,8 @@ proc openEmitter*(em: var Emitter, cache: IdentCache;
   em.col = 0
   em.indentStack = newSeqOfCap[int](30)
   em.indentStack.add 0
+  em.outIndentStack = newSeqOfCap[int](30)
+  em.outIndentStack.add 0
   em.lastLineNumber = 1
 
 proc computeMax(em: Emitter; pos: int): int =
@@ -123,6 +135,13 @@ proc optionalIsGood(em: var Emitter; pos, currentLen: int): bool =
     result = false
   elif em.kinds[p-1] == ltComment and currentLen+lineLen < em.maxLineLen+MinLineLen:
     result = false
+  elif em.kinds[pos+1] in {ltOther, ltSomeParLe, ltSomeParRi}: # note: pos+1, not p+1
+    # Never split before a punctuation token such as the `)` of an empty
+    # call, `get()`. This is checked before the same-indentation rejoin
+    # below, which would otherwise take the split (yielding `get(` and a
+    # continuation line that starts with `)`) merely because a later line
+    # can be rejoined.
+    result = false
   elif p+1 < em.tokens.len and em.kinds[p+1] == ltSpaces and
       em.kinds[p-1] == ltOptionalNewline:
     if em.tokens[p+1].len == ourIndent:
@@ -133,6 +152,12 @@ proc optionalIsGood(em: var Emitter; pos, currentLen: int): bool =
       em.findNewline(p, lineLenTotal)
       if isLongEnough(lineLenTotal, nlPos, p):
         em.kinds[nlPos] = ltOptionalNewline
+        # An optional newline's token is the indentation `renderTokens`
+        # writes after the "\L" when it takes the split. The token being
+        # demoted is a newline ("\L"), so keep the line's indentation in it:
+        # taking the rejoined split again otherwise emits "\L\L" and starts
+        # the continuation in column 0, which no longer parses.
+        em.tokens[nlPos] = repeat(' ', ourIndent)
         if em.kinds[nlPos+1] == ltSpaces:
           # inhibit extra spaces when concatenating two lines
           em.tokens[nlPos+1] = if em.tokens[nlPos-2] == "," or
@@ -140,8 +165,6 @@ proc optionalIsGood(em: var Emitter; pos, currentLen: int): bool =
       result = true
     elif em.tokens[p+1].len < ourIndent:
       result = isLongEnough(lineLen, pos, p)
-  elif em.kinds[pos+1] in {ltOther, ltSomeParLe, ltSomeParRi}: # note: pos+1, not p+1
-    result = false
   else:
     result = isLongEnough(lineLen, pos, p)
 
@@ -347,10 +370,18 @@ template rememberSplit(kind) =
       wr(em, strutils.repeat(' ', spaces), ltOptionalNewline)
     #em.altSplitPos[kind] = em.tokens.len
 
-proc emitMultilineComment(em: var Emitter, lit: string, col: int; dontIndent: bool) =
+proc emitMultilineComment(em: var Emitter, lit: string, col: int; dontIndent: bool;
+                          firstLineIndent = -1) =
   # re-align every line in the multi-line comment:
   var i = 0
-  var lastIndent = if em.keepIndents > 0: em.indentLevel else: em.indentStack[^1]
+  # A later line indented past `lastIndent` gets `indWidth` more. Measure that
+  # from the comment's own first line when it starts a line: the open block's
+  # column is a different baseline for a comment inside a bracket, and gave
+  # every later line of such a comment a spurious extra indentation.
+  var lastIndent =
+    if em.keepIndents > 0: em.indentLevel
+    elif firstLineIndent >= 0: firstLineIndent
+    else: em.indentStack[^1]
   var b = 0
   var dontIndent = dontIndent
   var hasEmptyLine = false
@@ -421,7 +452,7 @@ proc emitComment(em: var Emitter; tok: Token; dontIndent: bool) =
     if not endsInWhite(em):
       wrTab em
       inc col
-    emitMultilineComment(em, lit, col, dontIndent)
+    emitMultilineComment(em, lit, col, dontIndent, tok.indent)
 
 proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
   template wasExportMarker(em): bool =
@@ -458,21 +489,59 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
       if tok.tokType in openPars and tok.indent > em.indentStack[^1]:
         while em.indentStack[^1] < tok.indent:
           em.indentStack.add(em.indentStack[^1] + em.indWidth)
+          em.outIndentStack.add(em.outIndentStack[^1] + em.indWidth)
       while em.indentStack[^1] > tok.indent:
         discard em.indentStack.pop()
+        discard em.outIndentStack.pop()
 
       # aka: we are in an expression context:
       let alignment = max(tok.indent - em.indentStack[^1], 0)
-      em.indentLevel = alignment + em.indentStack.high * em.indWidth
+      em.indentLevel = alignment + em.outIndentStack[^1]
+      newlineKind = ltSplittingNewline
+    elif tok.tokType in closedPars and tok.indent > em.indentStack[^1]:
+      # A line that starts with a closing bracket deeper than the current
+      # block continues an expression (`foo(\n    ).bar`); it opens no block.
+      # Pushing a level for it would pull the real block that follows (an
+      # `if` or `elif` body, say) out to the enclosing level.
+      em.indentLevel = tok.indent - em.indentStack[^1] + em.outIndentStack[^1]
       newlineKind = ltSplittingNewline
     else:
       if tok.indent > em.indentStack[^1]:
+        # A new block is normally one `indWidth` deeper than the block that
+        # opens it. It must also stay right of the lines before it when the
+        # source puts it there: a statement list that opens inside an
+        # expression (the body of a `proc` passed as an argument or object
+        # field, say) follows continuation lines that were laid out in
+        # expression context, and counting levels alone would put the body
+        # at or left of the line that opens it. The source's offset from
+        # such a line is kept up to `indWidth`, so a wider source
+        # indentation is still normalized.
+        #
+        # Every line of the expression the block opens in counts, not just
+        # the previous one: on the next pass a split nimpretty made itself
+        # (`proc (a,\n    b) =`) is a line of the source too, and measured
+        # alone it would move the body on each pass. Taking the maximum
+        # keeps the result stable, because a line laid out where it stood
+        # can raise the body no further than its column on the previous
+        # pass.
+        var outIndent = em.outIndentStack[^1] + em.indWidth
+        for line in em.lineStarts:
+          if line.depth > em.parDepth: break
+          if tok.indent > line.srcIndent:
+            outIndent = max(outIndent, line.outIndent +
+              min(em.indWidth, tok.indent - line.srcIndent))
         em.indentStack.add tok.indent
+        em.outIndentStack.add outIndent
       else:
         # dedent?
         while em.indentStack.len > 1 and em.indentStack[^1] > tok.indent:
           discard em.indentStack.pop()
-      em.indentLevel = em.indentStack.high * em.indWidth
+          discard em.outIndentStack.pop()
+      em.indentLevel = em.outIndentStack[^1]
+    while em.lineStarts.len > 0 and em.lineStarts[^1].depth >= em.parDepth:
+      discard em.lineStarts.pop()
+    em.lineStarts.add LineStart(depth: em.parDepth, srcIndent: tok.indent,
+                                outIndent: em.indentLevel)
     #[ we only correct the indentation if it is not in an expression context,
        so that code like
 
@@ -520,10 +589,12 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
         (not em.wasExportMarker or tok.tokType == tkCurlyDotLe):
       wrSpace em
     wr(em, $tok.tokType, ltSomeParLe)
+    inc em.parDepth
     if tok.tokType != tkCurlyDotLe:
       rememberSplit(splitParLe)
   of closedPars:
     wr(em, $tok.tokType, ltSomeParRi)
+    if em.parDepth > 0: dec em.parDepth
   of tkColonColon:
     wr(em, $tok.tokType, ltOther)
   of tkDot:
@@ -572,8 +643,13 @@ proc emitTok*(em: var Emitter; L: Lexer; tok: Token) =
     if endsInAlpha(em): wrSpace(em)
     wr em, lit, ltIdent
 
-  em.lastTok = tok.tokType
-  em.lastTokWasTerse = lastTokWasTerse
+  if tok.tokType != tkComment:
+    # A comment is not code: the line after it continues whatever the code
+    # before it left open. Recording it would make an element that follows
+    # a comment inside a bracket look like the start of a statement block,
+    # and indent it differently on each pass.
+    em.lastTok = tok.tokType
+    em.lastTokWasTerse = lastTokWasTerse
   em.lastLineNumber = tok.line + em.lineSpan
   em.lineSpan = 0
 
