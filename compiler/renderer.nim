@@ -1117,6 +1117,10 @@ proc longMode(g: TSrcGen; n: PNode, start: int = 0, theEnd: int = - 1): bool =
 proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
   # echo "gstmts ", n.kind, " ", n.info
   if n.kind == nkEmpty: return
+  # The `expanded.nim` line a statement list starts on: the line of its
+  # first statement. The macro sourcemap block below gives the list this
+  # line, not the one rendering ends on, which is its last statement's.
+  var firstLine = g.line
   if n.kind in {nkStmtList, nkStmtListExpr, nkStmtListType}:
     if doIndent: indentNL(g)
     for i in 0..<n.len:
@@ -1124,6 +1128,9 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
         optNL(g, n[i-1], n[i])
       else:
         optNL(g)
+        # The newline `optNL` asks for is written with the statement's
+        # first token, so the statement starts on the line after this one.
+        firstLine = if g.pendingNL >= 0: g.line + 1 else: g.line
       if n[i].kind in {nkStmtList, nkStmtListExpr, nkStmtListType}:
         gstmts(g, n[i], c, doIndent=false)
       else:
@@ -1137,17 +1144,24 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
     dedent(g)
     optNL(g)
 
-  if renderMacroSourcemap in g.flags and not g.config.macroSourcemap.isNil:
-    let info = TLineInfo(line: g.line, col: 1, fileIndex: g.config.macroSourcemap.fileIndex)
+  # A statement that is not a list was rendered by `gsub`, which recorded
+  # its line and pointed its `info` at it; there is nothing left to record,
+  # and `g.line` is already past it.
+  if renderMacroSourcemap in g.flags and not g.config.macroSourcemap.isNil and
+      n.kind in {nkStmtList, nkStmtListExpr, nkStmtListType}:
+    let info = TLineInfo(line: firstLine, col: 1, fileIndex: g.config.macroSourcemap.fileIndex)
     # echo "node ", n, " ", g.fileIndex.int, " ", info.line, " ", n.info.line
     let siteInfo = g.config.macroSourcemap.expansions[g.config.macroSourcemap.expansionId].site
 
     # (toMsgFilename(g.config, n.info), n.info.line.int)
-    g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(
-      siteInfo: siteInfo,
-      expansionId: g.config.macroSourcemap.expansionId,
-      entryExpandedLine: -1,
-      entryExpandedCol: -1)
+    # The first statement's `gsub` has recorded this line already, for the
+    # same expansion; keep its entry, and any chain link set on it.
+    if not g.config.macroSourcemap.locations.hasKey(info.line.int):
+      g.config.macroSourcemap.locations[info.line.int] = ExpansionInfo(
+        siteInfo: siteInfo,
+        expansionId: g.config.macroSourcemap.expansionId,
+        entryExpandedLine: -1,
+        entryExpandedCol: -1)
     # §2-M1: replaced hard-coded `endsWith("/expanded.nim")` with a
     # comparison against the recorded expansion artifact filename.
     # §2-M3: switched the equality check from the string path to
@@ -1166,13 +1180,15 @@ proc gstmts(g: var TSrcGen, n: PNode, c: TContext, doIndent=true) =
     # it overwrites more precise locations
     # g.config.macroSourcemap.topLevelLines[g.line.int] = (toMsgFilename(g.config, n.info), n.info.line.int)
 
-    # M5: record the raw TLineInfo of the stmt-level node so cgen can
-    # bridge expanded.nim positions to user source. We only record if
-    # no gsub already populated this line — gsub provides more precise
-    # column info for sub-expressions.
-    if n.info.fileIndex != g.config.macroSourcemap.fileIndex and
-       not g.config.macroSourcemap.topLevelLineInfos.hasKey(g.line.int):
-      g.config.macroSourcemap.topLevelLineInfos[g.line.int] = n.info
+    # The list itself gets no `topLevelLineInfos` entry. That table tells
+    # cgen's `bridgeExpansionInfo` that an `expanded.nim` line is really
+    # user code, and maps the line's C there instead. Every line a list
+    # occupies holds one of its statements, which `gsub` has already
+    # judged: a list's own position (a macro's `newStmtList()` carries the
+    # call site) claimed the line of its last statement, so that
+    # statement's C mapped to the call site and no debugger could show it
+    # inside the expansion (codetracer-pm issue
+    # 2026-11-17-codetracer-nim-maps-a-macro-expansions-later-statements-to-the-call-site.md).
 
     # n.info => seq[info.line]?
     n.info = info
