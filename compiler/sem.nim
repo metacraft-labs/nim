@@ -1025,7 +1025,18 @@ proc semStmtAndGenerateGenerics(c: PContext, n: PNode): PNode =
   result = hloStmt(c, result)
   if c.config.cmd == cmdInteractive and not isEmptyType(result.typ):
     result = buildEchoStmt(c, result)
-  if c.config.cmd == cmdIdeTools:
+  # nimsuggest keeps every top-level statement in the module's AST so its
+  # queries can find the node under the cursor (`findNode(m.ast, ...)`).
+  # `closePContext` returns that AST as the module's final node, and the
+  # Eval/Interpreter passes interpret the final node. Those passes have
+  # already interpreted each statement as it was processed, so keeping the
+  # statements would run a NimScript config (`config.nims`, `<project>.nims`)
+  # a second time inside nimsuggest: its side effects twice, and with the
+  # register slots of its locals left over from the first run, which killed
+  # nimsuggest (an IndexDefect, a FieldDefect or SIGSEGV, depending on the
+  # build) whenever a top-level `for` came late enough in the script.
+  if c.config.cmd == cmdIdeTools and
+      c.graph.pipelinePass notin {EvalPass, InterpreterPass}:
     appendToModule(c.module, result)
   trackStmt(c, c.module, result, isTopLevel = true)
   if optMultiMethods notin c.config.globalOptions and
