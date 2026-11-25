@@ -1,6 +1,10 @@
 name: Nim Docs CI
 on:
   push:
+    # Branches only. Path filters are not evaluated for tag pushes, so without
+    # this a producer tag (windows-arm64-prefix.yml) would start this workflow
+    # too (https://docs.github.com/actions/writing-workflows/workflow-syntax-for-github-actions#onpushpull_requestpull_request_targetpathspaths-ignore).
+    branches: ['**']
     paths:
       - 'compiler/**.nim'
       - 'config/nimdoc.cfg'
