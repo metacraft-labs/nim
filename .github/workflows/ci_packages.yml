@@ -115,10 +115,11 @@ jobs:
           private-key: ${{ secrets.CI_TOKEN_PROVIDER_PRIVATE_KEY }}
           owner: metacraft-labs
       - name: 'Setup declared regression tools'
-        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@387fee68b58afd2542695709eb2e6681b0cd9888
+        # No repro-version: the action installs the organisation's
+        # reprobuild pin (pins/reprobuild.json).
+        uses: metacraft-labs/metacraft-github-actions/setup-dev-env@dev
         with:
           env-flavor: reprobuild
-          repro-version: v0.2.17
           consumer-directory: nim
           workspace-directory: .
           gh-token: ${{ steps.ci_token.outputs.token }}
