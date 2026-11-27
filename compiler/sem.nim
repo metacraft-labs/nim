@@ -494,7 +494,7 @@ proc semAfterMacroCall(c: PContext, call, macroResult: PNode,
       echo "[warn]: ignoring ", nimcache.string
     else:
       createDir(nimcache)
-      let filename = AbsoluteFile(nimcache / RelativeFile("expanded.nim"))
+      let filename = nimcache / RelativeFile("expanded.nim")
       if c.config.macroSourcemap.isNil:
         c.config.macroSourcemap = MacroSourcemap(
           source: "",

@@ -2867,7 +2867,7 @@ proc cgenWriteModules*(backend: RootRef, config: ConfigRef) =
   finalJsonNode["expandedEntries"] = %config.macroSourcemap.expandedEntries
   finalJsonNode["expandedFilename"] = %config.macroSourcemap.expandedFilename
   finalJsonNode["topLevelLines"] = %config.macroSourcemap.topLevelLines
-  writeFile(macroSourcemapDir / RelativeFile("macro_sourcemap_" & name.string & ".json"), pretty(finalJsonNode))
+  writeFile(macroSourcemapDir / RelativeFile("macro_sourcemap_" & name & ".json"), pretty(finalJsonNode))
 
   if config.macroSourcemap.expandedFilename.len > 0:
     writeFile(config.macroSourcemap.expandedFilename.AbsoluteFile, config.macroSourcemap.source)
