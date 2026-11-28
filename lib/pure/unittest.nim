@@ -142,6 +142,78 @@
 ## `--catalog FILE` and `--run` are untouched, since neither writes a document
 ## to standard output; under `--run`, standard output belongs to the test.
 ##
+## Tests entry
+## -----------
+##
+## A test binary also answers the `tests` entry of
+## `nim-entrypoints <https://github.com/metacraft-labs/nim-entrypoints>`_,
+## through which a build tool lists and runs the tests of any program, whatever
+## framework they are written in. The run-time selector is recognised only as
+## the FIRST argument, `--entrypoint=<name>` or `--entrypoint <name>`. Every
+## argument after it belongs to the entry: none is read as one of the flags
+## above or as a positional filter.
+##
+## ======================================= =====================================
+## arguments                               effect
+## ======================================= =====================================
+## `--entrypoint=list`                     print the entry list, one JSON
+##                                         document (schema `entrypoints/1`)
+##                                         naming `main` and `tests`, whose
+##                                         `entries` are the test names
+## `--entrypoint=tests --list`             print every test name, one per line
+## `--entrypoint=tests --list-test-cases`  print nothing: no test of this module
+##                                         can be built alone
+## `--entrypoint=tests --run-exact=NAME`   run exactly the tests named `NAME`;
+##                                         repeatable
+## `--entrypoint=tests --run=PATTERN`      run the tests the filter `PATTERN`
+##                                         matches, as a positional filter does
+##                                         without the selector; repeatable
+## `--entrypoint=tests`                    run every test
+## `--entrypoint=main`                     run every test
+## ======================================= =====================================
+##
+## A test's name under the entry is `suite::test`, or the bare test name
+## outside a suite (the `--list` flag above writes `::test` there). No test runs
+## while a listing is printed, and the listing is the only thing on standard
+## output, as above. A name holding a line break cannot be listed: it is named
+## on standard error and the exit code is 70, before any name is printed.
+##
+## `--run-exact` compares a name as written and never as a pattern, so a name
+## containing `*` selects that test alone. A name that `--list` does not print,
+## `--run-exact` together with `--run`, a `--run` that matches no test and an
+## entry other than `list`, `main` and `tests` each name the problem on
+## standard error and exit with 64. Otherwise the exit code is that of an
+## ordinary run: 1 when a test that ran failed, else 0. A skipped test does not
+## fail the run; when `NIMTEST_RESULT_FILE` is set and `--run-exact` names one
+## test, the result of that test is written to it exactly as under `--run`,
+## `"SKIP"` included.
+##
+## The listing and the refusals are produced when the program exits, once
+## every test has registered itself, so a program that declares no test answers
+## nothing. The exit code of a refusal cannot be set from an exit proc, so a
+## refusal ends the process at once: exit procs registered before the first
+## `suite` or `test`, and output buffered in files other than standard output
+## and standard error, are not run or written. A process that ends from inside
+## a test (`abortOnError`, or a `quit` in the test) keeps the exit code the
+## test chose and is not refused. Standard output is claimed by the first `suite` or `test` rather
+## than at module initialization, because only there is it known who answers
+## the entry: output the program writes at module level before its first
+## `suite` or `test` still reaches standard output.
+##
+## Two other components can answer the entry for the same tests, and then this
+## module stands down: it prints nothing, refuses nothing, leaves the exit code
+## alone and leaves standard output where it is. Which applies is decided where
+## each `suite` and `test` expands, from what that module can see:
+##
+## * a program built with nim-entrypoints (`entryArgs` and `parseSelector` are
+##   visible), whose `tests:` block lists the tests and guards them. Under
+##   `--run-exact` this module still runs only the named tests, and under
+##   `--run` only the matching ones;
+## * reprobuild's `ct_test_unittest_parallel` (`queueProtocolExitHook` and
+##   `entryRunWanted` are visible), which wraps this module and selects the
+##   tests itself. This module then reads the arguments as it does without
+##   the selector, which is what that wrapper was written against.
+##
 ## Backends
 ## --------
 ##
@@ -272,6 +344,27 @@ type
     pmCatalog,
     pmError
 
+  EntryMode = enum
+    ## What the run-time selector asked for; see "Tests entry" in the module
+    ## documentation. Kept apart from `ProtocolMode` rather than added to it:
+    ## `parseProtocolArgs` is reached from every test body through `fail`, so
+    ## anything it reads is part of every `bodyHash`, and the selector has to
+    ## be answered without changing those hashes.
+    emNone,          ## no selector: the program behaves as it always did
+    emDescribe,      ## `--entrypoint=list`
+    emList,          ## `--entrypoint=tests --list`
+    emListTestCases, ## `--entrypoint=tests --list-test-cases`
+    emRun,           ## `--entrypoint=tests`, with or without a selection,
+                     ## and `--entrypoint=main`
+    emUnknown,       ## `--entrypoint=<an entry this program does not have>`
+    emUsage          ## `--entrypoint=tests` with arguments it refuses
+
+  EntryOwner = enum
+    ## Who answers the selector for the `suite` or `test` being expanded.
+    eoUnittest,    ## this module: it prints, refuses and sets the exit code
+    eoEntrypoints, ## nim-entrypoints, whose `tests:` block holds the test
+    eoWrapper      ## a wrapper of this module that answers the entry itself
+
   OutputFormatter* = ref object of RootObj
 
   ConsoleOutputFormatter* = ref object of OutputFormatter
@@ -324,6 +417,22 @@ var
   protocolException {.threadvar.}: string
   protocolSkipReason {.threadvar.}: string
   protocolResultFile {.threadvar.}: string
+  entryInitialized {.threadvar.}: bool
+  entryExitProcAdded {.threadvar.}: bool
+  entryMode {.threadvar.}: EntryMode
+  entryName {.threadvar.}: string
+    ## The entry the selector named, for `emUnknown`'s message.
+  entryUsageError {.threadvar.}: string
+    ## Why `emUsage` refuses the entry's arguments.
+  entryExact {.threadvar.}: seq[string]
+    ## The `--run-exact=<name>` names.
+  entryPatterns {.threadvar.}: seq[string]
+    ## The `--run=<pattern>` patterns.
+  entryPatternMatched {.threadvar.}: bool
+  entryNames {.threadvar.}: seq[string]
+    ## Every test this module answers the entry for, as the entry names it.
+  entryWritesResult {.threadvar.}: bool
+    ## `NIMTEST_RESULT_FILE` is written for the test that is running.
 
   runningTestStatus {.threadvar.}: ptr TestStatus
     ## The status variable of the test currently executing on this thread, or
@@ -850,7 +959,10 @@ proc recordProtocolFailure(checkpoints: seq[string], stackTrace: string) {.gcsaf
     protocolException = stackTrace
 
 proc writeProtocolResult(testResult: TestResult) =
-  if protocolMode != pmRun or protocolResultFile.len == 0:
+  # `--run`, or the tests entry's `--run-exact` of a single name: the two ways
+  # of running exactly one test, so the one result has an owner.
+  if protocolResultFile.len == 0 or
+      (protocolMode != pmRun and not entryWritesResult):
     return
 
   let durationMs = max(0, int((epochTime() - protocolTestStartTime) * 1000))
@@ -913,6 +1025,22 @@ proc finishProtocol() =
     discard
   protocolFlushStdout()
 
+proc entrySelector(): tuple[name: string; taken: int] =
+  ## The entry the run-time selector names: the FIRST argument
+  ## `--entrypoint=<name>` (one argument taken) or `--entrypoint <name>` (two).
+  ## `taken` is 0 when the program was not given a selector. Only the first
+  ## argument is a selector, as in nim-entrypoints, so a test filter or a
+  ## program option further on is never read as one.
+  when declared(paramCount):
+    if paramCount() >= 1:
+      let first = paramStr(1)
+      if first.startsWith("--entrypoint="):
+        return (first.substr("--entrypoint=".len), 1)
+      if first == "--entrypoint":
+        if paramCount() >= 2:
+          return (paramStr(2), 2)
+        return ("", 1)
+
 proc protocolClaimsStdout(): bool =
   ## Whether the command line selects a mode whose document is written to
   ## standard output, decided WITHOUT touching any protocol state.
@@ -936,7 +1064,14 @@ proc protocolClaimsStdout(): bool =
   ## spellings and the last-flag-wins precedence of `parseProtocolArgs` below,
   ## and a new document-bearing flag has to be added in both places. Missing it
   ## here costs the new flag the protection and nothing else.
+  ##
+  ## Under the run-time selector the arguments belong to the entry, and the
+  ## descriptor is claimed later, by the first `suite` or `test` that answers
+  ## the entry (`enterEntry`): only there is it known whether this module or
+  ## nim-entrypoints prints the document.
   when declared(paramCount):
+    if entrySelector().taken > 0:
+      return false
     var i = 1
     while i <= paramCount():
       let arg = paramStr(i)
@@ -1161,6 +1296,245 @@ proc shouldRunProtocolTest(currentSuiteName, testName: string): bool =
   of pmDefault:
     result = shouldRun(currentSuiteName, testName)
 
+# ---------------------------------------------------------------------------
+# The tests entry
+# ---------------------------------------------------------------------------
+#
+# Everything below answers nim-entrypoints' run-time selector; see "Tests
+# entry" in the module documentation. None of it is reached from a test body:
+# it is called from the `suite` and `test` expansions only, so it leaves every
+# `bodyHash` as it was, and without a selector it does nothing but look at the
+# first argument once.
+
+const
+  entryUsageExitCode = 64
+    ## nim-entrypoints' `usageExitCode` (EX_USAGE).
+  entryUnlistableExitCode = 70
+    ## nim-entrypoints' `unlistableNameExitCode` (EX_SOFTWARE).
+  entryProgramName = querySetting(SingleValueSetting.projectName)
+    ## The `program` of the entry list, as nim-entrypoints spells it.
+
+proc entryTestName(suiteName, testName: string): string =
+  ## A test's name under the entry: `suite::test`, or the bare test name
+  ## outside a suite, as nim-entrypoints names a `tests:` block's tests (the
+  ## `--list` protocol above writes `::test` there).
+  if suiteName.len == 0: testName else: suiteName & "::" & testName
+
+proc isOneLine(name: string): bool =
+  '\n' notin name and '\r' notin name
+
+proc parseEntryArgs() {.gcsafe.} =
+  ## Read the selector and the entry's arguments, once. Under the selector the
+  ## arguments are the entry's alone: `parseProtocolArgs` is marked as done so
+  ## that neither the protocol flags nor the positional filters are read from
+  ## them. Without that, `--entrypoint=tests --run-exact=x` was two filters
+  ## that no test matches, so nothing ran and the run passed.
+  if entryInitialized:
+    return
+  entryInitialized = true
+  when declared(paramCount):
+    let selector = entrySelector()
+    if selector.taken == 0:
+      return
+    # Also undoes a parse that already happened, which only a `check` at
+    # module level, ahead of the first `suite` or `test`, can have caused.
+    protocolInitialized = true
+    protocolMode = pmDefault
+    testsFilters.clear()
+    protocolResultFile = ""
+    case selector.name
+    of "list":
+      entryMode = emDescribe
+    of "main":
+      entryMode = emRun
+    of "tests":
+      var listing, testCasesOnly = false
+      var i = selector.taken + 1
+      while i <= paramCount():
+        let arg = paramStr(i)
+        if arg == "--list":
+          listing = true
+        elif arg == "--list-test-cases":
+          listing = true
+          testCasesOnly = true
+        elif arg.startsWith("--run-exact="):
+          entryExact.add arg.substr("--run-exact=".len)
+        elif arg.startsWith("--run="):
+          entryPatterns.add arg.substr("--run=".len)
+        elif arg == "--run":
+          if i == paramCount():
+            entryUsageError = "--run requires a pattern"
+          else:
+            inc i
+            entryPatterns.add paramStr(i)
+        # Any other argument is ignored: it is neither a protocol flag nor a
+        # filter here.
+        inc i
+      # A listing wins over a run, as in nim-entrypoints.
+      if listing:
+        entryMode = if testCasesOnly: emListTestCases else: emList
+      elif entryUsageError.len > 0:
+        entryMode = emUsage
+      elif entryExact.len > 0 and entryPatterns.len > 0:
+        entryMode = emUsage
+        entryUsageError = "--run-exact cannot be combined with --run: " &
+          "--run-exact selects listed names exactly, --run matches patterns"
+      else:
+        entryMode = emRun
+    else:
+      entryName = selector.name
+      entryMode = emUnknown
+    if entryMode != emRun and formatters.len == 0:
+      # No test runs in these modes; the base formatter reports nothing, so a
+      # suite does not announce itself either.
+      formatters = @[OutputFormatter()]
+    when declared(existsEnv):
+      if entryMode == emRun and entryExact.len == 1:
+        protocolResultFile = getEnv(nimTestResultFileEnv)
+
+proc protocolEntryOwner(entrypointsVisible, wrapperVisible: bool): EntryOwner =
+  ## Decided where a `suite` or `test` expands, from what the user's module
+  ## can see there: nim-entrypoints' `entryArgs` and `parseSelector` mean
+  ## nim-entrypoints owns the selector (the test sits in its `tests:` block);
+  ## reprobuild's `ct_test_unittest_parallel` (its `queueProtocolExitHook`
+  ## and `entryRunWanted`) wraps this module and answers the entry itself.
+  if entrypointsVisible: eoEntrypoints
+  elif wrapperVisible: eoWrapper
+  else: eoUnittest
+
+when declared(stderr):
+  when defined(windows):
+    proc entryExitNow(code: cint) {.importc: "_exit", header: "<stdlib.h>",
+      noreturn.}
+  else:
+    proc entryExitNow(code: cint) {.importc: "_exit", header: "<unistd.h>",
+      noreturn.}
+
+  proc entryRefuse(code: int; message: string) =
+    ## Name the problem on standard error and end the process with `code`.
+    ## Called from the exit hook, which runs from the C runtime's `atexit`
+    ## once the program result has already been taken, so neither
+    ## `setProgramResult` nor `quit` can give the exit code there. The process
+    ## ends at once instead, as nim-entrypoints' `exitImmediately` does, and
+    ## exit procs queued behind this one do not run.
+    stderr.writeLine("unittest: " & message)
+    flushFile(stderr)
+    flushFile(stdout)
+    protocolFlushStdout()
+    entryExitNow(cint(code))
+else:
+  # No argument vector, so no selector and nothing to refuse.
+  proc entryRefuse(code: int; message: string) = discard
+
+proc buildEntryList(): string =
+  ## nim-entrypoints' entry list (schema `entrypoints/1`). Both entries are
+  ## chosen at run time; neither has a `-d:entrypoint=<name>` build.
+  result = "{\"schema\":\"entrypoints/1\",\"program\":"
+  result.add jsonString(entryProgramName)
+  result.add ",\"default\":\"main\",\"entries\":[" &
+    "{\"name\":\"main\",\"doc\":\"run every test\",\"select\":[\"runtime\"]}," &
+    "{\"name\":\"tests\",\"doc\":\"run the program's tests\"," &
+    "\"select\":[\"runtime\"],\"args\":" &
+    jsonString("[--list] [--list-test-cases] [--run=<pattern>]... " &
+      "[--run-exact=<name>]...") &
+    ",\"entries\":["
+  for i, name in entryNames:
+    if i > 0:
+      result.add ","
+    result.add jsonString(name)
+  result.add "]}]}"
+
+proc finishEntry() =
+  ## The exit hook of a program whose entry this module answers: the
+  ## documents, which need every test registered, and the refusals.
+  case entryMode
+  of emNone, emListTestCases:
+    discard
+  of emDescribe:
+    protocolEcho buildEntryList()
+  of emList:
+    # Every name is checked before any is printed, so a tool never reads a
+    # partial list as the whole.
+    for name in entryNames:
+      if not name.isOneLine:
+        entryRefuse(entryUnlistableExitCode, "the test name " & name.escape &
+          " cannot be listed: it holds a line break, and " &
+          "--entrypoint=tests --list prints one name per line; rename the test")
+        return
+    for name in entryNames:
+      protocolEcho name
+  of emUnknown:
+    entryRefuse(entryUsageExitCode,
+      (if entryName.len == 0: "--entrypoint needs an entry name"
+       else: "unknown entry '" & entryName & "'") &
+      "; the entries are: main, tests")
+  of emUsage:
+    entryRefuse(entryUsageExitCode, entryUsageError)
+  of emRun:
+    if runningTestStatus != nil:
+      # The process is ending from inside a test body: `abortOnError`, or a
+      # `quit` in the test. The tests after it never registered, so a name
+      # cannot be called unknown, and the exit code the test chose stands.
+      discard
+    elif entryExact.len > 0:
+      for name in entryExact:
+        if not name.isOneLine or name notin entryNames:
+          entryRefuse(entryUsageExitCode, "--run-exact: no test is named " &
+            "exactly " & name.escape & " (the name is compared as written, " &
+            "not as a pattern, and must be one that --entrypoint=tests " &
+            "--list prints); the tests are: " & entryNames.join(", "))
+          return
+    elif entryPatterns.len > 0 and not entryPatternMatched:
+      entryRefuse(entryUsageExitCode, "--run: no test matches " &
+        entryPatterns.join(", ") & "; the tests are: " & entryNames.join(", "))
+  protocolFlushStdout()
+
+proc enterEntry(owner: EntryOwner) =
+  ## Called by every `suite` and `test` expansion, ahead of anything else.
+  ## Without a selector, or when another component answers it, it does nothing
+  ## else; in particular it registers no exit proc (see
+  ## `ensureProtocolExitProc` for why that matters on the JS backend).
+  if owner == eoWrapper:
+    # The wrapper reads the command line itself and was written against this
+    # module as it behaves without the entry, so the arguments are left to
+    # `parseProtocolArgs` exactly as they were before the entry existed.
+    return
+  parseEntryArgs()
+  if entryMode == emNone or owner != eoUnittest:
+    return
+  if entryMode in {emDescribe, emList, emListTestCases}:
+    # The document is about to be the only thing on standard output; see
+    # "Keeping the protocol document off the same channel" above. Claimed
+    # here rather than at module initialization, because only an expansion
+    # site knows that this module, and not nim-entrypoints, prints it.
+    protocolRedirectStdout()
+  if not entryExitProcAdded:
+    entryExitProcAdded = true
+    addExitProc(finishEntry)
+
+proc registerEntryTest(suiteName, testName: string; owner: EntryOwner) =
+  if entryMode != emNone and owner == eoUnittest:
+    entryNames.add entryTestName(suiteName, testName)
+
+proc shouldRunTest(suiteName, testName: string; owner: EntryOwner): bool =
+  ## `shouldRunProtocolTest`, or under the selector the entry's selection.
+  if entryMode == emNone:
+    return shouldRunProtocolTest(suiteName, testName)
+  if entryMode != emRun:
+    return false
+  let name = entryTestName(suiteName, testName)
+  if entryExact.len > 0:
+    result = name.isOneLine and name in entryExact
+  elif entryPatterns.len > 0:
+    for pattern in entryPatterns:
+      if matchFilter(suiteName, testName, pattern):
+        result = true
+    if result:
+      entryPatternMatched = true
+  else:
+    result = true
+  entryWritesResult = result and owner == eoUnittest and entryExact.len == 1
+
 proc ensureInitialized() {.gcsafe.} =
   parseProtocolArgs()
 
@@ -1207,7 +1581,8 @@ template suite*(name, body) {.dirty.} =
   ##     [Suite] test suite for addition
   ##       [OK] 2 + 2 = 4
   ##       [OK] (2 + -2) != 4
-  bind formatters, ensureInitialized, ensureProtocolExitProc, suiteEnded
+  bind formatters, ensureInitialized, ensureProtocolExitProc, suiteEnded,
+    enterEntry, protocolEntryOwner
 
   block:
     template setup(setupBody: untyped) {.dirty, used.} =
@@ -1220,6 +1595,11 @@ template suite*(name, body) {.dirty.} =
 
     let testSuiteName {.used.} = name
 
+    # Who answers the tests entry is decided here, where the user's module is
+    # in scope: this template is dirty, so `declared` sees its imports.
+    enterEntry(protocolEntryOwner(
+      declared(entryArgs) and declared(parseSelector),
+      declared(queueProtocolExitHook) and declared(entryRunWanted)))
     ensureInitialized()
     ensureProtocolExitProc()
     try:
@@ -1279,13 +1659,20 @@ template testImpl(name: untyped; xfail: string; tags: openArray[string];
   ## reported before this macro existed.
   bind shouldRun, checkpoints, formatters, ensureInitialized, testEnded,
     exceptionTypeName, setProgramResult, protocolBodyHash, registerProtocolTest,
-    resetProtocolTestState, ensureProtocolExitProc, shouldRunProtocolTest,
-    protocolMode, pmRun, protocolDefaultGroup, runningTestStatus
-
-  ensureInitialized()
-  ensureProtocolExitProc()
+    resetProtocolTestState, ensureProtocolExitProc, shouldRunTest,
+    protocolMode, pmRun, protocolDefaultGroup, runningTestStatus, enterEntry,
+    protocolEntryOwner, registerEntryTest
 
   block:
+    # `getAst` leaves `entryArgs` and its peers unbound, so like `suite`'s
+    # check this one resolves in the module that wrote the `test`.
+    let testEntryOwnerIMPL {.used.} = protocolEntryOwner(
+      declared(entryArgs) and declared(parseSelector),
+      declared(queueProtocolExitHook) and declared(entryRunWanted))
+    enterEntry(testEntryOwnerIMPL)
+    ensureInitialized()
+    ensureProtocolExitProc()
+
     let currentSuiteNameIMPL {.used.} =
       when declared(testSuiteName): testSuiteName else: ""
     let currentGroupIMPL {.used.} =
@@ -1322,8 +1709,9 @@ template testImpl(name: untyped; xfail: string; tags: openArray[string];
       tags,
       deterministic
     )
+    registerEntryTest(currentSuiteNameIMPL, name, testEntryOwnerIMPL)
 
-    if shouldRunProtocolTest(currentSuiteNameIMPL, name):
+    if shouldRunTest(currentSuiteNameIMPL, name, testEntryOwnerIMPL):
       checkpoints = @[]
       resetProtocolTestState()
       var testStatusIMPL {.inject.} = TestStatus.OK
